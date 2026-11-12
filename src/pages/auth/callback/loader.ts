@@ -1,4 +1,5 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router';
+import { saveSessionUser } from '../../../entities/session';
 import { exchangeLoginCode, LoginExchangeFailure } from '../../../features/auth/exchange-code/api/exchangeLoginCode';
 
 export async function loginCallbackLoader({ request }: LoaderFunctionArgs) {
@@ -11,6 +12,7 @@ export async function loginCallbackLoader({ request }: LoaderFunctionArgs) {
 
   try {
     const result = await exchangeLoginCode(code);
+    saveSessionUser(result.user);
     return redirect(getSafeRedirect(result.redirect));
   } catch (error) {
     const errorCode = error instanceof LoginExchangeFailure && error.kind === 'expired'
