@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import {
   createPersonalDatabase,
+  createTeamDatabase,
   listDatabases,
   type DatabaseEngine,
   type DatabaseSummary,
 } from '../../entities/database';
 import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
+import { getTeam, type TeamDetail, type TeamRole } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
@@ -218,7 +220,7 @@ const DialogActions = styled.div`
   margin-top: 8px;
 `;
 
-type DialogState = 'count' | 'storage' | 'postgres' | 'failure' | 'accepted' | null;
+type DialogState = 'count' | 'teamLimit' | 'storage' | 'postgres' | 'permission' | 'notApproved' | 'failure' | 'accepted' | null;
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
@@ -234,9 +236,15 @@ function newIdempotencyKey() {
 
 export default function DatabaseCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const owner = searchParams.get('owner') ?? 'me';
+  const teamId = owner.startsWith('team-') ? owner : undefined;
+  const invalidOwner = owner !== 'me' && !teamId;
+  const listPath = teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases';
   const user = getSessionUser();
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
+  const [team, setTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);
   const [name, setName] = useState('');
   const [engine, setEngine] = useState<DatabaseEngine>('mysql');
@@ -247,30 +255,50 @@ export default function DatabaseCreatePage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setQuota(current => ({ ...current, loading: true, error: false }));
+    if (invalidOwner) {
+      setQuota({ value: null, loading: false, error: false });
+      setDatabases({ value: null, loading: false, error: false });
+      setTeam({ value: null, loading: false, error: false });
+      return () => controller.abort();
+    }
     setDatabases(current => ({ ...current, loading: true, error: false }));
-    void getMyDatabaseQuota(controller.signal).then(value => {
-      if (!controller.signal.aborted) setQuota({ value, loading: false, error: false });
-    }).catch(() => {
-      if (!controller.signal.aborted) setQuota({ value: null, loading: false, error: true });
-    });
-    void listDatabases({ owner: 'me', signal: controller.signal }).then(value => {
+    if (teamId) {
+      setQuota({ value: null, loading: false, error: false });
+      setTeam(current => ({ ...current, loading: true, error: false }));
+      void getTeam(teamId, controller.signal).then(value => {
+        if (!controller.signal.aborted) setTeam({ value, loading: false, error: false });
+      }).catch(() => {
+        if (!controller.signal.aborted) setTeam({ value: null, loading: false, error: true });
+      });
+    } else {
+      setTeam({ value: null, loading: false, error: false });
+      setQuota(current => ({ ...current, loading: true, error: false }));
+      void getMyDatabaseQuota(controller.signal).then(value => {
+        if (!controller.signal.aborted) setQuota({ value, loading: false, error: false });
+      }).catch(() => {
+        if (!controller.signal.aborted) setQuota({ value: null, loading: false, error: true });
+      });
+    }
+    void listDatabases({ owner: teamId ?? 'me', signal: controller.signal }).then(value => {
       if (!controller.signal.aborted) setDatabases({ value, loading: false, error: false });
     }).catch(() => {
       if (!controller.signal.aborted) setDatabases({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [retryKey]);
+  }, [invalidOwner, retryKey, teamId]);
 
   const count = quota.value?.db.count;
   const storage = quota.value?.db.shared_storage_gb;
   const writeLocked = databases.value?.some(database => database.write_locked) ?? false;
-  const needsQuotaCheck = quota.loading || databases.loading || quota.error || databases.error;
+  const needsQuotaCheck = invalidOwner || (teamId
+    ? team.loading || databases.loading || team.error || databases.error
+    : quota.loading || databases.loading || quota.error || databases.error);
   const nameIsValid = name.trim().length >= 1 && name.trim().length <= 30;
-  const canSubmit = useMemo(() => nameIsValid && !submitting, [nameIsValid, submitting]);
+  const teamApproved = !teamId || team.value?.status === 'approved';
+  const canSubmit = useMemo(() => nameIsValid && !submitting && !needsQuotaCheck && teamApproved, [nameIsValid, needsQuotaCheck, submitting, teamApproved]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'database') navigate('/databases');
+    if (item === 'database') navigate(listPath);
   };
 
   const submit = useCallback(async () => {
@@ -281,37 +309,49 @@ export default function DatabaseCreatePage() {
     }
     setNameError('');
     if (needsQuotaCheck) {
-      setNameError('사용량 정보를 확인한 뒤 발급할 수 있습니다.');
+      setNameError(teamId ? '팀 정보와 Database 상태를 확인한 뒤 발급할 수 있습니다.' : '사용량 정보를 확인한 뒤 발급할 수 있습니다.');
       return;
     }
-    if (count && count.used >= count.limit) { setDialog('count'); return; }
+    if (!teamId && count && count.used >= count.limit) { setDialog('count'); return; }
     if ((storage && storage.used > storage.limit) || writeLocked) { setDialog('storage'); return; }
+    if (teamId && team.value?.status !== 'approved') { setDialog('notApproved'); return; }
 
     setSubmitting(true);
-    const fingerprint = `${engine}\u0000${trimmedName}`;
+    const fingerprint = `${teamId ?? 'me'}\u0000${engine}\u0000${trimmedName}`;
     if (requestKeyRef.current?.fingerprint !== fingerprint) {
       requestKeyRef.current = { fingerprint, key: newIdempotencyKey() };
     }
     try {
-      await createPersonalDatabase(trimmedName, engine, { idempotencyKey: requestKeyRef.current.key });
+      if (teamId) await createTeamDatabase(teamId, trimmedName, engine, { idempotencyKey: requestKeyRef.current.key });
+      else await createPersonalDatabase(trimmedName, engine, { idempotencyKey: requestKeyRef.current.key });
       requestKeyRef.current = null;
       setDialog('accepted');
     } catch (error) {
       if (error instanceof ApiRequestError && error.status !== null && error.status < 500) {
         requestKeyRef.current = null;
       }
-      if (error instanceof ApiRequestError && error.code === 'QUOTA_EXCEEDED') setDialog('count');
+      if (error instanceof ApiRequestError && error.code === 'TEAM_NOT_APPROVED') setDialog('notApproved');
+      else if (error instanceof ApiRequestError && error.code === 'ACCESS_DENIED') setDialog('permission');
+      else if (error instanceof ApiRequestError && error.code === 'QUOTA_EXCEEDED') setDialog(teamId ? 'teamLimit' : 'count');
       else if (error instanceof ApiRequestError && error.code === 'WRITE_LOCKED_OWNER') setDialog('storage');
       else setDialog('failure');
     } finally {
       setSubmitting(false);
     }
-  }, [count, engine, name, needsQuotaCheck, storage, writeLocked]);
+  }, [count, engine, name, needsQuotaCheck, storage, teamId, team.value?.status, writeLocked]);
+
+  const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
+  const scopeLabel = team.value
+    ? `${team.value.name} · ${team.value.my_role ? roleLabels[team.value.my_role] : '관리자'}`
+    : teamId ? '팀 Resources' : '내 Resources';
 
   const dialogContent = {
     count: { title: 'Database를 더 발급할 수 없습니다', copy: `개인 Database 발급 한도 ${count ? `${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}에 도달했습니다. 사용하지 않는 Database를 정리한 뒤 다시 시도해 주세요.` },
-    storage: { title: '용량을 먼저 줄여 주세요', copy: `공유 용량을 초과했거나 쓰기 잠금 상태입니다. 현재 사용량 ${storage ? `${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB` : '정보 확인 필요'}을 확인하고 기존 Database의 용량을 줄여 주세요.` },
+    teamLimit: { title: '팀 Database를 더 발급할 수 없습니다', copy: '현재 팀의 Database 발급 한도에 도달했습니다. 기존 Database를 확인한 뒤 다시 시도해 주세요.' },
+    storage: { title: '용량을 먼저 줄여 주세요', copy: teamId ? '팀에서 사용할 수 있는 공유 용량을 초과했거나 쓰기 잠금 상태입니다. 기존 Database의 용량을 확인한 뒤 다시 시도해 주세요.' : `공유 용량을 초과했거나 쓰기 잠금 상태입니다. 현재 사용량 ${storage ? `${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB` : '정보 확인 필요'}을 확인하고 기존 Database의 용량을 줄여 주세요.` },
     postgres: { title: '지금은 MySQL만 발급할 수 있습니다', copy: 'PostgreSQL 발급은 아직 준비 중입니다. MySQL을 선택해 주세요.' },
+    permission: { title: 'Database를 발급할 권한이 없습니다', copy: '팀장 또는 DevOps만 팀 Database를 발급할 수 있습니다.' },
+    notApproved: { title: '팀 승인이 필요합니다', copy: '팀이 승인된 뒤 Database를 발급할 수 있습니다.' },
     failure: { title: 'Database 발급 요청에 실패했습니다', copy: '잠시 후 다시 시도해 주세요. 문제가 계속되면 Database 목록에서 상태를 확인해 주세요.' },
     accepted: { title: '발급 요청을 보냈습니다', copy: 'Database가 준비되는 동안 목록에서 상태를 확인할 수 있습니다. 준비가 끝나면 상세 화면에서 접속 정보를 확인하세요.' },
   };
@@ -319,7 +359,7 @@ export default function DatabaseCreatePage() {
   return (
     <StudentShell
       activeItem="database"
-      scopeLabel="내 Resources"
+      scopeLabel={scopeLabel}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
@@ -337,7 +377,7 @@ export default function DatabaseCreatePage() {
             <Description>엔진과 이름을 정하면 발급 요청을 보냅니다.</Description>
           </TitleGroup>
           <Actions>
-            <Button variant="secondary" onClick={() => navigate('/databases')}>취소</Button>
+            <Button variant="secondary" onClick={() => navigate(listPath)}>취소</Button>
             <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => void submit()} disabled={!canSubmit || needsQuotaCheck}>
               {submitting ? '요청 중…' : '발급'}
             </Button>
@@ -346,10 +386,14 @@ export default function DatabaseCreatePage() {
 
         <Notice role="note">
           <Octicon name="info" size={18} />
-          <span>개인 Database를 발급합니다. 요청이 접수된 뒤 준비 상태가 목록에 표시되며, 접속 정보는 준비 완료 후 상세 화면에서 확인할 수 있습니다.</span>
+          <span>{teamId ? `${team.value?.name ?? '팀'} Database를 발급합니다. 요청이 접수된 뒤 준비 상태가 팀 목록에 표시되며, 접속 정보는 준비 완료 후 상세 화면에서 확인할 수 있습니다.` : '개인 Database를 발급합니다. 요청이 접수된 뒤 준비 상태가 목록에 표시되며, 접속 정보는 준비 완료 후 상세 화면에서 확인할 수 있습니다.'}</span>
         </Notice>
 
-        <Summary aria-label="Database 사용량">
+        {invalidOwner && <Notice role="alert">유효하지 않은 Database 소유 범위입니다. Database 목록으로 돌아가 주세요.</Notice>}
+        {teamId && team.error && <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />}
+        {teamId && team.value && team.value.status !== 'approved' && <Notice role="status">팀이 승인된 뒤 Database를 발급할 수 있습니다.</Notice>}
+
+        {!teamId && <Summary aria-label="Database 사용량">
           {quota.loading ? <><LoadingCard height={152} /><LoadingCard height={152} /></> : (
             <>
               <FlexibleUsageCard
@@ -368,7 +412,7 @@ export default function DatabaseCreatePage() {
               />
             </>
           )}
-        </Summary>
+        </Summary>}
 
         {databases.error && <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />}
 
@@ -405,8 +449,8 @@ export default function DatabaseCreatePage() {
           <DialogTitle id="database-dialog-title">{dialogContent[dialog].title}</DialogTitle>
           <DialogCopy id="database-dialog-copy">{dialogContent[dialog].copy}</DialogCopy>
           <DialogActions>
-            {dialog === 'storage' && <Button variant="secondary" onClick={() => { setDialog(null); navigate('/databases'); }}>Database 목록</Button>}
-            {dialog === 'accepted' && <Button variant="primary" onClick={() => navigate('/databases')}>Database 목록</Button>}
+            {dialog === 'storage' && <Button variant="secondary" onClick={() => { setDialog(null); navigate(listPath); }}>Database 목록</Button>}
+            {dialog === 'accepted' && <Button variant="primary" onClick={() => navigate(listPath)}>Database 목록</Button>}
             {dialog !== 'accepted' && <Button variant={dialog === 'failure' ? 'secondary' : 'primary'} onClick={() => setDialog(null)}>{dialog === 'failure' ? '닫기' : '확인'}</Button>}
           </DialogActions>
         </Dialog>
