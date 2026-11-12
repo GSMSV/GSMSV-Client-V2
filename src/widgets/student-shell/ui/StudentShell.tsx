@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
 import { StudentTopbar } from './StudentTopbar';
@@ -40,6 +41,9 @@ export interface StudentShellProps {
   onOpenNotifications: () => void;
   hasUnsavedInput?: boolean;
   onLogoutPendingChange?: (pending: boolean) => void;
+  disabledNavigationItems?: readonly StudentNavigationKey[];
+  sidebarActionsAtBottom?: boolean;
+  showTopbarDivider?: boolean;
 }
 
 export function StudentShell({
@@ -60,14 +64,37 @@ export function StudentShell({
   onOpenNotifications,
   hasUnsavedInput = false,
   onLogoutPendingChange,
+  disabledNavigationItems,
+  sidebarActionsAtBottom = true,
+  showTopbarDivider = false,
 }: StudentShellProps) {
+  const navigate = useNavigate();
+  const [logoutPending, setLogoutPending] = useState(false);
+
+  const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    if (item !== 'docs') {
+      onNavigate(item);
+      return;
+    }
+    if (logoutPending) return;
+    if (hasUnsavedInput && !window.confirm('저장하지 않은 내용이 있습니다. 저장하지 않고 Docs로 이동할까요?')) return;
+    void navigate('/help');
+  };
+
+  const handleLogoutPendingChange = (pending: boolean) => {
+    setLogoutPending(pending);
+    onLogoutPendingChange?.(pending);
+  };
+
   return (
     <Layout>
       <StudentSidebar
         activeItem={activeItem}
-        onNavigate={onNavigate}
+        onNavigate={handleNavigate}
         onCreateTeam={onCreateTeam}
         onOpenStatus={onOpenStatus}
+        disabledItems={disabledNavigationItems}
+        actionsAtBottom={sidebarActionsAtBottom}
       />
       <MainColumn>
         <StudentTopbar
@@ -82,7 +109,8 @@ export function StudentShell({
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}
           hasUnsavedInput={hasUnsavedInput}
-          onLogoutPendingChange={onLogoutPendingChange}
+          onLogoutPendingChange={handleLogoutPendingChange}
+          showBottomBorder={showTopbarDivider}
         />
         <PageContent>{children}</PageContent>
       </MainColumn>

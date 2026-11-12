@@ -71,11 +71,12 @@ const NavigationDivider = styled.div`
   background: ${({ theme }) => theme.colors.border};
 `;
 
-const SidebarActions = styled.div`
+const SidebarActions = styled.div<{ $atBottom: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space[8]}px;
-  margin-top: auto;
+  margin-top: ${({ $atBottom }) => $atBottom ? 'auto' : '0'};
+  padding-top: ${({ $atBottom }) => $atBottom ? '0' : '60px'};
 `;
 
 interface StudentSidebarProps {
@@ -83,6 +84,8 @@ interface StudentSidebarProps {
   onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => void;
   onCreateTeam: () => void;
   onOpenStatus: () => void;
+  disabledItems?: readonly StudentNavigationKey[];
+  actionsAtBottom?: boolean;
 }
 
 const primaryNavigation = [
@@ -100,7 +103,7 @@ const secondaryNavigation = [
   { key: 'settings', label: '설정', icon: 'gear' },
 ] as const;
 
-export function StudentSidebar({ activeItem, onNavigate, onCreateTeam, onOpenStatus }: StudentSidebarProps) {
+export function StudentSidebar({ activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
   return (
     <Sidebar aria-label="학생 메뉴">
       <Brand>
@@ -115,6 +118,8 @@ export function StudentSidebar({ activeItem, onNavigate, onCreateTeam, onOpenSta
             label={label}
             icon={<Octicon name={icon} size={16} />}
             active={activeItem === key}
+            disabled={disabledItems.includes(key)}
+            title={disabledItems.includes(key) ? '아직 제공되지 않는 기능입니다' : undefined}
             onClick={() => onNavigate(key)}
           />
         ))}
@@ -125,11 +130,13 @@ export function StudentSidebar({ activeItem, onNavigate, onCreateTeam, onOpenSta
             label={label}
             icon={<Octicon name={icon} size={16} />}
             active={activeItem === key}
+            disabled={disabledItems.includes(key)}
+            title={disabledItems.includes(key) ? '아직 제공되지 않는 기능입니다' : undefined}
             onClick={() => onNavigate(key)}
           />
         ))}
       </Navigation>
-      <SidebarActions>
+      <SidebarActions $atBottom={actionsAtBottom}>
         <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={onCreateTeam}>
           팀 만들기
         </Button>
