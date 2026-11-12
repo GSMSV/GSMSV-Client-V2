@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
+import { Octicon } from '../icons';
 
 export type BannerTone = 'neutral' | 'primary' | 'warning' | 'danger';
 
@@ -17,13 +18,17 @@ const Surface = styled.section<{ $tone: BannerTone }>`
   color: ${({ theme }) => theme.colors.text};
 `;
 
-const IconSlot = styled.span`
+const IconSlot = styled.span<{ $tone: BannerTone }>`
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
+  color: ${({ theme, $tone }) =>
+    $tone === 'primary' ? theme.colors.primary :
+    $tone === 'warning' ? theme.colors.warning :
+    $tone === 'danger' ? theme.colors.danger : theme.colors.muted};
 `;
 
 const Copy = styled.div`
@@ -33,11 +38,15 @@ const Copy = styled.div`
   min-width: 0;
 `;
 
-const Title = styled.strong`
-  font-family: ${({ theme }) => theme.typography.label.family};
+const Title = styled.strong<{ $tone: BannerTone }>`
+  color: ${({ theme, $tone }) =>
+    $tone === 'primary' ? theme.colors.primary :
+    $tone === 'warning' ? theme.colors.warning :
+    $tone === 'danger' ? theme.colors.danger : theme.colors.text};
+  font-family: ${({ theme }) => theme.typography.bodySmall.family};
   font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
-  font-weight: 600;
-  line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+  font-weight: 500;
+  line-height: 20px;
 `;
 
 const Description = styled.span`
@@ -68,14 +77,16 @@ export interface BannerProps {
 export function Banner({ title, description, tone, icon, action, secondaryAction, className }: BannerProps) {
   return (
     <Surface $tone={tone} className={className} role="status">
-      {icon && <IconSlot aria-hidden="true">{icon}</IconSlot>}
+      <IconSlot $tone={tone} aria-hidden="true">
+        {icon ?? <Octicon name="clock" size={20} />}
+      </IconSlot>
       <Copy>
-        <Title>{title}</Title>
+        <Title $tone={tone}>{title}</Title>
         {description != null && <Description>{description}</Description>}
       </Copy>
-      {(secondaryAction || action) && (
+      {action && (
         <Actions>
-          {secondaryAction}
+          {secondaryAction && <>{secondaryAction}</>}
           {action}
         </Actions>
       )}

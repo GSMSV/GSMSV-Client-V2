@@ -9,6 +9,7 @@ import {
 } from '../../shared/ui/feedback';
 import { Meter, Pagination, UsageCard } from '../../shared/ui/data-display';
 import { Octicon, octiconNames } from '../../shared/ui/icons';
+import { theme } from '../../shared/theme';
 
 const Page = styled.main`
   box-sizing: border-box;
@@ -55,12 +56,12 @@ const IconCell = styled.div`display: flex; height: 42px; align-items: center; ga
 const TypeSample = styled.div`display: grid; grid-template-columns: 160px 1fr; align-items: baseline; gap: 24px; padding: 12px 0; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; span { color: ${({ theme }) => theme.colors.faint}; font: 12px 'DM Mono', monospace; }`;
 const DarkPanel = styled.div`padding: 24px; border-radius: 8px; background: ${({ theme }) => theme.colors.surface};`;
 
-const colors = [
-  ['primary', '#00ff90'], ['onPrimary', '#15251d'], ['primaryHover', '#4dffb1'], ['primaryPressed', '#00d97a'], ['primarySoft', '#203d30'],
-  ['canvas', '#2b292f'], ['surface', '#343238'], ['raised', '#3d3a42'], ['raisedHover', '#4a4750'], ['raisedPressed', '#322f37'],
-  ['field', '#403d45'], ['text', '#f7f6f8'], ['muted', '#c0bbc6'], ['faint', '#a8a2af'], ['border', '#514d57'],
-  ['warning', '#ffd08a'], ['warningSoft', '#433829'], ['danger', '#ffb0b0'], ['dangerSoft', '#482e33'], ['overlayHover', '#ffffff14'],
-];
+const colorNames = [
+  'primary', 'onPrimary', 'primaryHover', 'primaryPressed', 'primarySoft',
+  'canvas', 'sidebar', 'surface', 'raised', 'raisedHover', 'raisedPressed',
+  'field', 'text', 'muted', 'faint', 'border', 'overlayHover', 'overlayPressed',
+  'warning', 'warningSoft', 'danger', 'dangerSoft', 'dangerSoftHover', 'dangerSoftPressed',
+] as const;
 
 export default function DesignSystemPage() {
   const [segment, setSegment] = useState('개인');
@@ -75,7 +76,10 @@ export default function DesignSystemPage() {
 
       <Section>
         <SectionTitle>Color</SectionTitle>
-        <ColorGrid>{colors.map(([name, value]) => <ColorSwatch key={name} $color={value}><div><strong>{name}</strong><small>{value}</small></div></ColorSwatch>)}</ColorGrid>
+        <ColorGrid>{colorNames.map((name) => {
+          const value = theme.colors[name];
+          return <ColorSwatch key={name} $color={value}><div><strong>{name}</strong><small>{value}</small></div></ColorSwatch>;
+        })}</ColorGrid>
       </Section>
       <Section>
         <SectionTitle>Typography</SectionTitle>
@@ -86,6 +90,7 @@ export default function DesignSystemPage() {
         <TypeSample><span>Body small · 14 / 22</span><div style={{ fontSize: 14, lineHeight: '22px' }}>설명과 폼 안내에 사용하는 작은 본문입니다.</div></TypeSample>
         <TypeSample><span>Label · 12 / 18 · Medium</span><div style={{ fontSize: 12, fontWeight: 500, lineHeight: '18px' }}>상태 및 폼 레이블</div></TypeSample>
         <TypeSample><span>Code · DM Mono 13 / 22</span><code style={{ font: '13px/22px DM Mono, monospace' }}>grn:user_abc123:vm_def456</code></TypeSample>
+        <TypeSample><span>Code display · DM Mono 32 / 40 · 8%</span><code style={{ fontFamily: 'DM Mono, monospace', fontSize: 32, fontWeight: 500, lineHeight: '40px', letterSpacing: '2.56px' }}>WDJB-MJHT</code></TypeSample>
       </Section>
       <Section>
         <SectionTitle>Octicons</SectionTitle><SectionNote>Figma 아이콘 이름에 대응하는 공유 아이콘 레지스트리</SectionNote>

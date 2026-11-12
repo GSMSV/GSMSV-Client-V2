@@ -50,9 +50,8 @@ const Trigger = styled.button<{ $open: boolean; $invalid: boolean; $disabled: bo
   justify-content: space-between;
   gap: ${({ theme }) => theme.space[8]}px;
   padding: 0 ${({ theme }) => theme.space[16]}px;
-  border: 1px solid
-    ${({ theme, $invalid, $open }) =>
-      $invalid ? theme.colors.danger : $open ? theme.colors.primary : theme.colors.border};
+  border: ${({ theme, $invalid, $open }) =>
+    $invalid ? `1px solid ${theme.colors.danger}` : $open ? `2px solid ${theme.colors.primary}` : `1px solid ${theme.colors.border}`};
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme }) => theme.colors.text};
   background: ${({ theme }) => theme.colors.field};
@@ -61,13 +60,12 @@ const Trigger = styled.button<{ $open: boolean; $invalid: boolean; $disabled: bo
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
   opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not([aria-expanded='true']) {
     border-color: ${({ theme, $invalid }) => ($invalid ? theme.colors.danger : theme.colors.faint)};
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
+    border: 2px solid ${({ theme, $invalid }) => ($invalid ? theme.colors.danger : theme.colors.primary)};
   }
 
   &:disabled {
@@ -114,20 +112,21 @@ const Menu = styled.ul`
   padding: ${({ theme }) => theme.space[4]}px;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.raised};
-  box-shadow: 0 8px 24px #00000033;
+  gap: 2px;
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 12px 16px rgba(0, 0, 0, 0.45);
   list-style: none;
 `;
 
 const OptionButton = styled.button<{ $selected: boolean }>`
   display: flex;
-  min-height: ${({ theme }) => theme.size.control}px;
+  min-height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: ${({ theme }) => theme.space[8]}px;
-  padding: 0 ${({ theme }) => theme.space[8]}px;
+  padding: 9px 12px;
   border: 0;
-  border-radius: ${({ theme }) => theme.radii.sm}px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $selected }) => ($selected ? theme.colors.primary : theme.colors.text)};
   background: ${({ theme, $selected }) => ($selected ? theme.colors.primarySoft : 'transparent')};
   font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
@@ -136,8 +135,8 @@ const OptionButton = styled.button<{ $selected: boolean }>`
   text-align: left;
   cursor: pointer;
 
-  &:hover:not(:disabled),
-  &:focus-visible {
+  &:hover:not(:disabled):not([aria-selected='true']),
+  &:focus-visible:not([aria-selected='true']) {
     background: ${({ theme }) => theme.colors.overlayHover};
     outline: none;
   }
@@ -177,7 +176,7 @@ export function SelectField({
   value,
   defaultValue,
   options,
-  placeholder = '선택',
+  placeholder = '선택하세요',
   error,
   disabled = false,
   onChange,
@@ -278,25 +277,58 @@ export function SelectField({
   );
 }
 
-const ComboInput = styled.input<{ $open: boolean; $invalid: boolean }>`
+const ComboControl = styled.div<{ $open: boolean; $invalid: boolean; $disabled: boolean }>`
   box-sizing: border-box;
+  display: flex;
   width: 100%;
   min-width: 0;
   height: ${({ theme }) => theme.size.control}px;
+  align-items: center;
+  gap: ${({ theme }) => theme.space[8]}px;
   padding: 0 ${({ theme }) => theme.space[16]}px;
-  border: 1px solid
-    ${({ theme, $invalid, $open }) =>
-      $invalid ? theme.colors.danger : $open ? theme.colors.primary : theme.colors.border};
+  border: ${({ theme, $invalid, $open }) =>
+    $invalid ? `1px solid ${theme.colors.danger}` : $open ? `2px solid ${theme.colors.primary}` : `1px solid ${theme.colors.border}`};
   border-radius: ${({ theme }) => theme.radii.base}px;
+  color: ${({ theme }) => theme.colors.muted};
+  background: ${({ theme }) => theme.colors.field};
+  opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
+
+  &:focus-within {
+    border: 2px solid ${({ theme, $invalid }) => ($invalid ? theme.colors.danger : theme.colors.primary)};
+  }
+`;
+
+const ComboIcon = styled.span<{ $open?: boolean }>`
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.colors.muted};
+  transform: rotate(${({ $open }) => ($open ? '180deg' : '0deg')});
+  transition: transform 120ms ease;
+`;
+
+const ComboInput = styled.input<{ $open: boolean; $invalid: boolean }>`
+  box-sizing: border-box;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
   outline: none;
   color: ${({ theme }) => theme.colors.text};
-  background: ${({ theme }) => theme.colors.field};
+  background: transparent;
   font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
   font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
 
-  &:focus {
-    border-width: 2px;
-    border-color: ${({ theme, $invalid }) => ($invalid ? theme.colors.danger : theme.colors.primary)};
+  &:focus { outline: none; }
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.faint};
+    opacity: 1;
   }
 
   &:disabled {
@@ -310,7 +342,7 @@ export function Combobox({
   value,
   defaultValue,
   options,
-  placeholder = '검색',
+  placeholder = '이름이나 이메일로 검색',
   error,
   disabled = false,
   onChange,
@@ -365,7 +397,9 @@ export function Combobox({
   return (
     <Root>
       {label && <Label id={`${id}-label`} htmlFor={id}>{label}</Label>}
-      <ComboInput
+      <ComboControl $open={open} $invalid={Boolean(error)} $disabled={disabled}>
+        <ComboIcon aria-hidden="true"><Octicon name="search" size={16} /></ComboIcon>
+        <ComboInput
         ref={inputRef}
         id={id}
         role="combobox"
@@ -389,7 +423,9 @@ export function Combobox({
           onInputChange?.(event.currentTarget.value);
         }}
         onKeyDown={onKeyDown}
-      />
+        />
+        <ComboIcon $open={open} aria-hidden="true"><Octicon name="chevron-down" size={16} /></ComboIcon>
+      </ComboControl>
       {open && (
         <Menu id={listId} role="listbox" aria-labelledby={label ? `${id}-label` : undefined}>
           {filteredOptions.map((option, index) => (

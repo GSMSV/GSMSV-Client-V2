@@ -24,10 +24,10 @@ const NavigationBase = styled.a<{ $active: boolean }>`
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.muted)};
   background: ${({ theme, $active }) => ($active ? theme.colors.primarySoft : 'transparent')};
-  font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
-  font-weight: ${({ theme }) => theme.typography.bodySmall.weight};
-  line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
   text-decoration: none;
   cursor: pointer;
 
@@ -57,10 +57,10 @@ const NavigationButton = styled.button<{ $active: boolean }>`
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.muted)};
   background: ${({ theme, $active }) => ($active ? theme.colors.primarySoft : 'transparent')};
-  font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
-  font-weight: ${({ theme }) => theme.typography.bodySmall.weight};
-  line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
   text-align: left;
   cursor: pointer;
 

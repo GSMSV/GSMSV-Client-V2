@@ -30,6 +30,10 @@ const Label = styled.label`
   line-height: ${({ theme }) => theme.typography.label.lineHeight}px;
 `;
 
+const DateValue = styled.span<{ $placeholder: boolean }>`
+  color: ${({ theme, $placeholder }) => ($placeholder ? theme.colors.faint : theme.colors.text)};
+`;
+
 const DateTrigger = styled.button<{ $open: boolean; $disabled: boolean }>`
   display: flex;
   width: 100%;
@@ -37,7 +41,7 @@ const DateTrigger = styled.button<{ $open: boolean; $disabled: boolean }>`
   align-items: center;
   justify-content: space-between;
   padding: 0 ${({ theme }) => theme.space[16]}px;
-  border: 1px solid ${({ theme, $open }) => ($open ? theme.colors.primary : theme.colors.border)};
+  border: ${({ theme, $open }) => ($open ? `2px solid ${theme.colors.primary}` : `1px solid ${theme.colors.border}`)};
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme }) => theme.colors.text};
   background: ${({ theme }) => theme.colors.field};
@@ -48,8 +52,8 @@ const DateTrigger = styled.button<{ $open: boolean; $disabled: boolean }>`
   opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
+    border: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: none;
   }
 `;
 
@@ -58,19 +62,22 @@ const Calendar = styled.div`
   z-index: 1100;
   top: calc(100% + 4px);
   left: 0;
-  width: 284px;
-  padding: ${({ theme }) => theme.space[16]}px;
+  box-sizing: border-box;
+  display: flex;
+  width: 312px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.raised};
-  box-shadow: 0 8px 24px #00000033;
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 12px 16px rgba(0, 0, 0, 0.45);
 `;
 
 const CalendarHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: ${({ theme }) => theme.space[8]}px;
 `;
 
 const MonthLabel = styled.span`
@@ -94,7 +101,7 @@ const MonthButton = styled.button`
   font: inherit;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not([aria-pressed='true']) {
     background: ${({ theme }) => theme.colors.overlayHover};
   }
 
@@ -127,10 +134,10 @@ const DayButton = styled.button<{ $selected: boolean }>`
   height: 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid ${({ theme, $selected }) => ($selected ? theme.colors.primary : 'transparent')};
+  border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
-  color: ${({ theme, $selected }) => ($selected ? theme.colors.primary : theme.colors.text)};
-  background: ${({ theme, $selected }) => ($selected ? theme.colors.primarySoft : 'transparent')};
+  color: ${({ theme, $selected }) => ($selected ? theme.colors.onPrimary : theme.colors.text)};
+  background: ${({ theme, $selected }) => ($selected ? theme.colors.primary : 'transparent')};
   font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
   font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
   line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
@@ -217,7 +224,7 @@ export function DateField({
           if (event.key === 'Escape') setOpen(false);
         }}
       >
-        <span>{selectedValue ?? 'YYYY.MM.DD'}</span>
+        <DateValue $placeholder={!selectedValue}>{selectedValue ?? '날짜를 선택하세요'}</DateValue>
         <span aria-hidden="true">{calendarIcon}</span>
       </DateTrigger>
       {open && (

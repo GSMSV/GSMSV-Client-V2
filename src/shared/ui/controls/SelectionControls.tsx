@@ -23,23 +23,22 @@ const SwitchRow = styled.label<{ $disabled: boolean }>`
 const SwitchTrack = styled.span<{ $checked: boolean; $disabled: boolean }>`
   position: relative;
   box-sizing: border-box;
-  width: 36px;
-  height: 20px;
-  flex: 0 0 36px;
-  border: 1px solid ${({ theme, $checked }) => ($checked ? theme.colors.primary : theme.colors.border)};
-  border-radius: 10px;
-  background: ${({ theme, $checked }) => ($checked ? theme.colors.primarySoft : theme.colors.raised)};
+  width: 44px;
+  height: 24px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  background: ${({ theme, $checked }) => ($checked ? theme.colors.primary : theme.colors.raised)};
   opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
   transition: background-color 120ms ease, border-color 120ms ease;
 
   &::after {
     position: absolute;
     top: 2px;
-    left: ${({ $checked }) => ($checked ? '17px' : '2px')};
-    width: 14px;
-    height: 14px;
+    left: ${({ $checked }) => ($checked ? '22px' : '2px')};
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    background: ${({ theme, $checked }) => ($checked ? theme.colors.primary : theme.colors.muted)};
+    background: ${({ theme, $checked }) => ($checked ? theme.colors.onPrimary : theme.colors.muted)};
     content: '';
     transition: left 120ms ease;
   }
@@ -127,14 +126,15 @@ const SegmentButton = styled.button<{ $selected: boolean }>`
   flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  padding: 0 ${({ theme }) => theme.space[8]}px;
-  border: 1px solid ${({ theme, $selected }) => ($selected ? theme.colors.primary : 'transparent')};
-  border-radius: ${({ theme }) => theme.radii.sm}px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $selected }) => ($selected ? theme.colors.primary : theme.colors.muted)};
   background: ${({ theme, $selected }) => ($selected ? theme.colors.primarySoft : 'transparent')};
-  font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
-  line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
   text-align: center;
   cursor: pointer;
 
@@ -142,7 +142,7 @@ const SegmentButton = styled.button<{ $selected: boolean }>`
     background: ${({ theme }) => theme.colors.overlayHover};
   }
 
-  &:active:not(:disabled) {
+  &:active:not(:disabled):not([aria-checked='true']) {
     background: ${({ theme }) => theme.colors.overlayPressed};
   }
 
