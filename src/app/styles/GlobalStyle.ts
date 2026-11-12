@@ -1,6 +1,14 @@
 import { createGlobalStyle } from 'styled-components';
 
 export const GlobalStyle = createGlobalStyle`
+  @font-face {
+    font-family: 'Pretendard';
+    src: url('/assets/PretendardVariable.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
   *,
   *::before,
   *::after {
