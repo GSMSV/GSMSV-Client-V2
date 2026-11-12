@@ -207,7 +207,7 @@ const PreviewNotice = styled.div`
 
 type DialogKind = 'unsupported-source' | null;
 
-export default function AppCreateSourcePage() {
+export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
   const { draft, update } = useAppSourceDraft();
@@ -219,21 +219,22 @@ export default function AppCreateSourcePage() {
     archive: '압축 파일',
   };
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'apps') navigate('/apps');
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
   };
 
   const handleContinue = () => {
     if (draft.sourceType !== 'github') return;
     const name = draft.name.trim();
     if (name.length < 1 || name.length > 30) return;
-    sessionStorage.setItem('gsmsv.app-create-source-draft', JSON.stringify({ name }));
-    navigate('/apps/new/service');
+    const draftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
+    sessionStorage.setItem(draftKey, JSON.stringify({ name }));
+    navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps/new/service` : '/apps/new/service');
   };
 
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
@@ -244,7 +245,7 @@ export default function AppCreateSourcePage() {
       onOpenProfile={() => undefined}
     >
       <Page>
-        <Breadcrumb>Apps</Breadcrumb>
+        <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
         <Heading>어디서 코드를 가져오시겠습니까?</Heading>
         {isFigmaPreview && <PreviewNotice role="note">
           <Octicon name="info" size={16} />

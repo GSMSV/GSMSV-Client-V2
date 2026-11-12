@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { createPersonalApp } from '../../features/app/create-app';
+import { createPersonalApp, createTeamApp } from '../../features/app/create-app';
 import { checkAppSubdomain, useAppServiceDraft, type AppServiceType } from '../../features/app/create-app/service';
 import { getSessionUser } from '../../entities/session';
 import { ApiRequestError } from '../../shared/api';
@@ -206,10 +206,11 @@ function serviceDescription(type: AppServiceType) {
   return '웹은 주소로 요청을 받습니다.';
 }
 
-export default function AppCreateServicePage() {
+export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const { draft, update } = useAppServiceDraft();
+  const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
+  const { draft, update } = useAppServiceDraft(sourceDraftKey);
   const previewOnly = import.meta.env.DEV;
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
@@ -222,7 +223,7 @@ export default function AppCreateServicePage() {
   useEffect(() => () => requestController.current?.abort(), []);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'apps') navigate('/apps');
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
   };
 
   const checkSubdomain = useCallback(async () => {
@@ -263,14 +264,14 @@ export default function AppCreateServicePage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const app = await createPersonalApp(name);
-      sessionStorage.removeItem('gsmsv.app-create-source-draft');
+      const app = teamId ? await createTeamApp(teamId, name) : await createPersonalApp(name);
+      sessionStorage.removeItem(sourceDraftKey);
       navigate(`/apps/${encodeURIComponent(app.grn)}`);
     } catch (error) {
       setCreateError(error instanceof ApiRequestError && error.status === 401
         ? { message: '로그인이 필요합니다. 로그인한 뒤 다시 시도해 주세요.', login: true }
         : error instanceof ApiRequestError && error.status === 409
-          ? { message: '개인 앱 생성 한도에 도달했거나 요청이 충돌했습니다. Apps 목록에서 사용량을 확인해 주세요.' }
+          ? { message: teamId ? '팀 Apps 생성 한도에 도달했거나 요청이 충돌했습니다. 팀 Apps 목록에서 사용량을 확인해 주세요.' : '개인 앱 생성 한도에 도달했거나 요청이 충돌했습니다. Apps 목록에서 사용량을 확인해 주세요.' }
           : error instanceof ApiRequestError && error.status === 400
             ? { message: '앱 이름을 확인해 주세요. 앞뒤 공백을 제외하고 1~30자로 입력할 수 있습니다.' }
             : { message: '앱을 만들지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.' });
@@ -294,7 +295,7 @@ export default function AppCreateServicePage() {
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
@@ -306,7 +307,7 @@ export default function AppCreateServicePage() {
     >
       <Page>
         <PageMeta>
-          <Breadcrumb>Apps</Breadcrumb>
+          <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
           {previewOnly && <PreviewBadge>Figma 미리보기 샘플 · 실제 설정값 아님</PreviewBadge>}
         </PageMeta>
         <Heading>어떤 서비스로 실행하시겠습니까?</Heading>
@@ -318,7 +319,7 @@ export default function AppCreateServicePage() {
             <StepIndicator number={2} label="서비스" active />
           </Steps>
           <StepActions>
-            <Button variant="ghost" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate('/apps/new')}>이전: 소스</Button>
+            <Button variant="ghost" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps/new` : '/apps/new')}>이전: 소스</Button>
             <Button variant="primary" icon={<Octicon name={creating ? 'sync' : 'check'} size={16} />} onClick={() => void handleCreate()} disabled={creating || draft.appName.trim().length < 1 || draft.appName.trim().length > 30}>{creating ? '앱 만드는 중' : '앱 만들기'}</Button>
           </StepActions>
         </StepRow>
