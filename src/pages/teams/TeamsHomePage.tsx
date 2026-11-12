@@ -493,7 +493,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
 
   useEffect(() => {
     const team = detail.value;
-    if (!selectedTeamId || team?.status !== 'pending' || !team.permissions.invite_member) {
+    if (!selectedTeamId || team?.id !== selectedTeamId || team.status !== 'pending' || !team.permissions.invite_member) {
       setPendingInvitations({ value: [], loading: false, error: false });
       return;
     }
