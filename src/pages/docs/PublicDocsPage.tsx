@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
 import { Button } from '../../shared/ui/controls';
@@ -11,8 +11,17 @@ const Screen = styled.div`
 const Header = styled.header`
   display: flex; height: 74px; align-items: center; justify-content: space-between; gap: 24px;
   padding: 16px 40px; border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 700px) {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
 `;
-const HeaderLeft = styled.div`display: flex; align-items: center; gap: 32px;`;
+const HeaderLeft = styled.div`
+  display: flex; align-items: center; gap: 32px;
+  @media (max-width: 700px) { width: 100%; flex-wrap: wrap; gap: 12px; }
+`;
 const Brand = styled.a`
   display: inline-flex; align-items: center; gap: 12px; color: ${({ theme }) => theme.colors.text}; text-decoration: none;
 `;
@@ -20,7 +29,7 @@ const BrandLogo = styled.img`display: block; width: 24px; height: 24px;`;
 const BrandName = styled.span`
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
 `;
-const HeaderNav = styled.nav`display: flex; align-items: center; gap: 8px;`;
+const HeaderNav = styled.nav`display: flex; align-items: center; gap: 8px; flex-wrap: wrap;`;
 const HeaderLink = styled.a<{ $active?: boolean }>`
   display: inline-flex; height: 42px; align-items: center; justify-content: center; padding: 0 16px;
   border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme, $active }) => $active ? theme.colors.raised : 'transparent'};
@@ -29,9 +38,13 @@ const HeaderLink = styled.a<{ $active?: boolean }>`
 `;
 const Layout = styled.div`
   display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: calc(100vh - 74px);
+
+  @media (max-width: 960px) { grid-template-columns: minmax(0, 1fr); }
 `;
 const Sidebar = styled.aside`
   padding: 24px; background: ${({ theme }) => theme.colors.sidebar};
+
+  @media (max-width: 700px) { padding: 16px; }
 `;
 const SearchLabel = styled.label`
   display: block; margin-bottom: 8px; color: ${({ theme }) => theme.colors.muted};
@@ -57,30 +70,48 @@ const NavItem = styled.a<{ $active?: boolean }>`
   text-decoration: none; &:hover { background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : theme.colors.overlayHover}; }
   svg { flex: 0 0 16px; }
 `;
-const Main = styled.main`padding: 28px 40px 64px;`;
-const MainGrid = styled.div`
-  display: grid; grid-template-columns: minmax(520px, 760px) 208px; justify-content: center; align-items: start; gap: 34px;
-  max-width: 1090px; margin: 0 auto;
-  @media (max-width: 1150px) { grid-template-columns: minmax(0, 760px); }
+const StaticNavItem = styled(NavItem)`
+  cursor: default;
+  &:hover { background: transparent; }
 `;
-const Article = styled.article`display: flex; min-width: 0; flex-direction: column; gap: 16px;`;
+const Main = styled.main`
+  padding: 40px 48px 64px;
+  @media (max-width: 700px) { padding: 24px 16px 40px; }
+`;
+const MainGrid = styled.div`
+  display: grid; grid-template-columns: 760px 208px; justify-content: start; align-items: start; gap: 48px;
+  max-width: 100%; margin: 0;
+  @media (max-width: 1391px) {
+    grid-template-columns: minmax(0, 760px);
+    gap: 24px;
+  }
+  @media (max-width: 1150px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+const Article = styled.article`display: flex; min-width: 0; flex-direction: column; gap: 24px;`;
 const Breadcrumb = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.faint}; font-size: 12px; line-height: 18px;
 `;
+const PageHeading = styled.header`display: flex; flex-direction: column; gap: 8px;`;
 const Title = styled.h1`
   margin: 0; color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+  font: ${({ theme }) => theme.typography.h1.weight} ${({ theme }) => theme.typography.h1.size}px/${({ theme }) => theme.typography.h1.lineHeight}px ${({ theme }) => theme.typography.h1.family}, sans-serif;
 `;
 const Intro = styled.p`
-  margin: -8px 0 0; color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  margin: 0; color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
 const LoginNotice = styled.section`
   display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface}; color: ${({ theme }) => theme.colors.muted};
+  @media (max-width: 600px) { flex-wrap: wrap; }
 `;
 const NoticeCopy = styled.div`flex: 1; min-width: 0; p { margin: 4px 0 0; font-size: 12px; line-height: 18px; }`;
-const NoticeTitle = styled.strong`color: ${({ theme }) => theme.colors.text}; font-size: 12px; line-height: 18px;`;
+const NoticeTitle = styled.strong`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
 const Card = styled.section`
   display: flex; flex-direction: column; gap: 16px; padding: 24px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.surface};
   scroll-margin-top: 20px;
@@ -90,9 +121,9 @@ const CardTitle = styled.h2`
 `;
 const TableWrap = styled.div`overflow-x: auto;`;
 const Table = styled.table`
-  width: 100%; border-collapse: collapse; font-size: 14px; line-height: 22px;
-  th, td { padding: 10px 12px; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; text-align: left; }
-  th { background: ${({ theme }) => theme.colors.raised}; color: ${({ theme }) => theme.colors.faint}; font-weight: 500; }
+  width: 100%; min-width: 650px; border-collapse: collapse; font-size: 14px; line-height: 22px;
+  th, td { padding: 12px; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; text-align: left; }
+  th { background: ${({ theme }) => theme.colors.raised}; color: ${({ theme }) => theme.colors.faint}; font-size: 12px; line-height: 18px; font-weight: 500; }
   td { color: ${({ theme }) => theme.colors.muted}; }
   td:first-child { color: ${({ theme }) => theme.colors.text}; }
 `;
@@ -106,11 +137,17 @@ const TimelineCopy = styled.div`
   strong { color: ${({ theme }) => theme.colors.text}; font-weight: 500; line-height: 20px; }
 `;
 const FeedbackHead = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 16px;`;
-const FeedbackButtons = styled.div`display: flex; gap: 8px;`;
+const FeedbackButtons = styled.div`display: flex; flex-wrap: wrap; gap: 8px;`;
 const FeedbackHint = styled.p`margin: 0; color: ${({ theme }) => theme.colors.muted}; font-size: 12px; line-height: 18px;`;
 const Toc = styled.nav`
   position: sticky; top: 24px; display: flex; flex-direction: column; gap: 12px;
-  @media (max-width: 1150px) { display: none; }
+  @media (max-width: 1391px) {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+  }
 `;
 const TocLabel = styled.p`margin: 0 0 0; color: ${({ theme }) => theme.colors.faint}; font-size: 12px; line-height: 18px;`;
 const TocLink = styled.a<{ $active?: boolean }>`
@@ -134,17 +171,19 @@ const sections = [
   { id: 'feedback', label: '도움이 됐습니까?' },
 ];
 
-function jumpTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 export default function PublicDocsPage() {
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
+  const [activeSection, setActiveSection] = useState(() => window.location.hash.slice(1) || 'overview');
   const query = search.trim().toLocaleLowerCase();
+  useEffect(() => {
+    const updateSection = () => setActiveSection(window.location.hash.slice(1) || 'overview');
+    window.addEventListener('hashchange', updateSection);
+    return () => window.removeEventListener('hashchange', updateSection);
+  }, []);
   const visibleGroups = useMemo(() => groups.map(group => ({
     ...group,
-    items: group.items.filter(item => !query || `${group.label} ${item.label}`.toLocaleLowerCase().includes(query)),
+    items: group.items.filter(item => !query || (item.active && `${group.label} ${item.label}`.toLocaleLowerCase().includes(query))),
   })).filter(group => group.items.length > 0), [query]);
 
   return (
@@ -164,11 +203,16 @@ export default function PublicDocsPage() {
           <SearchLabel htmlFor="docs-search">Docs 검색</SearchLabel>
           <SearchInput id="docs-search" type="search" placeholder="검색어를 입력하세요" value={search} onChange={event => setSearch(event.target.value)} />
           <NavGroups aria-label="Docs 탐색">
+            {visibleGroups.length === 0 && <GroupLabel role="status">검색 결과가 없습니다.</GroupLabel>}
             {visibleGroups.map(group => <NavGroup key={group.label}>
               <GroupLabel>{group.label}</GroupLabel>
-              {group.items.map(item => <NavItem href="#" key={item.label} $active={item.active} aria-current={item.active ? 'page' : undefined} onClick={event => event.preventDefault()}>
-                <Octicon name={item.icon} size={16} aria-hidden="true" />{item.label}
-              </NavItem>)}
+              {group.items.map(item => item.active
+                ? <NavItem href="#overview" key={item.label} $active aria-current="page" onClick={() => setSearch('')}>
+                    <Octicon name={item.icon} size={16} aria-hidden="true" />{item.label}
+                  </NavItem>
+                : <StaticNavItem as="span" key={item.label} aria-disabled="true">
+                    <Octicon name={item.icon} size={16} aria-hidden="true" />{item.label}
+                  </StaticNavItem>)}
             </NavGroup>)}
           </NavGroups>
         </Sidebar>
@@ -176,11 +220,13 @@ export default function PublicDocsPage() {
           <MainGrid>
             <Article>
               <Breadcrumb>Docs / 정책</Breadcrumb>
-              <Title>VM 사용 기간과 연장</Title>
-              <Intro>개인 VM과 팀 VM의 첫 사용 기간, 연장 방법, 만료 후 처리를 설명합니다. 2026.09.30 수정</Intro>
+              <PageHeading>
+                <Title>VM 사용 기간과 연장</Title>
+                <Intro>개인 VM과 팀 VM의 첫 사용 기간, 연장 방법, 만료 후 처리를 설명합니다. 2026.09.30 수정</Intro>
+              </PageHeading>
               <LoginNotice>
                 <Octicon name="person" size={16} aria-hidden="true" />
-                <NoticeCopy><NoticeTitle>로그인하면 내 VM의 만료일을 여기서 바로 볼 수 있습니다</NoticeTitle><p>이 문서는 로그인 없이 볼 수 있습니다. 로그인하면 이 자리에 내 VM의 만료일과 연장 버튼이 나옵니다.</p></NoticeCopy>
+                <NoticeCopy><NoticeTitle>개인 VM의 남은 기간을 확인하려면 로그인하세요</NoticeTitle><p>로그인하면 홈에서 내 VM 목록과 남은 기간을 확인할 수 있습니다.</p></NoticeCopy>
                 <Button variant="primary" onClick={startDataGsmLogin} icon={<Octicon name="sign-in" size={16} />}>DataGSM으로 로그인</Button>
               </LoginNotice>
               <Card id="overview">
@@ -209,7 +255,7 @@ export default function PublicDocsPage() {
                 <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : feedback === 'no' ? '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.'}</FeedbackHint>
               </Card>
             </Article>
-            <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map((section, index) => <TocLink key={section.id} href={`#${section.id}`} $active={index === 0} onClick={event => { event.preventDefault(); jumpTo(section.id); }}>{section.label}</TocLink>)}</Toc>
+            <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
           </MainGrid>
         </Main>
       </Layout>
