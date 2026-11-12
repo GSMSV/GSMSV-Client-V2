@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
+import { listTeamApps } from '../../entities/app';
 import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
@@ -413,6 +414,30 @@ function TeamDatabaseCard({ teamId }: { teamId: string }) {
   );
 }
 
+function TeamAppsCard({ teamId }: { teamId: string }) {
+  const [count, setCount] = useState<number | null>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setCount(undefined);
+    void listTeamApps({ teamId, signal: controller.signal }).then(apps => {
+      if (!controller.signal.aborted) setCount(apps.length);
+    }).catch(() => {
+      if (!controller.signal.aborted) setCount(null);
+    });
+    return () => controller.abort();
+  }, [teamId]);
+
+  const loading = count === undefined;
+  return (
+    <ServiceCard>
+      <ServiceCardLabel><Octicon name="code" size={16} />Apps</ServiceCardLabel>
+      <ServiceCount aria-busy={loading}>{count ?? '—'} / —</ServiceCount>
+      <MutedCaption role="status">{loading ? '사용량을 불러오는 중…' : count === null ? '사용량 정보 없음' : '등록된 Apps · 전체 한도 정보 없음'}</MutedCaption>
+    </ServiceCard>
+  );
+}
+
 function getStatusMessage(team: TeamDetail) {
   if (team.status === 'pending') return { tone: 'warning' as const, title: '팀 승인 대기 중입니다', description: '팀 승인이 완료되면 팀 Resources를 사용할 수 있습니다.' };
   if (team.status === 'rejected') return { tone: 'danger' as const, title: '팀 승인이 거절되었습니다', description: team.rejection_reason || '팀 설정에서 거절 사유를 확인해 주세요.' };
@@ -602,7 +627,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
           <ServiceCards>
             <TeamDatabaseCard key={currentTeam.id} teamId={currentTeam.id} />
             <ServiceCard><ServiceCardLabel><Octicon name="zap" size={16} />Serverless</ServiceCardLabel><ServiceCount>— / —</ServiceCount><MutedCaption>사용량 정보 없음</MutedCaption></ServiceCard>
-            <ServiceCard><ServiceCardLabel><Octicon name="code" size={16} />Apps</ServiceCardLabel><ServiceCount>— / —</ServiceCount><MutedCaption>사용량 정보 없음</MutedCaption></ServiceCard>
+            <TeamAppsCard key={currentTeam.id} teamId={currentTeam.id} />
           </ServiceCards>
         </ServiceSection>
 
