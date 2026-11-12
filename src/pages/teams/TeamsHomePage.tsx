@@ -550,6 +550,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       </Page>
     );
   } else {
+    const teamSettingsPath = `/teams/${encodeURIComponent(currentTeam.id)}/settings`;
     const warningText = vcpu.unavailable
       ? undefined
       : quota!.vcpu.used >= quota!.vcpu.limit
@@ -565,7 +566,10 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
             {warningText && <TeamWarning>{warningText}</TeamWarning>}
           </TitleBlock>
           <Actions>
-            <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/settings`)}>팀 설정</Button>
+            <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀 설정</Button>
+            {currentTeam.status === 'pending' && currentTeam.permissions.invite_member && (
+              <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀원 초대</Button>
+            )}
             {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/new`)}>팀 VM 만들기</Button>}
           </Actions>
         </Heading>
