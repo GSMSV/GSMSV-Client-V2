@@ -412,7 +412,6 @@ export default function AppOverviewPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       {children}
     </StudentShell>

@@ -33,11 +33,15 @@ export function getInitialAppSourceDraft(): AppSourceDraft {
 }
 
 export function useAppSourceDraft() {
-  const [draft, setDraft] = useState(getInitialAppSourceDraft);
+  const [initialDraft] = useState(getInitialAppSourceDraft);
+  const [draft, setDraft] = useState(initialDraft);
 
   const update = <K extends keyof AppSourceDraft>(key: K, value: AppSourceDraft[K]) => {
     setDraft(current => ({ ...current, [key]: value }));
   };
 
-  return { draft, update };
+  const hasUnsavedInput = (Object.keys(initialDraft) as Array<keyof AppSourceDraft>)
+    .some(key => draft[key] !== initialDraft[key]);
+
+  return { draft, update, hasUnsavedInput };
 }

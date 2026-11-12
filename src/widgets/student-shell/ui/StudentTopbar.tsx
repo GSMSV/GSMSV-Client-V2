@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
 import { NotificationPanel } from '../../notification-panel';
+import { StudentProfile } from './StudentProfile';
 
 const Header = styled.header`
   display: flex;
@@ -152,6 +153,7 @@ const Count = styled.span`
 
 export interface StudentTopbarProps {
   scopeLabel: string;
+  teamScopeId?: string;
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
@@ -160,11 +162,12 @@ export interface StudentTopbarProps {
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
-  onOpenProfile: () => void;
+  hasUnsavedInput: boolean;
 }
 
 export function StudentTopbar({
   scopeLabel,
+  teamScopeId,
   userName,
   notificationCount,
   scopeOptions,
@@ -173,9 +176,11 @@ export function StudentTopbar({
   onSelectScope,
   onSearch,
   onOpenNotifications,
-  onOpenProfile,
+  hasUnsavedInput,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
+  const { teamId: routeTeamId } = useParams<{ teamId: string }>();
+  const selectedTeamId = scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id;
   const [scopeOpen, setScopeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
@@ -302,9 +307,12 @@ export function StudentTopbar({
           >
             <ActionLabel>알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
           </Button>
-          <Button variant="ghost" icon={<Octicon name="person" size={16} />} onClick={onOpenProfile}>
-            {userName}
-          </Button>
+          <StudentProfile
+            userName={userName}
+            activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
+            hasUnsavedInput={hasUnsavedInput}
+            onOpen={() => setNotificationsOpen(false)}
+          />
         </RightActions>
       </HeaderContent>
       <NotificationPanel

@@ -320,7 +320,6 @@ export default function PersonalResourcesPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       <Page>
         <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>

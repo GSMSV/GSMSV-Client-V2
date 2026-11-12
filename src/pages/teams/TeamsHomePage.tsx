@@ -637,7 +637,6 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       {content}
     </StudentShell>

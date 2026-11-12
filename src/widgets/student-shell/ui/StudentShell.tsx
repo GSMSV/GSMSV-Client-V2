@@ -26,6 +26,7 @@ export interface StudentShellProps {
   children: ReactNode;
   activeItem: StudentNavigationKey;
   scopeLabel: string;
+  teamScopeId?: string;
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
@@ -37,13 +38,14 @@ export interface StudentShellProps {
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
-  onOpenProfile: () => void;
+  hasUnsavedInput?: boolean;
 }
 
 export function StudentShell({
   children,
   activeItem,
   scopeLabel,
+  teamScopeId,
   userName,
   notificationCount,
   scopeOptions,
@@ -55,7 +57,7 @@ export function StudentShell({
   onSelectScope,
   onSearch,
   onOpenNotifications,
-  onOpenProfile,
+  hasUnsavedInput = false,
 }: StudentShellProps) {
   return (
     <Layout>
@@ -68,6 +70,7 @@ export function StudentShell({
       <MainColumn>
         <StudentTopbar
           scopeLabel={scopeLabel}
+          teamScopeId={teamScopeId}
           userName={userName}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
@@ -76,7 +79,7 @@ export function StudentShell({
           onSelectScope={onSelectScope}
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}
-          onOpenProfile={onOpenProfile}
+          hasUnsavedInput={hasUnsavedInput}
         />
         <PageContent>{children}</PageContent>
       </MainColumn>

@@ -36,11 +36,15 @@ export function getInitialAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-sou
 }
 
 export function useAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-source-draft') {
-  const [draft, setDraft] = useState(() => getInitialAppServiceDraft(sourceDraftKey));
+  const [initialDraft] = useState(() => getInitialAppServiceDraft(sourceDraftKey));
+  const [draft, setDraft] = useState(initialDraft);
 
   const update = <K extends keyof AppServiceDraft>(key: K, value: AppServiceDraft[K]) => {
     setDraft(current => ({ ...current, [key]: value }));
   };
 
-  return { draft, update };
+  const hasUnsavedInput = (Object.keys(initialDraft) as Array<keyof AppServiceDraft>)
+    .some(key => draft[key] !== initialDraft[key]);
+
+  return { draft, update, hasUnsavedInput };
 }

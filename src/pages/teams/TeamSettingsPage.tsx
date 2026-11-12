@@ -375,7 +375,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={Boolean(email)}
     >
       {content}
     </StudentShell>

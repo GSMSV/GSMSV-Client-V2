@@ -213,7 +213,7 @@ type DialogKind = 'unsupported-source' | null;
 export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const { draft, update } = useAppSourceDraft();
+  const { draft, update, hasUnsavedInput } = useAppSourceDraft();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
 
@@ -290,7 +290,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={hasUnsavedInput}
     >
       <Page>
         <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>

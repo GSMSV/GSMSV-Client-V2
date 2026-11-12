@@ -213,7 +213,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
   const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
-  const { draft, update } = useAppServiceDraft(sourceDraftKey);
+  const { draft, update, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
   const previewOnly = import.meta.env.DEV;
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
@@ -365,7 +365,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={hasUnsavedInput}
     >
       <Page>
         <PageMeta>
