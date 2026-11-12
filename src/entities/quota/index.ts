@@ -1,2 +1,3 @@
 export { getMyDatabaseQuota } from './api/getMyDatabaseQuota';
-export type { DatabaseQuota, QuotaAmount } from './model/types';
+export { getMyQuota } from './api/getMyQuota';
+export type { DatabaseQuota, MaxCreatableVm, MyQuota, QuotaAmount, VmQuotaAmount } from './model/types';

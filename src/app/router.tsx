@@ -9,6 +9,11 @@ const DatabaseCreatePage = lazy(() => import('../pages/database/DatabaseCreatePa
 const DatabaseDetailPage = lazy(() => import('../pages/database/DatabaseDetailPage'));
 const DatabaseBackupsPage = lazy(() => import('../pages/database/DatabaseBackupsPage'));
 const DatabaseSettingsPage = lazy(() => import('../pages/database/DatabaseSettingsPage'));
+const AppsListPage = lazy(() => import('../pages/apps/AppsListPage'));
+const AppCreateSourcePage = lazy(() => import('../pages/apps/AppCreateSourcePage'));
+const AppCreateServicePage = lazy(() => import('../pages/apps/AppCreateServicePage'));
+const AppSettingsPage = lazy(() => import('../pages/apps/AppSettingsPage'));
+const AppOverviewPage = lazy(() => import('../pages/apps/AppOverviewPage'));
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +29,46 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/new/service',
+    element: (
+      <Suspense fallback={null}>
+        <AppCreateServicePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/new',
+    element: (
+      <Suspense fallback={null}>
+        <AppCreateSourcePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/:appGrn/settings',
+    element: (
+      <Suspense fallback={null}>
+        <AppSettingsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/:appGrn',
+    element: (
+      <Suspense fallback={null}>
+        <AppOverviewRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps',
+    element: (
+      <Suspense fallback={null}>
+        <AppsListPage />
       </Suspense>
     ),
   },
@@ -76,6 +121,16 @@ export const router = createBrowserRouter([
     ),
   },
 ]);
+
+function AppSettingsRoute() {
+  const { appGrn } = useParams<{ appGrn: string }>();
+  return <AppSettingsPage key={appGrn} />;
+}
+
+function AppOverviewRoute() {
+  const { appGrn } = useParams<{ appGrn: string }>();
+  return <AppOverviewPage key={appGrn} />;
+}
 
 function DatabaseDetailRoute() {
   const { databaseGrn } = useParams<{ databaseGrn: string }>();
