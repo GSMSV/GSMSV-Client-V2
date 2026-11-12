@@ -86,10 +86,9 @@ const StyledButton = styled.button<{ $variant: ButtonVariant; $hasIcon: boolean 
   }
 
   &:disabled {
-    color: ${({ theme }) => theme.colors.muted};
+    color: ${({ theme }) => theme.colors.faint};
     background: ${({ theme }) => theme.colors.raised};
     cursor: not-allowed;
-    opacity: 0.65;
   }
 `;
 

@@ -56,6 +56,20 @@ const FieldGroup = styled.div`
   flex-direction: column;
   gap: 8px;
   width: 100%;
+
+  & > div > label {
+    color: ${({ theme }) => theme.colors.muted};
+    font-size: ${({ theme }) => theme.typography.caption.size}px;
+    line-height: ${({ theme }) => theme.typography.caption.lineHeight}px;
+  }
+
+  & > div > input {
+    border-color: transparent;
+
+    &:hover:not(:disabled):not(:focus) {
+      border-color: transparent;
+    }
+  }
 `;
 
 const Caption = styled.p`
@@ -105,7 +119,7 @@ export function DeleteConfirmDialog({
   caption,
   hint,
   cancelLabel = '취소',
-  confirmLabel = '삭제',
+  confirmLabel = '영구 삭제',
   className,
 }: DeleteConfirmDialogProps) {
   if (!open) return null;

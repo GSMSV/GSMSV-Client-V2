@@ -36,7 +36,10 @@ const PageButton = styled.button<{ $current?: boolean }>`
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $current }) => $current ? theme.colors.primary : theme.colors.muted};
   background: ${({ theme, $current }) => $current ? theme.colors.primarySoft : 'transparent'};
-  font: inherit;
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
   cursor: pointer;
 
   &:hover:not(:disabled) { background: ${({ theme }) => theme.colors.overlayHover}; }
@@ -48,15 +51,19 @@ const PageButton = styled.button<{ $current?: boolean }>`
 const PageList = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 4px;
 `;
 
 const Ellipsis = styled.span`
   display: inline-grid;
-  width: 28px;
+  width: 42px;
   height: 42px;
   place-items: center;
   color: ${({ theme }) => theme.colors.muted};
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
 `;
 
 export interface PaginationProps {

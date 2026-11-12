@@ -6,6 +6,7 @@ export const theme = {
     primaryPressed: '#00d97a',
     primarySoft: '#203d30',
     canvas: '#2b292f',
+    sidebar: '#232127',
     surface: '#343238',
     raised: '#3d3a42',
     raisedHover: '#4a4750',
@@ -109,7 +110,7 @@ export const theme = {
       size: 32,
       weight: 500,
       lineHeight: 40,
-      letterSpacing: 8,
+      letterSpacing: 2.56,
     },
     button: {
       family: 'Pretendard',

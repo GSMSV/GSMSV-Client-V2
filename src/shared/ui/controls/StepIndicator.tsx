@@ -13,21 +13,22 @@ export interface StepConnectorProps {
 const StepRoot = styled.div<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: ${({ theme }) => theme.space[8]}px;
+  gap: 12px;
   color: ${({ theme, $active }) => ($active ? theme.colors.text : theme.colors.muted)};
 `;
 
 const StepNumber = styled.span<{ $active: boolean }>`
   display: inline-flex;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   align-items: center;
   justify-content: center;
   border: 1px solid ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.border)};
-  border-radius: 50%;
-  color: ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.muted)};
-  background: ${({ theme, $active }) => ($active ? theme.colors.primarySoft : 'transparent')};
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  color: ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.border)};
+  background: ${({ theme, $active }) => ($active ? theme.colors.primarySoft : theme.colors.canvas)};
   font-family: ${({ theme }) => theme.typography.label.family}, sans-serif;
   font-size: ${({ theme }) => theme.typography.label.size}px;
   font-weight: ${({ theme }) => theme.typography.label.weight};
@@ -35,11 +36,11 @@ const StepNumber = styled.span<{ $active: boolean }>`
 `;
 
 const StepLabel = styled.span<{ $active: boolean }>`
-  color: ${({ theme, $active }) => ($active ? theme.colors.text : theme.colors.muted)};
-  font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
-  font-weight: ${({ theme, $active }) => ($active ? 500 : theme.typography.bodySmall.weight)};
-  line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+  color: ${({ theme, $active }) => ($active ? theme.colors.text : theme.colors.border)};
+  font-family: ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.caption.size}px;
+  font-weight: ${({ theme }) => theme.typography.caption.weight};
+  line-height: ${({ theme }) => theme.typography.caption.lineHeight}px;
 `;
 
 export function StepIndicator({ number, label, active = false }: StepIndicatorProps) {
@@ -53,9 +54,9 @@ export function StepIndicator({ number, label, active = false }: StepIndicatorPr
 
 const Connector = styled.span<{ $length: 18 | 36 }>`
   display: inline-block;
-  width: ${({ $length }) => $length}px;
-  height: 1px;
-  flex: 0 0 ${({ $length }) => $length}px;
+  width: 1px;
+  height: ${({ $length }) => $length}px;
+  flex: 0 0 1px;
   background: ${({ theme }) => theme.colors.border};
 `;
 
