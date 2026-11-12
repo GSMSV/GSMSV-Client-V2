@@ -236,8 +236,9 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
             <Title>Apps</Title>
             <Description>{teamScope ? `${teamScope.name} 팀에서 관리하는 Apps입니다.` : '팀 Apps를 불러오고 있습니다.'}</Description>
           </HeadingCopy>
-          <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!team.value || apps.loading || apps.error || !apps.value || appCount >= TEAM_APP_LIMIT} onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new`)} title={appCount >= TEAM_APP_LIMIT ? '팀 Apps 생성 한도에 도달했습니다.' : undefined}>새 앱</Button>
+          <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!team.value || team.value.status !== 'approved' || apps.loading || apps.error || !apps.value || appCount >= TEAM_APP_LIMIT} onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new`)} title={team.value && team.value.status !== 'approved' ? '팀이 승인되면 앱을 만들 수 있어요' : appCount >= TEAM_APP_LIMIT ? '팀 Apps 생성 한도에 도달했습니다.' : undefined}>새 앱</Button>
         </HeadingRow>
+        {team.value && team.value.status !== 'approved' && <CreateNote role="note">팀이 승인되면 앱을 만들 수 있어요</CreateNote>}
         {appCount >= TEAM_APP_LIMIT && <CreateNote role="note">팀 Apps는 최대 {TEAM_APP_LIMIT}개까지 만들 수 있습니다.</CreateNote>}
 
         {teams.error && (
