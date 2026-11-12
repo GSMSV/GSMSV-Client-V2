@@ -21,6 +21,7 @@ const TeamCreatePage = lazy(() => import('../pages/teams/TeamCreatePage'));
 const TeamSettingsPage = lazy(() => import('../pages/teams/TeamSettingsPage'));
 const TeamInvitationAcceptPage = lazy(() => import('../pages/teams/TeamInvitationAcceptPage'));
 const VMNetworkPage = lazy(() => import('../pages/network/VMNetworkPage'));
+const AccountSettingsPage = lazy(() => import('../pages/settings/AccountSettingsPage'));
 const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
 const PublicStatusPage = lazy(() => import('../pages/status/PublicStatusPage'));
 const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
@@ -180,6 +181,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <VMNetworkRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/settings',
+    element: (
+      <Suspense fallback={null}>
+        <AccountSettingsPage />
       </Suspense>
     ),
   },

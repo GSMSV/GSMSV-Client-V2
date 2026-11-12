@@ -268,7 +268,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
               disabled={loggingOut}
               onClick={() => {
                 setOpen(false);
-                void navigate('/settings/notifications');
+                void navigate('/settings');
               }}
             >
               계정 설정
