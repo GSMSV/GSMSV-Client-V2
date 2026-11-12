@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -51,6 +51,7 @@ const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
 
 export default function NotificationSettingsPage() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = getSessionUser();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -65,19 +66,24 @@ export default function NotificationSettingsPage() {
     return () => controller.abort();
   }, []);
 
+  const navigateWithUnsavedCheck = useCallback((path: string) => {
+    if (pathname !== path && hasChanges && !window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) return;
+    void navigate(path);
+  }, [hasChanges, navigate, pathname]);
+
   const scopeOptions = useMemo(() => [
-    { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigate('/') },
+    { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },
     ...teams.map(team => ({
       id: team.id,
       label: `${team.name} · ${roleLabels[team.my_role]}`,
       selected: false,
-      onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}`),
+      onSelect: () => navigateWithUnsavedCheck(`/teams/${encodeURIComponent(team.id)}`),
     })),
-  ], [navigate, teams]);
+  ], [navigateWithUnsavedCheck, teams]);
 
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const path = navigationPaths[item];
-    if (path) void navigate(path);
+    if (path) navigateWithUnsavedCheck(path);
   };
 
   return (
@@ -87,8 +93,8 @@ export default function NotificationSettingsPage() {
       scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={onNavigate}
-      onCreateTeam={() => navigate('/teams/new')}
-      onOpenStatus={() => navigate('/status')}
+      onCreateTeam={() => navigateWithUnsavedCheck('/teams/new')}
+      onOpenStatus={() => navigateWithUnsavedCheck('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}

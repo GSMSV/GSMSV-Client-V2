@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -172,6 +172,7 @@ function TeamMemberships({ state }: { state: TeamsState }) {
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = getSessionUser();
   const [teamsState, setTeamsState] = useState<TeamsState>({ status: 'loading' });
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'error'>('idle');
@@ -189,18 +190,28 @@ export default function AccountSettingsPage() {
     return () => controller.abort();
   }, []);
 
+  const confirmUnsavedNavigation = useCallback((path: string) => (
+    pathname === path || !notificationUnsaved || window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')
+  ), [notificationUnsaved, pathname]);
+
+  const navigateWithUnsavedCheck = useCallback((path: string) => {
+    if (!confirmUnsavedNavigation(path)) return;
+    void navigate(path);
+  }, [confirmUnsavedNavigation, navigate]);
+
   const scopeOptions = useMemo(() => [
-    { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigate('/') },
+    { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },
     ...(teamsState.status === 'ready' ? teamsState.teams : []).map(team => ({
       id: team.id,
       label: `${team.name} · ${teamRoleLabels[team.my_role]}`,
       selected: false,
-      onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}`),
+      onSelect: () => navigateWithUnsavedCheck(`/teams/${encodeURIComponent(team.id)}`),
     })),
-  ], [navigate, teamsState]);
+  ], [navigateWithUnsavedCheck, teamsState]);
 
   const handleLogout = async () => {
     if (logoutState === 'pending') return;
+    if (!confirmUnsavedNavigation('/login')) return;
     setLogoutState('pending');
     try {
       await logout();
@@ -219,10 +230,10 @@ export default function AccountSettingsPage() {
       userName={userName}
       onNavigate={item => {
         const path = navigationPaths[item];
-        if (path) void navigate(path);
+        if (path) navigateWithUnsavedCheck(path);
       }}
-      onCreateTeam={() => navigate('/teams/new')}
-      onOpenStatus={() => navigate('/status')}
+      onCreateTeam={() => navigateWithUnsavedCheck('/teams/new')}
+      onOpenStatus={() => navigateWithUnsavedCheck('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
@@ -294,7 +305,7 @@ export default function AccountSettingsPage() {
                 <br />
                 팀은 관리자 승인 후 VM을 만들 수 있습니다.
               </Description>
-              <Button icon={<Octicon name="arrow-right" />} onClick={() => navigate('/teams/new')}>팀 만들기</Button>
+              <Button icon={<Octicon name="arrow-right" />} onClick={() => navigateWithUnsavedCheck('/teams/new')}>팀 만들기</Button>
             </FeatureActions>
           </Panel>
 
