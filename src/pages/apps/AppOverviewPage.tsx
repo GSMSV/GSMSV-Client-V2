@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { SegmentedControl } from '../../shared/ui/controls/SelectionControls';
@@ -256,6 +257,7 @@ const SubsectionDivider = styled.div`
 interface LoadableApp { value: AppDetail | null; loading: boolean; error: boolean; notFound: boolean; }
 
 const initialLoadable = (): LoadableApp => ({ value: null, loading: true, error: false, notFound: false });
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -308,6 +310,7 @@ export default function AppOverviewPage() {
   const { appGrn } = useParams<{ appGrn: string }>();
   const user = getSessionUser();
   const [app, setApp] = useState<LoadableApp>(initialLoadable);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [retryKey, setRetryKey] = useState(0);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>();
   const [extending, setExtending] = useState(false);
@@ -339,6 +342,14 @@ export default function AppOverviewPage() {
     return () => controller.abort();
   }, [loadApp, retryKey]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setTeams(value); })
+      .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+    return () => controller.abort();
+  }, []);
+
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const owner = app.value?.owner;
     const teamId = owner?.type === 'team' ? owner.id : undefined;
@@ -347,6 +358,28 @@ export default function AppOverviewPage() {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
     if (item === 'database') navigate(teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases');
   };
+
+  const scopeOptions = useMemo(() => {
+    const owner = app.value?.owner;
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: owner?.type !== 'team', onSelect: () => navigate('/apps') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabel[team.my_role]}`,
+        selected: owner?.type === 'team' && owner.id === team.id,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps`),
+      })),
+    ];
+    if (owner?.type === 'team' && !teams.some(team => team.id === owner.id)) {
+      options.push({
+        id: owner.id,
+        label: `${owner.name} · 팀`,
+        selected: true,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(owner.id)}/apps`),
+      });
+    }
+    return options;
+  }, [app.value?.owner, navigate, teams]);
 
   const handleExtend = async () => {
     if (!app.value || !appGrn || extending || !canExtendNow(app.value)) return;
@@ -371,6 +404,7 @@ export default function AppOverviewPage() {
     <StudentShell
       activeItem="apps"
       scopeLabel={scopeLabel}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
