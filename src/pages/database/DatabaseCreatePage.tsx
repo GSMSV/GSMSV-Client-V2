@@ -322,7 +322,7 @@ export default function DatabaseCreatePage() {
       scopeLabel="내 Resources"
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
-      onCreateTeam={() => undefined}
+      onCreateTeam={() => navigate('/teams/new')}
       onOpenStatus={() => navigate('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}

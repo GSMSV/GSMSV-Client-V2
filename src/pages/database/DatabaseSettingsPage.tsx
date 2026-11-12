@@ -163,7 +163,7 @@ export default function DatabaseSettingsPage(){
     finally{setDeleting(false);}
   };
 
-  return <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>undefined} onOpenStatus={()=>undefined} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
+  return <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
     <Page>
       <Breadcrumb type="button" onClick={()=>navigate('/databases')}>Database</Breadcrumb>
       {detail.loading&&!value?<LoadingCard width="100%" height={174}/>:detail.error||!value?<ErrorCard onRetry={()=>setRetryKey(key=>key+1)}/>:<>
