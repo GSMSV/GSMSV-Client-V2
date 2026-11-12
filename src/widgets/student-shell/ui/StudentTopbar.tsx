@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useNavigate } from 'react-router';
 import styled from 'styled-components';
+import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
+import { NotificationPanel } from '../../notification-panel';
 
 const Header = styled.header`
   display: flex;
@@ -157,7 +160,10 @@ export function StudentTopbar({
   onOpenNotifications,
   onOpenProfile,
 }: StudentTopbarProps) {
+  const navigate = useNavigate();
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
   const [activeScopeIndex, setActiveScopeIndex] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -169,6 +175,19 @@ export function StudentTopbar({
     setActiveScopeIndex(nextIndex);
     optionRefs.current[nextIndex]?.focus();
   }, [scopeOpen, scopeOptions]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listNotifications(controller.signal)
+      .then(result => { if (!controller.signal.aborted) setUnreadCount(result.unread_count); })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  const closeNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+    window.requestAnimationFrame(() => document.getElementById('student-notifications-trigger')?.focus());
+  }, []);
 
   const onScopeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const optionCount = scopeOptions?.length ?? 0;
@@ -249,14 +268,30 @@ export function StudentTopbar({
           </SearchAction>
         </HeaderStart>
         <RightActions>
-          <Button variant="ghost" icon={<Octicon name="bell" size={16} />} onClick={onOpenNotifications}>
-            <ActionLabel>알림{notificationCount !== undefined && notificationCount > 0 && <Count>{notificationCount}</Count>}</ActionLabel>
+          <Button
+            id="student-notifications-trigger"
+            variant="ghost"
+            icon={<Octicon name="bell" size={16} />}
+            aria-expanded={notificationsOpen}
+            aria-controls="notification-panel"
+            onClick={() => {
+              onOpenNotifications();
+              setNotificationsOpen(open => !open);
+            }}
+          >
+            <ActionLabel>알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
           </Button>
           <Button variant="ghost" icon={<Octicon name="person" size={16} />} onClick={onOpenProfile}>
             {userName}
           </Button>
         </RightActions>
       </HeaderContent>
+      <NotificationPanel
+        open={notificationsOpen}
+        onClose={closeNotifications}
+        onUnreadCountChange={setUnreadCount}
+        onOpenResource={path => navigate(path)}
+      />
     </Header>
   );
 }
