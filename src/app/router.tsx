@@ -24,6 +24,7 @@ const VMNetworkPage = lazy(() => import('../pages/network/VMNetworkPage'));
 const AccountSettingsPage = lazy(() => import('../pages/settings/AccountSettingsPage'));
 const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
 const PublicStatusPage = lazy(() => import('../pages/status/PublicStatusPage'));
+const PublicDocsPage = lazy(() => import('../pages/docs/PublicDocsPage'));
 const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
 
 function TeamHomeRoute() {
@@ -197,6 +198,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <NotificationSettingsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/docs',
+    element: (
+      <Suspense fallback={null}>
+        <PublicDocsPage />
       </Suspense>
     ),
   },

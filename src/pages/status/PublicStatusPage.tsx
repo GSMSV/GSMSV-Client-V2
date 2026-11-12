@@ -242,7 +242,7 @@ export default function PublicStatusPage() {
           <BrandLabel>GSM SV 상태</BrandLabel>
         </Brand>
         <HeaderActions aria-label="페이지 이동">
-          <Button variant="ghost" disabled title="Docs API가 아직 공개되지 않았습니다" icon={<Octicon name="book" size={16} />}>Docs</Button>
+          <Button variant="ghost" onClick={() => window.location.assign('/docs')} icon={<Octicon name="book" size={16} />}>Docs</Button>
           <Button variant="secondary" onClick={() => window.location.assign('/')} icon={<Octicon name="arrow-right" size={16} />}>GSM SV 열기</Button>
         </HeaderActions>
       </Header>
