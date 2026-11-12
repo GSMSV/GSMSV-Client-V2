@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listPersonalApps, type AppSummary } from '../../entities/app';
 import { listDatabases, type DatabaseSummary } from '../../entities/database';
 import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -197,6 +198,12 @@ interface Loadable<T> {
 
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
+const teamRoleLabel: Record<TeamRole, string> = {
+  leader: '팀장',
+  devops: 'DevOps 엔지니어',
+  member: '일반 팀원',
+};
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -234,6 +241,7 @@ export default function PersonalResourcesPage() {
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [retryKey, setRetryKey] = useState(0);
 
   const load = useCallback(async (signal: AbortSignal) => {
@@ -254,6 +262,33 @@ export default function PersonalResourcesPage() {
     return () => controller.abort();
   }, [load, retryKey]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => {
+        if (!controller.signal.aborted) setTeams(value);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTeams([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const scopeOptions = useMemo(() => [
+    {
+      id: 'personal',
+      label: '내 Resources',
+      selected: true,
+      onSelect: () => navigate('/'),
+    },
+    ...teams.map(team => ({
+      id: team.id,
+      label: `${team.name} · ${teamRoleLabel[team.my_role]}`,
+      selected: false,
+      onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}`),
+    })),
+  ], [navigate, teams]);
+
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'home') navigate('/');
     else if (item === 'database') navigate('/databases');
@@ -266,6 +301,7 @@ export default function PersonalResourcesPage() {
     <StudentShell
       activeItem="home"
       scopeLabel="내 Resources"
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={onNavigate}
       onCreateTeam={() => navigate('/teams/new')}
