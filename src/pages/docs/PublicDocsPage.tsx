@@ -44,7 +44,11 @@ const Layout = styled.div`
 const Sidebar = styled.aside`
   padding: 24px; background: ${({ theme }) => theme.colors.sidebar};
 
-  @media (max-width: 700px) { padding: 16px; }
+  @media (max-width: 700px) {
+    padding: 16px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 `;
 const SearchLabel = styled.label`
   display: block; margin-bottom: 8px; color: ${({ theme }) => theme.colors.muted};
@@ -90,6 +94,9 @@ const MainGrid = styled.div`
   }
 `;
 const Article = styled.article`display: flex; min-width: 0; flex-direction: column; gap: 24px;`;
+const MobileArticle = styled(Article)`
+  @media (max-width: 1391px) { grid-row: 2; }
+`;
 const Breadcrumb = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.faint}; font-size: 12px; line-height: 18px;
 `;
@@ -143,6 +150,7 @@ const Toc = styled.nav`
   position: sticky; top: 24px; display: flex; flex-direction: column; gap: 12px;
   @media (max-width: 1391px) {
     position: static;
+    grid-row: 1;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -177,6 +185,10 @@ export default function PublicDocsPage() {
   const [activeSection, setActiveSection] = useState(() => window.location.hash.slice(1) || 'overview');
   const query = search.trim().toLocaleLowerCase();
   useEffect(() => {
+    const initialHash = window.location.hash.slice(1);
+    if (sections.some(section => section.id === initialHash)) {
+      requestAnimationFrame(() => document.getElementById(initialHash)?.scrollIntoView({ block: 'start' }));
+    }
     const updateSection = () => setActiveSection(window.location.hash.slice(1) || 'overview');
     window.addEventListener('hashchange', updateSection);
     return () => window.removeEventListener('hashchange', updateSection);
@@ -218,7 +230,7 @@ export default function PublicDocsPage() {
         </Sidebar>
         <Main>
           <MainGrid>
-            <Article>
+            <MobileArticle>
               <Breadcrumb>Docs / 정책</Breadcrumb>
               <PageHeading>
                 <Title>VM 사용 기간과 연장</Title>
@@ -254,7 +266,7 @@ export default function PublicDocsPage() {
                 </FeedbackButtons></FeedbackHead>
                 <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : feedback === 'no' ? '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.'}</FeedbackHint>
               </Card>
-            </Article>
+            </MobileArticle>
             <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
           </MainGrid>
         </Main>
