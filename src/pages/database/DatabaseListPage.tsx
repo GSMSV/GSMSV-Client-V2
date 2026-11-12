@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { listDatabases, type DatabaseStatus, type DatabaseSummary } from '../../entities/database';
 import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
+import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -182,6 +183,18 @@ const DatabaseListError = styled(ErrorCard)`
   width: 371px;
 `;
 
+const EmptyDatabaseState = styled.div`
+  display: flex;
+  min-height: 174px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
 const InlineRetry = styled.button`
   margin-left: 8px;
   padding: 0;
@@ -205,6 +218,15 @@ const ConnectionCaption = styled.span`
   color: ${({ theme }) => theme.colors.faint};
 `;
 
+const ScopeError = styled.p`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.warning};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
 const BannerDescription = styled.span`
   display: block;
 `;
@@ -223,6 +245,8 @@ const databasePresentationMock = import.meta.env.DEV
   : null;
 
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
+
+const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
@@ -270,23 +294,30 @@ function DatabaseResourceCard({ database, onOpen }: { database: DatabaseSummary;
 
 export default function DatabaseListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const owner = searchParams.get('owner') ?? 'me';
+  const isTeamScope = owner !== 'me';
+  const teamId = owner.startsWith('team-') ? owner : undefined;
   const user = getSessionUser();
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);
   const [quotaRetryKey, setQuotaRetryKey] = useState(0);
+  const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
+  const [currentTeam, setCurrentTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
+  const [scopeRetryKey, setScopeRetryKey] = useState(0);
 
   const openDatabase = (database: DatabaseSummary) => navigate(`/databases/${encodeURIComponent(database.grn)}`);
 
   const loadList = useCallback(async (signal: AbortSignal) => {
     setDatabases(current => ({ ...current, loading: true, error: false }));
     try {
-      const items = await listDatabases({ owner: 'me', signal });
+      const items = await listDatabases({ owner, signal });
       if (!signal.aborted) setDatabases({ value: items, loading: false, error: false });
     } catch {
       if (!signal.aborted) setDatabases({ value: null, loading: false, error: true });
     }
-  }, []);
+  }, [owner]);
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
@@ -305,17 +336,73 @@ export default function DatabaseListPage() {
   }, [loadList, retryKey]);
 
   useEffect(() => {
+    if (owner !== 'me') {
+      setQuota({ value: null, loading: false, error: false });
+      return;
+    }
     const controller = new AbortController();
     void loadQuota(controller.signal);
     return () => controller.abort();
-  }, [loadQuota, quotaRetryKey]);
+  }, [loadQuota, quotaRetryKey, owner]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setTeams(current => ({ ...current, loading: true, error: false }));
+    void listMyTeams(controller.signal).then(value => {
+      if (!controller.signal.aborted) setTeams({ value, loading: false, error: false });
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeams({ value: null, loading: false, error: true });
+    });
+    return () => controller.abort();
+  }, [scopeRetryKey]);
+
+  useEffect(() => {
+    if (!teamId) {
+      setCurrentTeam({ value: null, loading: false, error: false });
+      return;
+    }
+    const controller = new AbortController();
+    setCurrentTeam(current => ({ ...current, loading: true, error: false }));
+    void getTeam(teamId, controller.signal).then(value => {
+      if (!controller.signal.aborted) setCurrentTeam({ value, loading: false, error: false });
+    }).catch(() => {
+      if (!controller.signal.aborted) setCurrentTeam({ value: null, loading: false, error: true });
+    });
+    return () => controller.abort();
+  }, [teamId]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'database') navigate('/databases');
   };
 
-  const count = quota.value?.db.count;
-  const storage = quota.value?.db.shared_storage_gb;
+  const availableTeams = teams.value ?? [];
+  const scopeOptions = useMemo(() => {
+    const listedTeams = availableTeams.map(team => ({
+      id: team.id,
+      label: `${team.name} · ${roleLabels[team.my_role]}`,
+      selected: team.id === teamId,
+      onSelect: () => navigate(`/databases?owner=${encodeURIComponent(team.id)}`),
+    }));
+    if (currentTeam.value && !listedTeams.some(team => team.id === currentTeam.value?.id)) {
+      listedTeams.push({
+        id: currentTeam.value.id,
+        label: `${currentTeam.value.name} · ${currentTeam.value.my_role ? roleLabels[currentTeam.value.my_role] : '관리자'}`,
+        selected: true,
+        onSelect: () => navigate(`/databases?owner=${encodeURIComponent(currentTeam.value!.id)}`),
+      });
+    }
+    return [
+      { id: 'personal', label: '내 Resources', selected: !isTeamScope, onSelect: () => navigate('/databases') },
+      ...listedTeams,
+    ];
+  }, [availableTeams, currentTeam.value, isTeamScope, navigate, teamId]);
+  const currentTeamName = currentTeam.value?.name ?? availableTeams.find(team => team.id === teamId)?.name;
+  const scopeLabel = currentTeam.value
+    ? `${currentTeam.value.name} · ${currentTeam.value.my_role ? roleLabels[currentTeam.value.my_role] : '관리자'}`
+    : isTeamScope ? '팀 Resources' : '내 Resources';
+
+  const count = isTeamScope ? undefined : quota.value?.db.count;
+  const storage = isTeamScope ? undefined : quota.value?.db.shared_storage_gb;
   const countOver = Boolean(count && count.used > count.limit);
   const countPercent = count && count.limit > 0 ? Math.min(100, count.used / count.limit * 100) : 0;
   const storageOver = Boolean(storage && storage.used > storage.limit);
@@ -324,7 +411,8 @@ export default function DatabaseListPage() {
   return (
     <StudentShell
       activeItem="database"
-      scopeLabel="내 Resources"
+      scopeLabel={scopeLabel}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
@@ -342,11 +430,11 @@ export default function DatabaseListPage() {
               <Title>Database</Title>
               <Description>VM에 설치하지 않고 발급받아 쓰는 데이터베이스입니다.</Description>
             </TitleBlock>
-            <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>
+            {isTeamScope ? <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled title="팀 Database 발급 화면이 연결되지 않았습니다.">새 Database</Button> : <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>}
           </HeadingRow>
         </HeadingGroup>
 
-        <SummaryRow aria-label="Database 사용량">
+        {!isTeamScope && <SummaryRow aria-label="Database 사용량">
           {quota.loading ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
           ) : (
@@ -373,17 +461,19 @@ export default function DatabaseListPage() {
               />
             </>
           )}
-        </SummaryRow>
+        </SummaryRow>}
 
         <Section>
-          <SectionTitle>내 Database</SectionTitle>
+          <SectionTitle>{isTeamScope ? `${currentTeamName ?? '팀'} Database` : '내 Database'}</SectionTitle>
+          {teams.error && <ScopeError role="alert">팀 범위를 불러오지 못했습니다.<Button variant="ghost" onClick={() => setScopeRetryKey(value => value + 1)}>다시 시도</Button></ScopeError>}
+          {currentTeam.error && <ScopeError role="alert">팀 정보를 불러오지 못했습니다. 팀 접근 권한을 확인해 주세요.</ScopeError>}
           {databases.loading ? (
             <CardsRow><LoadingCard width="calc((100% - 32px) / 3)" height={254} /></CardsRow>
           ) : databases.error ? (
             <DatabaseListError onRetry={() => setRetryKey(value => value + 1)} />
           ) : (
             <CardsRow>
-              {databases.value?.map(database => (
+              {databases.value?.length === 0 ? <EmptyDatabaseState>{isTeamScope ? '이 팀에는 Database가 없습니다.' : '아직 Database가 없습니다.'}</EmptyDatabaseState> : databases.value?.map(database => (
                 <DatabaseResourceCard key={database.grn} database={database} onOpen={() => openDatabase(database)} />
               ))}
             </CardsRow>
