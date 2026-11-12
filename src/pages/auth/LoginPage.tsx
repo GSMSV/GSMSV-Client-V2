@@ -1,4 +1,7 @@
 import styled from 'styled-components';
+import { useSearchParams } from 'react-router';
+import { LoginErrorDialog, type LoginErrorKind } from '../../features/auth/login-error/ui/LoginErrorDialog';
+import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
@@ -168,8 +171,8 @@ const Actions = styled.div`
 `;
 
 export function LoginPage() {
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/+$/, '') ?? '';
-  const authorizeUrl = `${apiOrigin}/api/v2/auth/datagsm/authorize?redirect=%2F`;
+  const [searchParams] = useSearchParams();
+  const errorKind = getLoginErrorKind(searchParams.get('error'));
 
   return (
     <Screen>
@@ -214,14 +217,35 @@ export function LoginPage() {
           <Button
             variant="primary"
             icon={<Octicon name="sign-in" size={16} />}
-            onClick={() => window.location.assign(authorizeUrl)}
+            onClick={startDataGsmLogin}
           >
             DataGSM으로 계속하기
           </Button>
         </Actions>
       </Content>
+      {errorKind && <LoginErrorDialog kind={errorKind} onClose={() => window.location.assign('/login')} onRetry={startDataGsmLogin} />}
     </Screen>
   );
+}
+
+function getLoginErrorKind(error: string | null): LoginErrorKind | null {
+  switch (error) {
+    case 'OAUTH_STATE_INVALID':
+      return 'expired';
+    case 'NOT_ENROLLED':
+      return 'not-enrolled';
+    case 'ACCOUNT_INACTIVE':
+      return 'inactive';
+    case 'UPSTREAM_UNAVAILABLE':
+      return 'unavailable';
+    case 'OAUTH_EXCHANGE_FAILED':
+    case 'RATE_LIMITED':
+      return 'failed';
+    case 'GONE':
+      return 'expired';
+    default:
+      return error ? 'failed' : null;
+  }
 }
 
 export default LoginPage;
