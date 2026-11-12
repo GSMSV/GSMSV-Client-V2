@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { logout } from '../../features/auth/logout/api/logout';
+import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { Button } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -174,6 +175,7 @@ export default function AccountSettingsPage() {
   const user = getSessionUser();
   const [teamsState, setTeamsState] = useState<TeamsState>({ status: 'loading' });
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'error'>('idle');
+  const [notificationUnsaved, setNotificationUnsaved] = useState(false);
   const userName = user?.name ?? '사용자';
   const roleLabel = user ? (user.role === 'admin' ? '관리자' : '일반 사용자') : '역할 확인 불가';
 
@@ -224,6 +226,7 @@ export default function AccountSettingsPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
+      hasUnsavedInput={notificationUnsaved}
     >
       <Content>
         <Page>
@@ -295,13 +298,7 @@ export default function AccountSettingsPage() {
             </FeatureActions>
           </Panel>
 
-          <Panel aria-labelledby="account-notifications-title">
-            <ActionRow>
-              <PanelTitle id="account-notifications-title">알림 받기</PanelTitle>
-              <Button icon={<Octicon name="arrow-right" />} onClick={() => navigate('/settings/notifications')}>알림 설정</Button>
-            </ActionRow>
-            <Description>필수 알림은 이메일로 계속 보냅니다. Discord를 연결하면 Discord로도 받습니다.</Description>
-          </Panel>
+          <NotificationSettingsPanel onUnsavedInputChange={setNotificationUnsaved} />
 
           <Panel aria-labelledby="account-session-title">
             <ActionRow>
