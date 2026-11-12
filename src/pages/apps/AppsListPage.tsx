@@ -300,7 +300,6 @@ export default function AppsListPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       <Page>
         <Breadcrumb>Apps</Breadcrumb>

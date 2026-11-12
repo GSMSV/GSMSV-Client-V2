@@ -399,7 +399,7 @@ export default function DatabaseCreatePage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={Boolean(name)}
     >
       <Page>
         <Breadcrumb>Database</Breadcrumb>

@@ -37,7 +37,7 @@ export interface StudentShellProps {
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
-  onOpenProfile: () => void;
+  hasUnsavedInput?: boolean;
 }
 
 export function StudentShell({
@@ -55,7 +55,7 @@ export function StudentShell({
   onSelectScope,
   onSearch,
   onOpenNotifications,
-  onOpenProfile,
+  hasUnsavedInput = false,
 }: StudentShellProps) {
   return (
     <Layout>
@@ -76,7 +76,7 @@ export function StudentShell({
           onSelectScope={onSelectScope}
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}
-          onOpenProfile={onOpenProfile}
+          hasUnsavedInput={hasUnsavedInput}
         />
         <PageContent>{children}</PageContent>
       </MainColumn>

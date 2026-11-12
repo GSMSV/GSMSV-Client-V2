@@ -227,7 +227,6 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       <Page>
         <Breadcrumb>{teamScope?.name ?? '팀'} / Apps</Breadcrumb>

@@ -23,7 +23,7 @@ function getApiUrl(path: string) {
   return `${apiOrigin}${path}`;
 }
 
-export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -48,6 +48,18 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
     throw new ApiRequestError(response.status, payload?.code ?? 'UNKNOWN_ERROR', payload?.request_id);
   }
 
+  return response;
+}
+
+export async function requestNoContent(path: string, init: RequestInit = {}): Promise<void> {
+  const response = await request(path, init);
+  if (response.status !== 204) {
+    throw new ApiRequestError(response.status, 'INVALID_RESPONSE');
+  }
+}
+
+export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await request(path, init);
   try {
     return (await response.json()) as T;
   } catch {

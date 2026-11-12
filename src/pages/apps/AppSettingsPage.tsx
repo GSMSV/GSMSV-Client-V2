@@ -425,7 +425,7 @@ export default function AppSettingsPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={Boolean((current && name !== current.name) || (deleteOpen && confirmationName))}
     >
       <Page>
         <Breadcrumb>Apps</Breadcrumb>

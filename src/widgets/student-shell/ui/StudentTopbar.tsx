@@ -5,6 +5,7 @@ import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
 import { NotificationPanel } from '../../notification-panel';
+import { StudentProfile } from './StudentProfile';
 
 const Header = styled.header`
   display: flex;
@@ -160,7 +161,7 @@ export interface StudentTopbarProps {
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
-  onOpenProfile: () => void;
+  hasUnsavedInput: boolean;
 }
 
 export function StudentTopbar({
@@ -173,7 +174,7 @@ export function StudentTopbar({
   onSelectScope,
   onSearch,
   onOpenNotifications,
-  onOpenProfile,
+  hasUnsavedInput,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
   const [scopeOpen, setScopeOpen] = useState(false);
@@ -302,9 +303,12 @@ export function StudentTopbar({
           >
             <ActionLabel>알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
           </Button>
-          <Button variant="ghost" icon={<Octicon name="person" size={16} />} onClick={onOpenProfile}>
-            {userName}
-          </Button>
+          <StudentProfile
+            userName={userName}
+            activeTeamId={scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id}
+            hasUnsavedInput={hasUnsavedInput}
+            onOpen={() => setNotificationsOpen(false)}
+          />
         </RightActions>
       </HeaderContent>
       <NotificationPanel

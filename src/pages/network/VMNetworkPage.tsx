@@ -437,6 +437,14 @@ export default function VMNetworkPage() {
   const ruleRemaining = Math.max(0, (rules.value?.limits.per_vm ?? 0) - (rules.value?.items.length ?? 0));
   const busy = ports.loading || rules.loading || domains.loading;
   const vmSegment = vmGrn ? encodeURIComponent(vmGrn) : '';
+  const hasUnsavedInput = Boolean(
+    (action === 'port' && (portForm.internalPort || portForm.allowedSource || portForm.description || portForm.protocol !== 'tcp'))
+    || ((action === 'rule' || action?.startsWith('firewall-')) && (
+      ruleForm.dport || ruleForm.source || ruleForm.action !== 'accept'
+      || ruleForm.direction !== 'in' || ruleForm.protocol !== 'tcp'
+    ))
+    || (action === 'domain' && (domainForm.subdomain || domainForm.internalPort)),
+  );
   const expectedInternalPort = useMemo(() => Number.parseInt(domainForm.internalPort, 10), [domainForm.internalPort]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
@@ -560,7 +568,7 @@ export default function VMNetworkPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => navigate('/settings')}
+      hasUnsavedInput={hasUnsavedInput}
     >
       <Page>
         <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>

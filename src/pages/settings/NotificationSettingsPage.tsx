@@ -245,7 +245,7 @@ export default function NotificationSettingsPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
+      hasUnsavedInput={hasChanges}
     >
       <Page>
         <Breadcrumb>설정 / 알림 설정</Breadcrumb>

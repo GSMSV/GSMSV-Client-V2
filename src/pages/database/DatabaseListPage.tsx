@@ -408,7 +408,6 @@ export default function DatabaseListPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => undefined}
     >
       <Page>
         <Breadcrumb>Database</Breadcrumb>

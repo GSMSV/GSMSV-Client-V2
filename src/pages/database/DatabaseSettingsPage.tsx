@@ -184,7 +184,7 @@ export default function DatabaseSettingsPage(){
     finally{setDeleting(false);}
   };
 
-  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} scopeOptions={scopeOptions} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
+  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} scopeOptions={scopeOptions} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} hasUnsavedInput={Boolean((value && name !== value.name) || (showDeleteDialog && confirmName))}>
     <Page>
       <Breadcrumb type="button" onClick={()=>navigate(value?databaseListPath(value):'/databases')}>Database</Breadcrumb>
       {detail.loading&&!value?<LoadingCard width="100%" height={174}/>:detail.error||!value?<ErrorCard onRetry={()=>setRetryKey(key=>key+1)}/>:<>

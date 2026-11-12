@@ -285,7 +285,7 @@ export default function TeamCreatePage() {
       onSelectScope={() => undefined}
       onSearch={() => {}}
       onOpenNotifications={() => undefined}
-      onOpenProfile={() => navigate('/settings')}
+      hasUnsavedInput={Boolean(name || purpose)}
     >
       <Page>
         <Breadcrumb>팀 / 새 팀</Breadcrumb>
