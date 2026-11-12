@@ -381,7 +381,7 @@ interface TeamDatabaseUsage {
 const databaseStorageFormat = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
 
 function TeamDatabaseCard({ teamId }: { teamId: string }) {
-  const [usage, setUsage] = useState<TeamDatabaseUsage | null>(null);
+  const [usage, setUsage] = useState<TeamDatabaseUsage | null>();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -398,12 +398,17 @@ function TeamDatabaseCard({ teamId }: { teamId: string }) {
     return () => controller.abort();
   }, [teamId]);
 
+  const loading = usage === undefined;
+  const caption = usage
+    ? `용량 ${databaseStorageFormat.format(usage.storageGb)} / — GB · 전용형 ${usage.dedicatedCount}개`
+    : loading ? '사용량을 불러오는 중…' : '사용량 정보 없음';
+
   return (
     <DatabaseUsageCard
       label="Database"
       icon={<Octicon name="database" size={16} />}
-      value={`${usage?.count ?? '—'} / —`}
-      caption={usage ? `용량 ${databaseStorageFormat.format(usage.storageGb)} / — GB · 전용형 ${usage.dedicatedCount}개` : '사용량 정보 없음'}
+      value={<span aria-busy={loading}>{usage?.count ?? '—'} / —</span>}
+      caption={<span role="status">{caption}</span>}
     />
   );
 }
