@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { deleteApp, extendApp, getApp, updateApp, type AppDetail } from '../../features/app/manage-app';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -250,6 +251,7 @@ const DeleteFailure = styled.p`
 
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -284,6 +286,7 @@ export default function AppSettingsPage() {
   const { appGrn } = useParams<{ appGrn: string }>();
   const user = getSessionUser();
   const [app, setApp] = useState<Loadable<AppDetail>>(initialLoadable);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [retryKey, setRetryKey] = useState(0);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -317,6 +320,14 @@ export default function AppSettingsPage() {
     return () => controller.abort();
   }, [loadApp, retryKey]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setTeams(value); })
+      .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+    return () => controller.abort();
+  }, []);
+
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const teamId = app.value?.owner.type === 'team' ? app.value.owner.id : undefined;
     if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
@@ -326,6 +337,27 @@ export default function AppSettingsPage() {
   };
 
   const current = app.value;
+  const scopeOptions = useMemo(() => {
+    const owner = current?.owner;
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: owner?.type !== 'team', onSelect: () => navigate('/apps') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabel[team.my_role]}`,
+        selected: owner?.type === 'team' && owner.id === team.id,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps`),
+      })),
+    ];
+    if (owner?.type === 'team' && !teams.some(team => team.id === owner.id)) {
+      options.push({
+        id: owner.id,
+        label: `${owner.name} · 팀`,
+        selected: true,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(owner.id)}/apps`),
+      });
+    }
+    return options;
+  }, [current?.owner, navigate, teams]);
   const canSaveName = Boolean(current?.permissions.update && name.trim() && name.trim() !== current.name && name.trim().length <= 30 && !saving);
   const envLabel = useMemo(() => current ? `환경 · ${current.envs.length}개` : '환경', [current]);
   const serviceCounts = current ? `${current.services.length}개 서비스 · ${current.envs.length}개 환경 · ${current.deployments.length}개 배포 기록` : '';
@@ -385,6 +417,7 @@ export default function AppSettingsPage() {
     <StudentShell
       activeItem="apps"
       scopeLabel={scopeLabel}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
