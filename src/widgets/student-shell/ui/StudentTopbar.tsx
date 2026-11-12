@@ -7,7 +7,7 @@ import { Octicon } from '../../../shared/ui/icons';
 import { NotificationPanel } from '../../notification-panel';
 import { StudentProfile } from './StudentProfile';
 
-const Header = styled.header`
+const Header = styled.header<{ $showBottomBorder: boolean }>`
   display: flex;
   width: 100%;
   min-height: 74px;
@@ -15,6 +15,7 @@ const Header = styled.header`
   align-items: center;
   justify-content: space-between;
   padding: ${({ theme }) => theme.space[16]}px 40px;
+  border-bottom: ${({ theme, $showBottomBorder }) => $showBottomBorder ? `1px solid ${theme.colors.border}` : '0'};
 `;
 
 const HeaderContent = styled.div`
@@ -164,6 +165,7 @@ export interface StudentTopbarProps {
   onOpenNotifications: () => void;
   hasUnsavedInput: boolean;
   onLogoutPendingChange?: (pending: boolean) => void;
+  showBottomBorder?: boolean;
 }
 
 export function StudentTopbar({
@@ -179,6 +181,7 @@ export function StudentTopbar({
   onOpenNotifications,
   hasUnsavedInput,
   onLogoutPendingChange,
+  showBottomBorder = false,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
@@ -244,7 +247,7 @@ export function StudentTopbar({
   };
 
   return (
-    <Header>
+    <Header $showBottomBorder={showBottomBorder}>
       <HeaderContent>
         <HeaderStart>
           <ScopeSelector onBlur={onScopeBlur} onKeyDown={onScopeKeyDown}>
