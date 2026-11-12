@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { getNotificationSettings, updateNotificationSettings, type NotificationSettings } from '../../features/settings/notification-settings';
 import { Button, Switch } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -139,6 +140,7 @@ const GroupHint = styled.p`
 export default function NotificationSettingsPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [draft, setDraft] = useState<NotificationSettings['items']>([]);
   const [loading, setLoading] = useState(true);
@@ -147,6 +149,29 @@ export default function NotificationSettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal).then(value => {
+      if (!controller.signal.aborted) setTeams(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeams([]);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const scopeOptions = useMemo(() => {
+    const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
+    return [
+      { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigate('/') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabels[team.my_role]}`,
+        selected: false,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}`),
+      })),
+    ];
+  }, [navigate, teams]);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
@@ -212,6 +237,7 @@ export default function NotificationSettingsPage() {
     <StudentShell
       activeItem="settings"
       scopeLabel="내 Resources"
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={onNavigate}
       onCreateTeam={() => navigate('/teams/new')}
