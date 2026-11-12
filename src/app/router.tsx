@@ -37,12 +37,12 @@ function TeamAppsRoute() {
 
 function TeamAppCreateSourceRoute() {
   const { teamId } = useParams<{ teamId: string }>();
-  return <AppCreateSourcePage teamId={teamId} />;
+  return <AppCreateSourcePage key={teamId} teamId={teamId} />;
 }
 
 function TeamAppCreateServiceRoute() {
   const { teamId } = useParams<{ teamId: string }>();
-  return <AppCreateServicePage teamId={teamId} />;
+  return <AppCreateServicePage key={teamId} teamId={teamId} />;
 }
 
 function VMNetworkRoute() {
