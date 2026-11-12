@@ -219,6 +219,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<{ message: string; login?: boolean } | null>(null);
   const [teamStatus, setTeamStatus] = useState<TeamStatus | 'loading' | 'error'>(teamId ? 'loading' : 'approved');
+  const [teamStatusRetry, setTeamStatusRetry] = useState(0);
   const requestController = useRef<AbortController | null>(null);
   const subdomainInputId = 'app-service-subdomain';
 
@@ -238,7 +239,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
       if (!controller.signal.aborted) setTeamStatus('error');
     });
     return () => controller.abort();
-  }, [teamId]);
+  }, [teamId, teamStatusRetry]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
@@ -349,6 +350,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         {teamId && teamStatus !== 'approved' && teamStatus !== 'loading' && <PreviewBlock role={teamStatus === 'error' ? 'alert' : 'note'}>
           <Octicon name={teamStatus === 'error' ? 'alert' : 'info'} size={16} aria-hidden="true" />
           <span>{teamStatus === 'error' ? '팀 승인 상태를 확인하지 못해 앱을 만들 수 없습니다. 다시 시도해 주세요.' : '팀이 승인되면 앱을 만들 수 있어요'}</span>
+          {teamStatus === 'error' && <Button variant="ghost" onClick={() => setTeamStatusRetry(value => value + 1)}>다시 시도</Button>}
         </PreviewBlock>}
 
         {createError && <PreviewBlock role="alert">
