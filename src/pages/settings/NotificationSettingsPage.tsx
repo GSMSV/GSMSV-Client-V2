@@ -215,7 +215,7 @@ export default function NotificationSettingsPage() {
       userName={user?.name ?? '사용자'}
       onNavigate={onNavigate}
       onCreateTeam={() => navigate('/teams/new')}
-      onOpenStatus={() => undefined}
+      onOpenStatus={() => navigate('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
