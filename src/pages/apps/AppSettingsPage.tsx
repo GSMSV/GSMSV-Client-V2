@@ -318,9 +318,11 @@ export default function AppSettingsPage() {
   }, [loadApp, retryKey]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'apps') navigate('/apps');
-    if (item === 'database') navigate('/databases');
-    if (item === 'team' || item === 'home') navigate('/teams');
+    const teamId = app.value?.owner.type === 'team' ? app.value.owner.id : undefined;
+    if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
+    if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
+    if (item === 'database') navigate(teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases');
   };
 
   const current = app.value;
@@ -367,7 +369,9 @@ export default function AppSettingsPage() {
     setMutationMessage('');
     try {
       await deleteApp(appGrn, current.name);
-      navigate('/apps');
+      navigate(current.owner.type === 'team'
+        ? `/teams/${encodeURIComponent(current.owner.id)}/apps`
+        : '/apps');
     } catch (error) {
       setDeleteMessage(getApiMessage(error, '앱 삭제를 요청하지 못했습니다.'));
     } finally {

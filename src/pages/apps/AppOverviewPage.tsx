@@ -340,8 +340,12 @@ export default function AppOverviewPage() {
   }, [loadApp, retryKey]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'apps') navigate('/apps');
-    if (item === 'database') navigate('/databases');
+    const owner = app.value?.owner;
+    const teamId = owner?.type === 'team' ? owner.id : undefined;
+    if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
+    if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
+    if (item === 'database') navigate(teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases');
   };
 
   const handleExtend = async () => {
