@@ -1,3 +1,5 @@
+import { ApiRequestError, requestJson } from '../../../../shared/api';
+
 export interface LoginExchangeResponse {
   user: {
     id: string;
@@ -10,38 +12,23 @@ export interface LoginExchangeResponse {
 export type LoginExchangeFailureKind = 'expired' | 'failed';
 
 export class LoginExchangeFailure extends Error {
-  constructor(readonly kind: LoginExchangeFailureKind) {
+  constructor(readonly kind: LoginExchangeFailureKind, readonly requestId?: string) {
     super(kind === 'expired' ? 'Login code expired' : 'Login code exchange failed');
     this.name = 'LoginExchangeFailure';
   }
 }
 
 export async function exchangeLoginCode(code: string): Promise<LoginExchangeResponse> {
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/+$/, '') ?? '';
-  let response: Response;
-
   try {
-    response = await fetch(`${apiOrigin}/api/v2/auth/token-exchange`, {
+    return await requestJson<LoginExchangeResponse>('/api/v2/auth/token-exchange', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
     });
-  } catch {
-    throw new LoginExchangeFailure('failed');
-  }
-
-  if (response.status === 410) {
-    throw new LoginExchangeFailure('expired');
-  }
-
-  if (!response.ok) {
-    throw new LoginExchangeFailure('failed');
-  }
-
-  try {
-    return (await response.json()) as LoginExchangeResponse;
-  } catch {
-    throw new LoginExchangeFailure('failed');
+  } catch (error) {
+    throw new LoginExchangeFailure(
+      error instanceof ApiRequestError && error.status === 410 ? 'expired' : 'failed',
+      error instanceof ApiRequestError ? error.requestId : undefined,
+    );
   }
 }
