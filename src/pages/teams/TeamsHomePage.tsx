@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
+import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
 import { Button } from '../../shared/ui/controls';
+import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
@@ -181,6 +183,10 @@ const ServiceCards = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+`;
+
+const DatabaseUsageCard = styled(UsageCard)`
+  width: 100%;
 `;
 
 const ServiceCard = styled.article`
@@ -363,6 +369,42 @@ function QuotaLine({ label, usage, suffix = '' }: { label: string; usage: TeamQu
         {usage && <MeterFill $value={state.percent} $tone={state.tone} />}
       </MeterTrack>
     </QuotaRow>
+  );
+}
+
+interface TeamDatabaseUsage {
+  count: number;
+  storageGb: number;
+  dedicatedCount: number;
+}
+
+const databaseStorageFormat = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
+
+function TeamDatabaseCard({ teamId }: { teamId: string }) {
+  const [usage, setUsage] = useState<TeamDatabaseUsage | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listDatabases({ owner: teamId, signal: controller.signal }).then(databases => {
+      if (controller.signal.aborted) return;
+      setUsage({
+        count: databases.length,
+        storageGb: databases.reduce((total, database) => total + database.storage.used_gb, 0),
+        dedicatedCount: databases.filter(database => database.isolation === 'dedicated').length,
+      });
+    }).catch(() => {
+      if (!controller.signal.aborted) setUsage(null);
+    });
+    return () => controller.abort();
+  }, [teamId]);
+
+  return (
+    <DatabaseUsageCard
+      label="Database"
+      icon={<Octicon name="database" size={16} />}
+      value={`${usage?.count ?? '—'} / —`}
+      caption={usage ? `용량 ${databaseStorageFormat.format(usage.storageGb)} / — GB · 전용형 ${usage.dedicatedCount}개` : '사용량 정보 없음'}
+    />
   );
 }
 
@@ -549,7 +591,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         <ServiceSection>
           <SectionTitle>팀 서비스</SectionTitle>
           <ServiceCards>
-            <ServiceCard><ServiceCardLabel><Octicon name="database" size={16} />Database</ServiceCardLabel><ServiceCount>— / —</ServiceCount><MutedCaption>사용량 정보 없음</MutedCaption></ServiceCard>
+            <TeamDatabaseCard key={currentTeam.id} teamId={currentTeam.id} />
             <ServiceCard><ServiceCardLabel><Octicon name="zap" size={16} />Serverless</ServiceCardLabel><ServiceCount>— / —</ServiceCount><MutedCaption>사용량 정보 없음</MutedCaption></ServiceCard>
             <ServiceCard><ServiceCardLabel><Octicon name="code" size={16} />Apps</ServiceCardLabel><ServiceCount>— / —</ServiceCount><MutedCaption>사용량 정보 없음</MutedCaption></ServiceCard>
           </ServiceCards>
