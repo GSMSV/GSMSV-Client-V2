@@ -102,6 +102,8 @@ export interface DeleteConfirmDialogProps {
   hint?: ReactNode;
   cancelLabel?: string;
   confirmLabel?: string;
+  confirmIcon?: ReactNode;
+  confirmDisabled?: boolean;
   className?: string;
 }
 
@@ -120,6 +122,8 @@ export function DeleteConfirmDialog({
   hint,
   cancelLabel = '취소',
   confirmLabel = '영구 삭제',
+  confirmIcon = <Octicon name="trashcan" size={16} />,
+  confirmDisabled = false,
   className,
 }: DeleteConfirmDialogProps) {
   if (!open) return null;
@@ -144,7 +148,7 @@ export function DeleteConfirmDialog({
       </FieldGroup>
       <Actions>
         <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={onCancel}>{cancelLabel}</Button>
-        <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!matched} onClick={onConfirm}>{confirmLabel}</Button>
+        <Button variant="danger" icon={confirmIcon} disabled={!matched || confirmDisabled} onClick={onConfirm}>{confirmLabel}</Button>
       </Actions>
       {!matched && hint && <Caption>{hint}</Caption>}
     </Panel>
