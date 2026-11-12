@@ -7,7 +7,7 @@ import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
-import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
+import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
@@ -242,6 +242,9 @@ export default function PersonalResourcesPage() {
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [teamsError, setTeamsError] = useState(false);
+  const [teamsRetryKey, setTeamsRetryKey] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
 
   const load = useCallback(async (signal: AbortSignal) => {
@@ -264,15 +267,23 @@ export default function PersonalResourcesPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setTeamsLoading(true);
     void listMyTeams(controller.signal)
       .then(value => {
-        if (!controller.signal.aborted) setTeams(value);
+        if (controller.signal.aborted) return;
+        setTeams(value);
+        setTeamsError(false);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setTeams([]);
+        if (controller.signal.aborted) return;
+        setTeams([]);
+        setTeamsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setTeamsLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [teamsRetryKey]);
 
   const scopeOptions = useMemo(() => [
     {
@@ -323,6 +334,15 @@ export default function PersonalResourcesPage() {
           <span>VM과 Serverless의 개인 자원 목록 API가 없어 실제 자원 카드는 표시되지 않습니다. 할당량은 계약된 API에서 불러오며 Database와 Apps 목록도 실제 데이터를 사용합니다.</span>
           <Button variant="ghost" onClick={() => setRetryKey(value => value + 1)}>새로고침</Button>
         </Notice>
+        {teamsError && <div role="alert">
+          <Banner
+            title="팀 목록을 불러오지 못했습니다"
+            description="팀이 없는 상태와 구분할 수 있도록 팀 범위는 표시하지 않습니다. 개인 Resources는 계속 이용할 수 있습니다."
+            tone="danger"
+            icon={<Octicon name="alert" size={20} />}
+            action={<Button variant="secondary" disabled={teamsLoading} onClick={() => setTeamsRetryKey(value => value + 1)}>{teamsLoading ? '불러오는 중…' : '팀 다시 불러오기'}</Button>}
+          />
+        </div>}
 
         <Sections>
           <Section>
