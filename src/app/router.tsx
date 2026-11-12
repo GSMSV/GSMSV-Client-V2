@@ -22,6 +22,7 @@ const TeamInvitationAcceptPage = lazy(() => import('../pages/teams/TeamInvitatio
 const VMNetworkPage = lazy(() => import('../pages/network/VMNetworkPage'));
 const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
 const PublicStatusPage = lazy(() => import('../pages/status/PublicStatusPage'));
+const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
 
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -155,6 +156,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <PublicStatusPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/admin/infra',
+    element: (
+      <Suspense fallback={null}>
+        <AdminInfrastructurePage />
       </Suspense>
     ),
   },
