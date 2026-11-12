@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { listPersonalApps, type AppSummary } from '../../entities/app';
+import { AppResourceCard, listPersonalApps, type AppSummary } from '../../entities/app';
 import { getMyQuota, type MyQuota, type QuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -99,81 +100,6 @@ const CardsRow = styled.div`
   width: 100%;
 `;
 
-const AppCard = styled.article`
-  display: flex;
-  width: calc((100% - 32px) / 3);
-  min-width: 300px;
-  min-height: 180px;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
-`;
-
-const CardActions = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 42px;
-`;
-
-const AppIcon = styled.span`
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.raised};
-  color: ${({ theme }) => theme.colors.text};
-`;
-
-const AppName = styled.h3`
-  overflow: hidden;
-  width: 100%;
-  margin: 0;
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const Metadata = styled.p`
-  overflow: hidden;
-  width: 100%;
-  margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const CardFooter = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 22px;
-  margin-top: auto;
-`;
-
-const Expiry = styled.span`
-  overflow: hidden;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const StatusText = styled.span<{ $tone: 'primary' | 'warning' | 'neutral' }>`
-  flex: 0 0 auto;
-  color: ${({ theme, $tone }) => $tone === 'primary' ? theme.colors.primary : $tone === 'warning' ? theme.colors.warning : theme.colors.muted};
-  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
-`;
-
 const EmptySurface = styled.div`
   display: flex;
   min-height: 180px;
@@ -259,7 +185,14 @@ interface LoadableQuota {
   error: boolean;
 }
 
+interface LoadableTeams {
+  value: TeamSummary[] | null;
+  loading: boolean;
+}
+
 const initialQuota: LoadableQuota = { value: null, loading: true, error: false };
+const initialTeams: LoadableTeams = { value: null, loading: true };
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 function formatQuota(amount: QuotaAmount) {
   return `${amount.used} / ${amount.limit}`;
@@ -274,45 +207,12 @@ function quotaPercentage(amount: QuotaAmount) {
   return amount.limit > 0 ? Math.min(100, (amount.used / amount.limit) * 100) : amount.used > 0 ? 100 : 0;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Seoul',
-  }).format(date).split('-');
-  return `만료 ${year}. ${month}. ${day}.`;
-}
-
-function getStatusPresentation(status: string) {
-  if (status === 'deleting') return { label: '삭제 중', tone: 'warning' as const };
-  return { label: '상태 확인 중', tone: 'neutral' as const };
-}
-
-function AppResourceCard({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
-  const status = getStatusPresentation(app.status);
-  return (
-    <AppCard>
-      <CardActions>
-        <AppIcon aria-hidden="true"><Octicon name="upload" size={16} /></AppIcon>
-        <Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={onOpen}>열기</Button>
-      </CardActions>
-      <AppName title={app.name}>{app.name}</AppName>
-      <Metadata title={`소유자 ${app.owner.name} · 생성자 ${app.created_by}`}>
-        소유자 {app.owner.name} · 생성자 {app.created_by}
-      </Metadata>
-      <CardFooter>
-        <Expiry>{formatDate(app.expires_at)}</Expiry>
-        <StatusText $tone={status.tone}>{status.label}</StatusText>
-      </CardFooter>
-    </AppCard>
-  );
-}
-
 export default function AppsListPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
   const [apps, setApps] = useState<LoadableApps>({ value: null, loading: true, error: false });
   const [quota, setQuota] = useState<LoadableQuota>(initialQuota);
+  const [teams, setTeams] = useState<LoadableTeams>(initialTeams);
   const [retryKey, setRetryKey] = useState(0);
   const [quotaOpen, setQuotaOpen] = useState(false);
 
@@ -336,12 +236,23 @@ export default function AppsListPage() {
     }
   }, []);
 
+  const loadTeams = useCallback(async (signal: AbortSignal) => {
+    setTeams(current => ({ ...current, loading: true }));
+    try {
+      const value = await listMyTeams(signal);
+      if (!signal.aborted) setTeams({ value, loading: false });
+    } catch {
+      if (!signal.aborted) setTeams({ value: null, loading: false });
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void loadApps(controller.signal);
     void loadQuota(controller.signal);
+    void loadTeams(controller.signal);
     return () => controller.abort();
-  }, [loadApps, loadQuota, retryKey]);
+  }, [loadApps, loadQuota, loadTeams, retryKey]);
 
   useEffect(() => {
     if (!quotaOpen) return;
@@ -357,6 +268,16 @@ export default function AppsListPage() {
     if (item === 'database') navigate('/databases');
   };
 
+  const scopeOptions = useMemo(() => [
+    { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigate('/') },
+    ...(teams.value ?? []).map(team => ({
+      id: team.id,
+      label: `${team.name} · ${roleLabel[team.my_role]}`,
+      selected: false,
+      onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps`),
+    })),
+  ], [navigate, teams.value]);
+
   const appCount = apps.value?.length ?? 0;
   const appQuota = quota.value?.app.count;
   const hasReachedAppLimit = appQuota ? appQuota.used >= appQuota.limit : false;
@@ -371,6 +292,7 @@ export default function AppsListPage() {
     <StudentShell
       activeItem="apps"
       scopeLabel="내 Resources"
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
