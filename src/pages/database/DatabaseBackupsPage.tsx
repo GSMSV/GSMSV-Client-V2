@@ -194,7 +194,7 @@ export default function DatabaseBackupsPage() {
   const backupTable = backups.value && backups.value.length > 0;
 
   return (
-    <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => undefined} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
+    <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
       <Page>
         <Breadcrumb type="button" onClick={() => navigate('/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard width="100%" height={416} /> : detail.error || !detail.value ? (
