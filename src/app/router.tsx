@@ -35,6 +35,16 @@ function TeamAppsRoute() {
   return <TeamAppsListPage key={teamId} teamId={teamId ?? ''} />;
 }
 
+function TeamAppCreateSourceRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <AppCreateSourcePage key={teamId} teamId={teamId} />;
+}
+
+function TeamAppCreateServiceRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <AppCreateServicePage key={teamId} teamId={teamId} />;
+}
+
 function VMNetworkRoute() {
   const { vmGrn } = useParams<{ vmGrn: string }>();
   return <VMNetworkPage key={vmGrn} />;
@@ -90,6 +100,22 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <TeamAppsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps/new/service',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppCreateServiceRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps/new',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppCreateSourceRoute />
       </Suspense>
     ),
   },

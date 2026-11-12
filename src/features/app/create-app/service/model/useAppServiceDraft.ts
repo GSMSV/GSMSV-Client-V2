@@ -11,10 +11,10 @@ export interface AppServiceDraft {
   cpu: number;
 }
 
-function getSourceName() {
+function getSourceName(sourceDraftKey: string) {
   if (typeof window === 'undefined') return '';
   try {
-    const source = window.sessionStorage.getItem('gsmsv.app-create-source-draft');
+    const source = window.sessionStorage.getItem(sourceDraftKey);
     const parsed = source ? JSON.parse(source) as { name?: unknown } : null;
     return typeof parsed?.name === 'string' ? parsed.name : '';
   } catch {
@@ -22,9 +22,9 @@ function getSourceName() {
   }
 }
 
-export function getInitialAppServiceDraft(): AppServiceDraft {
+export function getInitialAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-source-draft'): AppServiceDraft {
   const preview = import.meta.env.DEV;
-  const sourceName = getSourceName();
+  const sourceName = getSourceName(sourceDraftKey);
   return {
     appName: sourceName,
     serviceType: 'web',
@@ -35,8 +35,8 @@ export function getInitialAppServiceDraft(): AppServiceDraft {
   };
 }
 
-export function useAppServiceDraft() {
-  const [draft, setDraft] = useState(getInitialAppServiceDraft);
+export function useAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-source-draft') {
+  const [draft, setDraft] = useState(() => getInitialAppServiceDraft(sourceDraftKey));
 
   const update = <K extends keyof AppServiceDraft>(key: K, value: AppServiceDraft[K]) => {
     setDraft(current => ({ ...current, [key]: value }));

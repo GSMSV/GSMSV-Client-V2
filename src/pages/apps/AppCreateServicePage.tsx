@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { createPersonalApp } from '../../features/app/create-app';
+import { createPersonalApp, createTeamApp } from '../../features/app/create-app';
 import { checkAppSubdomain, useAppServiceDraft, type AppServiceType } from '../../features/app/create-app/service';
 import { getSessionUser } from '../../entities/session';
+import { getTeam, type TeamStatus } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -206,23 +207,42 @@ function serviceDescription(type: AppServiceType) {
   return '웹은 주소로 요청을 받습니다.';
 }
 
-export default function AppCreateServicePage() {
+export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const { draft, update } = useAppServiceDraft();
+  const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
+  const { draft, update } = useAppServiceDraft(sourceDraftKey);
   const previewOnly = import.meta.env.DEV;
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
   const [availabilityError, setAvailabilityError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<{ message: string; login?: boolean } | null>(null);
+  const [teamStatus, setTeamStatus] = useState<TeamStatus | 'loading' | 'error'>(teamId ? 'loading' : 'approved');
+  const [teamStatusRetry, setTeamStatusRetry] = useState(0);
   const requestController = useRef<AbortController | null>(null);
   const subdomainInputId = 'app-service-subdomain';
 
   useEffect(() => () => requestController.current?.abort(), []);
 
+  useEffect(() => {
+    if (!teamId) {
+      setTeamStatus('approved');
+      return;
+    }
+
+    const controller = new AbortController();
+    setTeamStatus('loading');
+    void getTeam(teamId, controller.signal).then(team => {
+      if (!controller.signal.aborted) setTeamStatus(team.status);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeamStatus('error');
+    });
+    return () => controller.abort();
+  }, [teamId, teamStatusRetry]);
+
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'apps') navigate('/apps');
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
   };
 
   const checkSubdomain = useCallback(async () => {
@@ -259,18 +279,22 @@ export default function AppCreateServicePage() {
 
   const handleCreate = async () => {
     const name = draft.appName.trim();
-    if (creating || name.length < 1 || name.length > 30) return;
+    if (creating || (teamId && teamStatus !== 'approved') || name.length < 1 || name.length > 30) return;
     setCreating(true);
     setCreateError(null);
     try {
-      const app = await createPersonalApp(name);
-      sessionStorage.removeItem('gsmsv.app-create-source-draft');
+      const app = teamId ? await createTeamApp(teamId, name) : await createPersonalApp(name);
+      sessionStorage.removeItem(sourceDraftKey);
       navigate(`/apps/${encodeURIComponent(app.grn)}`);
     } catch (error) {
       setCreateError(error instanceof ApiRequestError && error.status === 401
         ? { message: '로그인이 필요합니다. 로그인한 뒤 다시 시도해 주세요.', login: true }
-        : error instanceof ApiRequestError && error.status === 409
-          ? { message: '개인 앱 생성 한도에 도달했거나 요청이 충돌했습니다. Apps 목록에서 사용량을 확인해 주세요.' }
+        : teamId && error instanceof ApiRequestError && error.code === 'TEAM_NOT_APPROVED'
+          ? { message: '팀이 승인되면 앱을 만들 수 있어요' }
+          : teamId && error instanceof ApiRequestError && error.code === 'ACCESS_DENIED'
+            ? { message: '현재 팀에서 앱을 만들 권한이 없습니다. 팀 권한을 확인해 주세요.' }
+            : error instanceof ApiRequestError && error.status === 409
+          ? { message: teamId ? '팀 Apps 생성 한도에 도달했거나 요청이 충돌했습니다. 팀 Apps 목록에서 사용량을 확인해 주세요.' : '개인 앱 생성 한도에 도달했거나 요청이 충돌했습니다. Apps 목록에서 사용량을 확인해 주세요.' }
           : error instanceof ApiRequestError && error.status === 400
             ? { message: '앱 이름을 확인해 주세요. 앞뒤 공백을 제외하고 1~30자로 입력할 수 있습니다.' }
             : { message: '앱을 만들지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.' });
@@ -294,7 +318,7 @@ export default function AppCreateServicePage() {
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
@@ -306,7 +330,7 @@ export default function AppCreateServicePage() {
     >
       <Page>
         <PageMeta>
-          <Breadcrumb>Apps</Breadcrumb>
+          <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
           {previewOnly && <PreviewBadge>Figma 미리보기 샘플 · 실제 설정값 아님</PreviewBadge>}
         </PageMeta>
         <Heading>어떤 서비스로 실행하시겠습니까?</Heading>
@@ -318,10 +342,16 @@ export default function AppCreateServicePage() {
             <StepIndicator number={2} label="서비스" active />
           </Steps>
           <StepActions>
-            <Button variant="ghost" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate('/apps/new')}>이전: 소스</Button>
-            <Button variant="primary" icon={<Octicon name={creating ? 'sync' : 'check'} size={16} />} onClick={() => void handleCreate()} disabled={creating || draft.appName.trim().length < 1 || draft.appName.trim().length > 30}>{creating ? '앱 만드는 중' : '앱 만들기'}</Button>
+            <Button variant="ghost" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps/new` : '/apps/new')}>이전: 소스</Button>
+            <Button variant="primary" icon={<Octicon name={creating ? 'sync' : 'check'} size={16} />} onClick={() => void handleCreate()} disabled={creating || Boolean(teamId && teamStatus !== 'approved') || draft.appName.trim().length < 1 || draft.appName.trim().length > 30}>{creating ? '앱 만드는 중' : '앱 만들기'}</Button>
           </StepActions>
         </StepRow>
+
+        {teamId && teamStatus !== 'approved' && teamStatus !== 'loading' && <PreviewBlock role={teamStatus === 'error' ? 'alert' : 'note'}>
+          <Octicon name={teamStatus === 'error' ? 'alert' : 'info'} size={16} aria-hidden="true" />
+          <span>{teamStatus === 'error' ? '팀 승인 상태를 확인하지 못해 앱을 만들 수 없습니다. 다시 시도해 주세요.' : '팀이 승인되면 앱을 만들 수 있어요'}</span>
+          {teamStatus === 'error' && <Button variant="ghost" onClick={() => setTeamStatusRetry(value => value + 1)}>다시 시도</Button>}
+        </PreviewBlock>}
 
         {createError && <PreviewBlock role="alert">
           <Octicon name="alert" size={16} aria-hidden="true" />
