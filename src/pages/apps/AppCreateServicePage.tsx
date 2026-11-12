@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { createPersonalApp, createTeamApp } from '../../features/app/create-app';
 import { checkAppSubdomain, useAppServiceDraft, type AppServiceType } from '../../features/app/create-app/service';
 import { getSessionUser } from '../../entities/session';
-import { getTeam, type TeamStatus } from '../../entities/team';
+import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamStatus, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 const Page = styled.div`
   display: flex;
@@ -220,21 +222,36 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const [createError, setCreateError] = useState<{ message: string; login?: boolean } | null>(null);
   const [teamStatus, setTeamStatus] = useState<TeamStatus | 'loading' | 'error'>(teamId ? 'loading' : 'approved');
   const [teamStatusRetry, setTeamStatusRetry] = useState(0);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
   const requestController = useRef<AbortController | null>(null);
   const subdomainInputId = 'app-service-subdomain';
 
   useEffect(() => () => requestController.current?.abort(), []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setTeams(value); })
+      .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (!teamId) {
       setTeamStatus('approved');
+      setCurrentTeam(null);
       return;
     }
 
     const controller = new AbortController();
+    setCurrentTeam(null);
     setTeamStatus('loading');
     void getTeam(teamId, controller.signal).then(team => {
-      if (!controller.signal.aborted) setTeamStatus(team.status);
+      if (!controller.signal.aborted) {
+        setCurrentTeam(team);
+        setTeamStatus(team.status);
+      }
     }).catch(() => {
       if (!controller.signal.aborted) setTeamStatus('error');
     });
@@ -244,6 +261,27 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
   };
+
+  const scopeOptions = useMemo(() => {
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: !teamId, onSelect: () => navigate('/apps/new/service') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabel[team.my_role]}`,
+        selected: team.id === teamId,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps/new/service`),
+      })),
+    ];
+    if (teamId && !teams.some(team => team.id === teamId)) {
+      options.push({
+        id: teamId,
+        label: currentTeam ? `${currentTeam.name} · ${currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'}` : '팀 Resources',
+        selected: true,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new/service`),
+      });
+    }
+    return options;
+  }, [currentTeam, navigate, teamId, teams]);
 
   const checkSubdomain = useCallback(async () => {
     const value = draft.subdomain.trim();
@@ -319,6 +357,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     <StudentShell
       activeItem="apps"
       scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}

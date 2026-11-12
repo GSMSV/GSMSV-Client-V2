@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { useAppSourceDraft, type AppSourceType } from '../../features/app/create-app';
+import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
 import { Button } from '../../shared/ui/controls';
 import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 const Page = styled.div`
   display: flex;
@@ -211,6 +214,29 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
   const { draft, update } = useAppSourceDraft();
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setTeams(value); })
+      .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!teamId) {
+      setCurrentTeam(null);
+      return;
+    }
+    const controller = new AbortController();
+    setCurrentTeam(null);
+    void getTeam(teamId, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setCurrentTeam(value); })
+      .catch(() => { if (!controller.signal.aborted) setCurrentTeam(null); });
+    return () => controller.abort();
+  }, [teamId]);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const isFigmaPreview = import.meta.env.DEV;
   const sourceTypeLabels: Record<AppSourceType, string> = {
@@ -221,6 +247,27 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
   };
+
+  const scopeOptions = useMemo(() => {
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: !teamId, onSelect: () => navigate('/apps/new') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabel[team.my_role]}`,
+        selected: team.id === teamId,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps/new`),
+      })),
+    ];
+    if (teamId && !teams.some(team => team.id === teamId)) {
+      options.push({
+        id: teamId,
+        label: currentTeam ? `${currentTeam.name} · ${currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'}` : '팀 Resources',
+        selected: true,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new`),
+      });
+    }
+    return options;
+  }, [currentTeam, navigate, teamId, teams]);
 
   const handleContinue = () => {
     if (draft.sourceType !== 'github') return;
@@ -235,6 +282,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     <StudentShell
       activeItem="apps"
       scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
