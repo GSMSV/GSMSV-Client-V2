@@ -187,8 +187,10 @@ export function StudentTopbar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
   const [activeScopeIndex, setActiveScopeIndex] = useState(0);
+  const hasUnsavedInputRef = useRef(hasUnsavedInput);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  hasUnsavedInputRef.current = hasUnsavedInput;
 
   useEffect(() => {
     if (!scopeOpen || !scopeOptions?.length) return;
@@ -323,7 +325,7 @@ export function StudentTopbar({
         onClose={closeNotifications}
         onUnreadCountChange={setUnreadCount}
         onOpenResource={path => {
-          if (hasUnsavedInput && !window.confirm('저장하지 않은 입력이 있습니다. 알림에서 선택한 화면으로 이동할까요?')) return;
+          if (hasUnsavedInputRef.current && !window.confirm('저장하지 않은 입력이 있습니다. 알림에서 선택한 화면으로 이동할까요?')) return;
           void navigate(path);
         }}
       />
