@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { extendDatabase, getDatabase, getDatabaseCredentials, listDatabaseBackups } from '../../entities/database';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -133,6 +134,7 @@ export default function DatabaseDetailPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
   const [detail, setDetail] = useState<Loadable<DatabaseDetail>>(initial);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [backups, setBackups] = useState<Loadable<DatabaseBackup[]>>(initial);
   const [retry, setRetry] = useState(0);
   const [credential, setCredential] = useState<DatabaseCredentials | null>(null);
@@ -166,6 +168,16 @@ export default function DatabaseDetailPage() {
     return () => controller.abort();
   }, [load, retry]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal).then(value => {
+      if (!controller.signal.aborted) setTeams(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeams([]);
+    });
+    return () => controller.abort();
+  }, []);
+
   const latestBackup = useMemo(() => backups.value?.reduce<DatabaseBackup | null>((latest, backup) => {
     if (!latest || new Date(backup.created_at).getTime() > new Date(latest.created_at).getTime()) return backup;
     return latest;
@@ -176,6 +188,28 @@ export default function DatabaseDetailPage() {
     ? `/databases?owner=${encodeURIComponent(database.owner.id)}`
     : '/databases';
   const teamPath = (database: DatabaseDetail, suffix = '') => `/teams/${encodeURIComponent(database.owner.id)}${suffix}`;
+  const scopeOptions = useMemo(() => {
+    const owner = detail.value?.owner;
+    const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: owner?.type !== 'team', onSelect: () => navigate('/databases') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabels[team.my_role]}`,
+        selected: owner?.type === 'team' && team.id === owner.id,
+        onSelect: () => navigate(`/databases?owner=${encodeURIComponent(team.id)}`),
+      })),
+    ];
+    if (owner?.type === 'team' && !options.some(option => option.id === owner.id)) {
+      options.push({
+        id: owner.id,
+        label: `${owner.name} · 팀`,
+        selected: true,
+        onSelect: () => navigate(`/databases?owner=${encodeURIComponent(owner.id)}`),
+      });
+    }
+    return options;
+  }, [detail.value?.owner, navigate, teams]);
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const current = detail.value;
     if (item === 'database') navigate(current ? databaseListPath(current) : '/databases');
@@ -242,7 +276,7 @@ export default function DatabaseDetailPage() {
   );
 
   return (
-    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
+    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
       <Page>
         <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard height={300} /> : detail.error && !detail.value ? (

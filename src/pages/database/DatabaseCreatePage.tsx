@@ -10,7 +10,7 @@ import {
 } from '../../entities/database';
 import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
-import { getTeam, type TeamDetail, type TeamRole } from '../../entities/team';
+import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
@@ -245,6 +245,7 @@ export default function DatabaseCreatePage() {
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [team, setTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [retryKey, setRetryKey] = useState(0);
   const [name, setName] = useState('');
   const [engine, setEngine] = useState<DatabaseEngine>('mysql');
@@ -252,6 +253,16 @@ export default function DatabaseCreatePage() {
   const [submitting, setSubmitting] = useState(false);
   const [nameError, setNameError] = useState('');
   const requestKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal).then(value => {
+      if (!controller.signal.aborted) setTeams(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeams([]);
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -344,6 +355,26 @@ export default function DatabaseCreatePage() {
   const scopeLabel = team.value
     ? `${team.value.name} · ${team.value.my_role ? roleLabels[team.value.my_role] : '관리자'}`
     : teamId ? '팀 Resources' : '내 Resources';
+  const scopeOptions = useMemo(() => {
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: !teamId, onSelect: () => navigate('/databases/new') },
+      ...teams.map(item => ({
+        id: item.id,
+        label: `${item.name} · ${roleLabels[item.my_role]}`,
+        selected: item.id === teamId,
+        onSelect: () => navigate(`/databases/new?owner=${encodeURIComponent(item.id)}`),
+      })),
+    ];
+    if (team.value && !options.some(option => option.id === team.value?.id)) {
+      options.push({
+        id: team.value.id,
+        label: `${team.value.name} · ${team.value.my_role ? roleLabels[team.value.my_role] : '관리자'}`,
+        selected: true,
+        onSelect: () => navigate(`/databases/new?owner=${encodeURIComponent(team.value!.id)}`),
+      });
+    }
+    return options;
+  }, [navigate, team.value, teamId, teams]);
 
   const dialogContent = {
     count: { title: 'Database를 더 발급할 수 없습니다', copy: `개인 Database 발급 한도 ${count ? `${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}에 도달했습니다. 사용하지 않는 Database를 정리한 뒤 다시 시도해 주세요.` },
@@ -360,6 +391,7 @@ export default function DatabaseCreatePage() {
     <StudentShell
       activeItem="database"
       scopeLabel={scopeLabel}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}

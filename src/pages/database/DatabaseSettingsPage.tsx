@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { deleteDatabase, getDatabase, renameDatabase, rotateDatabasePassword } from '../../entities/database';
 import type { DatabaseDetail, DatabaseOperation, DatabasePasswordRotation } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard, RevealableSecret } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -98,6 +99,7 @@ export default function DatabaseSettingsPage(){
   const navigate=useNavigate();
   const user=getSessionUser();
   const [detail,setDetail]=useState<Loadable<DatabaseDetail>>(initial);
+  const [teams,setTeams]=useState<TeamSummary[]>([]);
   const [name,setName]=useState('');
   const [retryKey,setRetryKey]=useState(0);
   const [saving,setSaving]=useState(false);
@@ -124,6 +126,7 @@ export default function DatabaseSettingsPage(){
     }
   },[databaseGrn]);
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load,retryKey]);
+  useEffect(()=>{const controller=new AbortController();void listMyTeams(controller.signal).then(value=>{if(!controller.signal.aborted)setTeams(value);}).catch(()=>{if(!controller.signal.aborted)setTeams([]);});return()=>controller.abort();},[]);
   useEffect(()=>{
     if(!showRotationDialog&&!rotationResult&&!showDeleteDialog)return;
     const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!rotating&&!deleting){setShowRotationDialog(false);setRotationResult(null);setShowDeleteDialog(false);}};
@@ -132,6 +135,16 @@ export default function DatabaseSettingsPage(){
 
   const databaseListPath=(database:DatabaseDetail)=>database.owner.type==='team'?`/databases?owner=${encodeURIComponent(database.owner.id)}`:'/databases';
   const teamPath=(database:DatabaseDetail,suffix='')=>`/teams/${encodeURIComponent(database.owner.id)}${suffix}`;
+  const scopeOptions=useMemo(()=>{
+    const owner=detail.value?.owner;
+    const roleLabels:Record<TeamRole,string>={leader:'팀장',devops:'DevOps',member:'팀원'};
+    const options=[
+      {id:'personal',label:'내 Resources',selected:owner?.type!=='team',onSelect:()=>navigate('/databases')},
+      ...teams.map(team=>({id:team.id,label:`${team.name} · ${roleLabels[team.my_role]}`,selected:owner?.type==='team'&&team.id===owner.id,onSelect:()=>navigate(`/databases?owner=${encodeURIComponent(team.id)}`)})),
+    ];
+    if(owner?.type==='team'&&!options.some(option=>option.id===owner.id))options.push({id:owner.id,label:`${owner.name} · 팀`,selected:true,onSelect:()=>navigate(`/databases?owner=${encodeURIComponent(owner.id)}`)});
+    return options;
+  },[detail.value?.owner,navigate,teams]);
   const navigateFromShell=(item:Exclude<StudentNavigationKey,'none'>)=>{
     const current=detail.value;
     if(item==='database')navigate(current?databaseListPath(current):'/databases');
@@ -171,7 +184,7 @@ export default function DatabaseSettingsPage(){
     finally{setDeleting(false);}
   };
 
-  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
+  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} scopeOptions={scopeOptions} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
     <Page>
       <Breadcrumb type="button" onClick={()=>navigate(value?databaseListPath(value):'/databases')}>Database</Breadcrumb>
       {detail.loading&&!value?<LoadingCard width="100%" height={174}/>:detail.error||!value?<ErrorCard onRetry={()=>setRetryKey(key=>key+1)}/>:<>
