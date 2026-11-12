@@ -481,7 +481,7 @@ export default function DatabaseListPage() {
 
         <Banner
           title="인터넷에서는 바로 접속할 수 없습니다"
-          description={<BannerDescription>내 VM에서 접속하거나 Database 상세의 쿼리 콘솔을 쓰세요. PC의 DB 도구는 VM을 거치는 SSH 터널로 연결합니다.</BannerDescription>}
+          description={<BannerDescription>VM에서 Database에 연결하세요. PC의 DB 도구는 VM을 거치는 SSH 터널로 연결할 수 있습니다.</BannerDescription>}
           tone="neutral"
           icon={<Octicon name="info" size={20} />}
           action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/docs')}>접속 방법 Docs</Button>}
