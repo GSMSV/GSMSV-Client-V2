@@ -4,6 +4,7 @@ import { loginCallbackLoader } from '../pages/auth/callback/loader';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const DatabaseListPage = lazy(() => import('../pages/database/DatabaseListPage'));
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseListPage />
       </Suspense>
     ),
   },
