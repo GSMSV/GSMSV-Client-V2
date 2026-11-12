@@ -29,6 +29,8 @@ export interface StudentShellProps {
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
+  scopeDisabled?: boolean;
+  scopeDisabledReason?: string;
   onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => void;
   onCreateTeam: () => void;
   onOpenStatus: () => void;
@@ -45,6 +47,8 @@ export function StudentShell({
   userName,
   notificationCount,
   scopeOptions,
+  scopeDisabled,
+  scopeDisabledReason,
   onNavigate,
   onCreateTeam,
   onOpenStatus,
@@ -67,6 +71,8 @@ export function StudentShell({
           userName={userName}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
+          scopeDisabled={scopeDisabled}
+          scopeDisabledReason={scopeDisabledReason}
           onSelectScope={onSelectScope}
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}

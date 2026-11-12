@@ -552,6 +552,8 @@ export default function VMNetworkPage() {
       activeItem="home"
       scopeLabel="내 Resources"
       userName={userName}
+      scopeDisabled
+      scopeDisabledReason="VM 소유 범위 정보가 제공되지 않아 범위를 변경할 수 없습니다."
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
       onOpenStatus={() => navigate('/status')}
