@@ -5,6 +5,7 @@ import { listTeamApps } from '../../entities/app';
 import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
+import { listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -454,6 +455,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const user = getSessionUser();
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
   const [detail, setDetail] = useState<Loadable<TeamDetail>>(initialLoadable);
+  const [pendingInvitations, setPendingInvitations] = useState<Loadable<TeamInvitation[]>>(initialLoadable);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -489,11 +491,29 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
     return () => controller.abort();
   }, [selectedTeamId, retryKey]);
 
+  useEffect(() => {
+    const team = detail.value;
+    if (!selectedTeamId || team?.id !== selectedTeamId || team.status !== 'pending' || !team.permissions.invite_member) {
+      setPendingInvitations({ value: [], loading: false, error: false });
+      return;
+    }
+
+    const controller = new AbortController();
+    setPendingInvitations(current => ({ ...current, loading: true, error: false }));
+    void listTeamInvitations(selectedTeamId, controller.signal).then(value => {
+      if (!controller.signal.aborted) setPendingInvitations({ value, loading: false, error: false });
+    }).catch(() => {
+      if (!controller.signal.aborted) setPendingInvitations({ value: null, loading: false, error: true });
+    });
+    return () => controller.abort();
+  }, [detail.value, retryKey, selectedTeamId]);
+
   const selectedSummary = useMemo(
     () => teams.value?.find(team => team.id === selectedTeamId),
     [selectedTeamId, teams.value],
   );
   const currentTeam = detail.value;
+  const invitedMembers = currentTeam?.status === 'pending' ? pendingInvitations.value ?? [] : [];
   const scopeLabel = currentTeam
     ? `${currentTeam.name} · ${currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'}`
     : selectedSummary ? `${selectedSummary.name} · ${roleLabel[selectedSummary.my_role]}` : '내 Resources';
@@ -587,7 +607,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         <Heading>
           <TitleBlock>
             <Title>{currentTeam.name}</Title>
-            <Subtitle>팀 Resources · 내 역할 {role || '확인 중'} · 팀원 <MemberCount>{currentTeam.members.length}명</MemberCount></Subtitle>
+            <Subtitle>팀 Resources · 내 역할 {role || '확인 중'} · 팀원 <MemberCount>{currentTeam.members.length + invitedMembers.length}명</MemberCount></Subtitle>
             {warningText && <TeamWarning>{warningText}</TeamWarning>}
           </TitleBlock>
           <Actions>
@@ -633,7 +653,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
 
         <BottomGrid>
           <MemberPanel>
-            <SectionTitle>팀원 · <MemberCount>{currentTeam.members.length}명</MemberCount></SectionTitle>
+            <SectionTitle>팀원 · <MemberCount>{currentTeam.members.length + invitedMembers.length}명</MemberCount></SectionTitle>
             <MemberList>
               {currentTeam.members.map(member => (
                 <Member key={member.member_id}>
@@ -641,7 +661,14 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
                   <MemberCopy><MemberName>{member.name}{member.role === currentTeam.my_role ? ' (나)' : ''}</MemberName><MemberRole>{roleLabel[member.role]}</MemberRole></MemberCopy>
                 </Member>
               ))}
+              {invitedMembers.map(invitation => (
+                <Member key={invitation.id}>
+                  <MemberIcon aria-hidden="true"><Octicon name="person" size={18} /></MemberIcon>
+                  <MemberCopy><MemberName>{invitation.email}</MemberName><MemberRole>초대 대기</MemberRole></MemberCopy>
+                </Member>
+              ))}
             </MemberList>
+            {pendingInvitations.error && currentTeam.permissions.invite_member && <TeamWarning role="alert">초대 중인 팀원을 불러오지 못했습니다. <Button variant="ghost" onClick={retry}>다시 시도</Button></TeamWarning>}
           </MemberPanel>
           <Banner
             title="팀 VM 사용 기간"
