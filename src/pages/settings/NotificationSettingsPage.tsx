@@ -73,7 +73,7 @@ export default function NotificationSettingsPage() {
   }, [hasChanges, navigate, pathname]);
 
   const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
-    if (nextLocation.pathname === '/login') return false;
+    if (logoutPending && historyAction === 'REPLACE' && nextLocation.pathname === '/login') return false;
     return logoutPending || (historyAction === 'POP' && hasChanges);
   }, [hasChanges, logoutPending]));
 

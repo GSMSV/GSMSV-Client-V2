@@ -200,7 +200,7 @@ export default function AccountSettingsPage() {
   }, [confirmUnsavedNavigation, navigate]);
 
   const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
-    if (nextLocation.pathname === '/login') return false;
+    if (logoutState === 'pending' && historyAction === 'REPLACE' && nextLocation.pathname === '/login') return false;
     return logoutState === 'pending' || (historyAction === 'POP' && notificationUnsaved);
   }, [logoutState, notificationUnsaved]));
 
