@@ -149,7 +149,17 @@ export default function DatabaseBackupsPage() {
   }, [selectedBackup, restoring]);
 
   const sortedBackups = useMemo(() => [...(backups.value ?? [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [backups.value]);
-  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => { if (item === 'database') navigate('/databases'); };
+  const databaseListPath = (database: DatabaseDetail) => database.owner.type === 'team'
+    ? `/databases?owner=${encodeURIComponent(database.owner.id)}`
+    : '/databases';
+  const teamPath = (database: DatabaseDetail, suffix = '') => `/teams/${encodeURIComponent(database.owner.id)}${suffix}`;
+  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const current = detail.value;
+    if (item === 'database') navigate(current ? databaseListPath(current) : '/databases');
+    if (item === 'apps') navigate(current?.owner.type === 'team' ? teamPath(current, '/apps') : '/apps');
+    if (item === 'home') navigate(current?.owner.type === 'team' ? teamPath(current) : '/');
+    if (item === 'team') navigate(current?.owner.type === 'team' ? teamPath(current) : '/teams');
+  };
 
   const download = async (backup: DatabaseBackup) => {
     if (downloadingId) return;
@@ -194,9 +204,9 @@ export default function DatabaseBackupsPage() {
   const backupTable = backups.value && backups.value.length > 0;
 
   return (
-    <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
+    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
       <Page>
-        <Breadcrumb type="button" onClick={() => navigate('/databases')}>Database</Breadcrumb>
+        <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard width="100%" height={416} /> : detail.error || !detail.value ? (
           <BackupError onRetry={() => setRetryKey(value => value + 1)} />
         ) : <>

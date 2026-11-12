@@ -172,7 +172,17 @@ export default function DatabaseDetailPage() {
   }, null) ?? null, [backups.value]);
   const daysLeft = detail.value ? remainingDays(detail.value.expires_at) : null;
   const databaseSql = detail.value ? sqlExample(detail.value) : null;
-  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => { if (item === 'database') navigate('/databases'); };
+  const databaseListPath = (database: DatabaseDetail) => database.owner.type === 'team'
+    ? `/databases?owner=${encodeURIComponent(database.owner.id)}`
+    : '/databases';
+  const teamPath = (database: DatabaseDetail, suffix = '') => `/teams/${encodeURIComponent(database.owner.id)}${suffix}`;
+  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const current = detail.value;
+    if (item === 'database') navigate(current ? databaseListPath(current) : '/databases');
+    if (item === 'apps') navigate(current?.owner.type === 'team' ? teamPath(current, '/apps') : '/apps');
+    if (item === 'home') navigate(current?.owner.type === 'team' ? teamPath(current) : '/');
+    if (item === 'team') navigate(current?.owner.type === 'team' ? teamPath(current) : '/teams');
+  };
 
   const ensureCredentials = useCallback(async () => {
     if (credential || credentialLoading) return credential;
@@ -232,20 +242,20 @@ export default function DatabaseDetailPage() {
   );
 
   return (
-    <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
+    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} onOpenProfile={() => undefined}>
       <Page>
-        <Breadcrumb type="button" onClick={() => navigate('/databases')}>Database</Breadcrumb>
+        <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard height={300} /> : detail.error && !detail.value ? (
           <Card>
             <CardHeading>Database를 찾을 수 없습니다</CardHeading>
             <HelpText>삭제됐거나 볼 수 있는 권한이 없습니다. 계약상 두 경우를 구분하지 않습니다.</HelpText>
             <ErrorCard onRetry={() => setRetry(value => value + 1)} />
-            <Button variant="secondary" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate('/databases')}>Database 목록</Button>
+            <Button variant="secondary" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database 목록</Button>
           </Card>
         ) : detail.value && (
           <>
             <Heading>
-              <HeadingRow><TitleBlock><Title>{detail.value.name}</Title><Subtitle>{engineName(detail.value.engine)} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle></TitleBlock><Button variant="secondary" onClick={() => navigate('/databases')}>목록으로</Button></HeadingRow>
+              <HeadingRow><TitleBlock><Title>{detail.value.name}</Title><Subtitle>{engineName(detail.value.engine)} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle></TitleBlock><Button variant="secondary" onClick={() => navigate(databaseListPath(detail.value!))}>목록으로</Button></HeadingRow>
               <Metadata><span>{detail.value.owner.name}</span><Dot /><span>{statusText(detail.value)}</span><Dot /><span>생성 {dateTime(detail.value.created_at)}</span></Metadata>
             </Heading>
             <Tabs aria-label="Database 상세 메뉴">

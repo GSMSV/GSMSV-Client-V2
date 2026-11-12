@@ -130,7 +130,15 @@ export default function DatabaseSettingsPage(){
     window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);
   },[showRotationDialog,rotationResult,showDeleteDialog,rotating,deleting]);
 
-  const navigateFromShell=(item:Exclude<StudentNavigationKey,'none'>)=>{if(item==='database')navigate('/databases');};
+  const databaseListPath=(database:DatabaseDetail)=>database.owner.type==='team'?`/databases?owner=${encodeURIComponent(database.owner.id)}`:'/databases';
+  const teamPath=(database:DatabaseDetail,suffix='')=>`/teams/${encodeURIComponent(database.owner.id)}${suffix}`;
+  const navigateFromShell=(item:Exclude<StudentNavigationKey,'none'>)=>{
+    const current=detail.value;
+    if(item==='database')navigate(current?databaseListPath(current):'/databases');
+    if(item==='apps')navigate(current?.owner.type==='team'?teamPath(current,'/apps'):'/apps');
+    if(item==='home')navigate(current?.owner.type==='team'?teamPath(current):'/');
+    if(item==='team')navigate(current?.owner.type==='team'?teamPath(current):'/teams');
+  };
   const value=detail.value;
   const trimmedName=name.trim();
   const nameValid=trimmedName.length>=1&&trimmedName.length<=30;
@@ -163,9 +171,9 @@ export default function DatabaseSettingsPage(){
     finally{setDeleting(false);}
   };
 
-  return <StudentShell activeItem="database" scopeLabel="내 Resources" userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
+  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} onOpenProfile={()=>undefined}>
     <Page>
-      <Breadcrumb type="button" onClick={()=>navigate('/databases')}>Database</Breadcrumb>
+      <Breadcrumb type="button" onClick={()=>navigate(value?databaseListPath(value):'/databases')}>Database</Breadcrumb>
       {detail.loading&&!value?<LoadingCard width="100%" height={174}/>:detail.error||!value?<ErrorCard onRetry={()=>setRetryKey(key=>key+1)}/>:<>
         <HeadingGroup><Title>{value.name}</Title><Subtitle>{engineIsolation(value)}</Subtitle></HeadingGroup>
         <TabsRow>
