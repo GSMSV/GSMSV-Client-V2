@@ -443,7 +443,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'home' || item === 'team') navigate(selectedTeamId ? `/teams/${encodeURIComponent(selectedTeamId)}` : '/teams');
     else if (item === 'database') navigate('/databases');
-    else if (item === 'apps') navigate('/apps');
+    else if (item === 'apps') navigate(selectedTeamId ? `/teams/${encodeURIComponent(selectedTeamId)}/apps` : '/apps');
   };
 
   const retry = useCallback(() => setRetryKey(value => value + 1), []);

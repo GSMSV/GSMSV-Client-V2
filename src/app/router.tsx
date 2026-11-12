@@ -11,6 +11,7 @@ const DatabaseDetailPage = lazy(() => import('../pages/database/DatabaseDetailPa
 const DatabaseBackupsPage = lazy(() => import('../pages/database/DatabaseBackupsPage'));
 const DatabaseSettingsPage = lazy(() => import('../pages/database/DatabaseSettingsPage'));
 const AppsListPage = lazy(() => import('../pages/apps/AppsListPage'));
+const TeamAppsListPage = lazy(() => import('../pages/apps/TeamAppsListPage'));
 const AppCreateSourcePage = lazy(() => import('../pages/apps/AppCreateSourcePage'));
 const AppCreateServicePage = lazy(() => import('../pages/apps/AppCreateServicePage'));
 const AppSettingsPage = lazy(() => import('../pages/apps/AppSettingsPage'));
@@ -27,6 +28,11 @@ const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastru
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
   return <TeamsHomePage teamId={teamId} />;
+}
+
+function TeamAppsRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamAppsListPage key={teamId} teamId={teamId ?? ''} />;
 }
 
 function VMNetworkRoute() {
@@ -76,6 +82,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <TeamCreatePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppsRoute />
       </Suspense>
     ),
   },
