@@ -374,7 +374,7 @@ export default function AppsListPage() {
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
-      onOpenStatus={() => undefined}
+      onOpenStatus={() => navigate('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}

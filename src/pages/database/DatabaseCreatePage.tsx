@@ -323,7 +323,7 @@ export default function DatabaseCreatePage() {
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => undefined}
-      onOpenStatus={() => undefined}
+      onOpenStatus={() => navigate('/status')}
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
