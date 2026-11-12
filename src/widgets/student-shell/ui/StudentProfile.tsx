@@ -108,11 +108,12 @@ interface StudentProfileProps {
   activeTeamId?: string;
   hasUnsavedInput: boolean;
   onOpen: () => void;
+  onLogoutPendingChange?: (pending: boolean) => void;
 }
 
-export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen }: StudentProfileProps) {
+export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange }: StudentProfileProps) {
   const navigate = useNavigate();
-  const { key: locationKey } = useLocation();
+  const { key: locationKey, pathname } = useLocation();
   const panelId = useId();
   const profileRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -179,14 +180,21 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
   };
 
   const openAdmin = () => {
-    if (hasUnsavedInput && !window.confirm('저장하지 않은 입력이 있습니다. 관리자 콘솔로 이동할까요?')) return;
+    if (!confirmNavigation('/admin/infra', '관리자 콘솔')) return;
     setOpen(false);
     void navigate('/admin/infra');
   };
 
+  const confirmNavigation = (path: string, destination: string) => {
+    if (hasUnsavedInput && pathname !== path && !window.confirm(`저장하지 않은 입력이 있습니다. ${destination}(으)로 이동할까요?`)) return false;
+    return true;
+  };
+
   const handleLogout = async () => {
     if (loggingOut) return;
+    if (!confirmNavigation('/login', '로그인 화면')) return;
     setLoggingOut(true);
+    onLogoutPendingChange?.(true);
     setLogoutError(false);
     try {
       await logout();
@@ -197,6 +205,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
       setLogoutError(true);
     } finally {
       setLoggingOut(false);
+      onLogoutPendingChange?.(false);
     }
   };
 
@@ -246,6 +255,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
               disabled={!teamSettingsPath || loggingOut}
               onClick={() => {
                 if (!teamSettingsPath) return;
+                if (!confirmNavigation(teamSettingsPath, '팀 설정')) return;
                 setOpen(false);
                 void navigate(teamSettingsPath);
               }}
@@ -267,8 +277,9 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
               icon={<Octicon name="gear" size={16} />}
               disabled={loggingOut}
               onClick={() => {
+                if (!confirmNavigation('/settings', '계정 설정')) return;
                 setOpen(false);
-                void navigate('/settings/notifications');
+                void navigate('/settings');
               }}
             >
               계정 설정

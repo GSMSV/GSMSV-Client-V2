@@ -305,7 +305,7 @@ export default function PersonalResourcesPage() {
     else if (item === 'database') navigate('/databases');
     else if (item === 'apps') navigate('/apps');
     else if (item === 'team') navigate('/teams');
-    else if (item === 'settings') navigate('/settings/notifications');
+    else if (item === 'settings') navigate('/settings');
   };
 
   return (
