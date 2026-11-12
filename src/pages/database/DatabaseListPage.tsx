@@ -183,18 +183,6 @@ const DatabaseListError = styled(ErrorCard)`
   width: 371px;
 `;
 
-const EmptyDatabaseState = styled.div`
-  display: flex;
-  min-height: 174px;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-
 const InlineRetry = styled.button`
   margin-left: 8px;
   padding: 0;
@@ -473,7 +461,7 @@ export default function DatabaseListPage() {
             <DatabaseListError onRetry={() => setRetryKey(value => value + 1)} />
           ) : (
             <CardsRow>
-              {databases.value?.length === 0 ? <EmptyDatabaseState>{isTeamScope ? '이 팀에는 Database가 없습니다.' : '아직 Database가 없습니다.'}</EmptyDatabaseState> : databases.value?.map(database => (
+              {databases.value?.map(database => (
                 <DatabaseResourceCard key={database.grn} database={database} onOpen={() => openDatabase(database)} />
               ))}
             </CardsRow>
