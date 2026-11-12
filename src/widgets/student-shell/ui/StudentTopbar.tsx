@@ -40,7 +40,7 @@ const ScopeSelector = styled.div`
   flex: 0 0 220px;
 `;
 
-const ScopeTrigger = styled.button`
+const ScopeTrigger = styled.button<{ $disabled: boolean }>`
   display: inline-flex;
   width: 220px;
   height: 42px;
@@ -56,12 +56,23 @@ const ScopeTrigger = styled.button`
   font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
   line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
   text-align: left;
-  cursor: pointer;
+  cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
+  opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
   }
+`;
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
 `;
 
 const ScopeText = styled.span`
@@ -144,6 +155,8 @@ export interface StudentTopbarProps {
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
+  scopeDisabled?: boolean;
+  scopeDisabledReason?: string;
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
@@ -155,6 +168,8 @@ export function StudentTopbar({
   userName,
   notificationCount,
   scopeOptions,
+  scopeDisabled = false,
+  scopeDisabledReason,
   onSelectScope,
   onSearch,
   onOpenNotifications,
@@ -227,10 +242,15 @@ export function StudentTopbar({
             <ScopeTrigger
               ref={triggerRef}
               type="button"
-              aria-haspopup={scopeOptions?.length ? 'listbox' : undefined}
-              aria-expanded={scopeOptions?.length ? scopeOpen : undefined}
-              aria-controls={scopeOptions?.length ? 'scope-menu' : undefined}
+              disabled={scopeDisabled}
+              $disabled={scopeDisabled}
+              aria-describedby={scopeDisabled && scopeDisabledReason ? 'scope-disabled-reason' : undefined}
+              title={scopeDisabledReason}
+              aria-haspopup={!scopeDisabled && scopeOptions?.length ? 'listbox' : undefined}
+              aria-expanded={!scopeDisabled && scopeOptions?.length ? scopeOpen : undefined}
+              aria-controls={!scopeDisabled && scopeOptions?.length ? 'scope-menu' : undefined}
               onClick={() => {
+                if (scopeDisabled) return;
                 onSelectScope();
                 if (scopeOptions?.length) {
                   const selectedIndex = scopeOptions.findIndex(option => option.selected);
@@ -242,7 +262,8 @@ export function StudentTopbar({
               <ScopeText>{scopeLabel}</ScopeText>
               <Octicon name="chevron-down" size={16} />
             </ScopeTrigger>
-            {scopeOpen && scopeOptions && scopeOptions.length > 0 && (
+            {scopeDisabled && scopeDisabledReason && <VisuallyHidden id="scope-disabled-reason">{scopeDisabledReason}</VisuallyHidden>}
+            {!scopeDisabled && scopeOpen && scopeOptions && scopeOptions.length > 0 && (
               <ScopeMenu id="scope-menu" role="listbox" aria-label="작업 범위 선택" aria-activedescendant={`scope-option-${activeScopeIndex}`}>
                 {scopeOptions.map((option, index) => (
                   <ScopeOption
