@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, useParams } from 'react-router';
+import { createBrowserRouter, useParams } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
+const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const DatabaseListPage = lazy(() => import('../pages/database/DatabaseListPage'));
 const DatabaseCreatePage = lazy(() => import('../pages/database/DatabaseCreatePage'));
@@ -18,7 +19,11 @@ const AppOverviewPage = lazy(() => import('../pages/apps/AppOverviewPage'));
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/__design-system" replace />,
+    element: (
+      <Suspense fallback={null}>
+        <PersonalResourcesPage />
+      </Suspense>
+    ),
   },
   {
     path: '/login/callback',
