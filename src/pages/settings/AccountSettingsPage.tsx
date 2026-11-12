@@ -199,23 +199,30 @@ export default function AccountSettingsPage() {
     void navigate(path);
   }, [confirmUnsavedNavigation, navigate]);
 
-  const blocker = useBlocker(useCallback(({ historyAction }) => historyAction === 'POP' && notificationUnsaved, [notificationUnsaved]));
+  const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
+    if (nextLocation.pathname === '/login') return false;
+    return logoutState === 'pending' || (historyAction === 'POP' && notificationUnsaved);
+  }, [logoutState, notificationUnsaved]));
 
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
+    if (logoutState === 'pending') {
+      blocker.reset();
+      return;
+    }
     if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
     else blocker.reset();
-  }, [blocker]);
+  }, [blocker, logoutState]);
 
   useEffect(() => {
-    if (!notificationUnsaved) return;
+    if (!notificationUnsaved && logoutState !== 'pending') return;
     const preventUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', preventUnload);
     return () => window.removeEventListener('beforeunload', preventUnload);
-  }, [notificationUnsaved]);
+  }, [logoutState, notificationUnsaved]);
 
   const scopeOptions = useMemo(() => [
     { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },

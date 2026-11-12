@@ -72,23 +72,30 @@ export default function NotificationSettingsPage() {
     void navigate(path);
   }, [hasChanges, navigate, pathname]);
 
-  const blocker = useBlocker(useCallback(({ historyAction }) => historyAction === 'POP' && hasChanges, [hasChanges]));
+  const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
+    if (nextLocation.pathname === '/login') return false;
+    return logoutPending || (historyAction === 'POP' && hasChanges);
+  }, [hasChanges, logoutPending]));
 
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
+    if (logoutPending) {
+      blocker.reset();
+      return;
+    }
     if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
     else blocker.reset();
-  }, [blocker]);
+  }, [blocker, logoutPending]);
 
   useEffect(() => {
-    if (!hasChanges) return;
+    if (!hasChanges && !logoutPending) return;
     const preventUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', preventUnload);
     return () => window.removeEventListener('beforeunload', preventUnload);
-  }, [hasChanges]);
+  }, [hasChanges, logoutPending]);
 
   const scopeOptions = useMemo(() => [
     { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },
