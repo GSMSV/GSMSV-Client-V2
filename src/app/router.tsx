@@ -19,10 +19,16 @@ const TeamsHomePage = lazy(() => import('../pages/teams/TeamsHomePage'));
 const TeamCreatePage = lazy(() => import('../pages/teams/TeamCreatePage'));
 const TeamSettingsPage = lazy(() => import('../pages/teams/TeamSettingsPage'));
 const TeamInvitationAcceptPage = lazy(() => import('../pages/teams/TeamInvitationAcceptPage'));
+const VMNetworkPage = lazy(() => import('../pages/network/VMNetworkPage'));
 
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
   return <TeamsHomePage teamId={teamId} />;
+}
+
+function VMNetworkRoute() {
+  const { vmGrn } = useParams<{ vmGrn: string }>();
+  return <VMNetworkPage key={vmGrn} />;
 }
 
 export const router = createBrowserRouter([
@@ -123,6 +129,14 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <AppsListPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/vms/:vmGrn/network',
+    element: (
+      <Suspense fallback={null}>
+        <VMNetworkRoute />
       </Suspense>
     ),
   },
