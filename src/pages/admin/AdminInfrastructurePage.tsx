@@ -502,8 +502,9 @@ export default function AdminInfrastructurePage() {
   const allocatedVcpu = nodes.reduce((total, node) => total + node.allocation.vcpu.allocated, 0);
   const availableVcpu = nodes.reduce((total, node) => total + node.allocation.vcpu.allocatable, 0);
   const vmResources = state.resources.filter(resource => resource.type === 'vm');
+  const refresh = () => setRefreshKey(value => value + 1);
+
   const loadNodeVms = async (node: string) => {
-    setExpandedNode(current => current === node ? null : node);
     if (nodeVmStates[node]?.loading) return;
     if (nodeVmStates[node] && !nodeVmStates[node].error) return;
     setNodeVmStates(current => ({ ...current, [node]: { loading: true, error: false, unavailable: false, items: current[node]?.items ?? [] } }));
@@ -513,6 +514,15 @@ export default function AdminInfrastructurePage() {
     } catch {
       setNodeVmStates(current => ({ ...current, [node]: { loading: false, error: true, unavailable: false, items: [] } }));
     }
+  };
+
+  const toggleNodeVms = (node: string) => {
+    if (expandedNode === node) {
+      setExpandedNode(null);
+      return;
+    }
+    setExpandedNode(node);
+    void loadNodeVms(node);
   };
 
   const navItems: Array<{ label: string; icon: OcticonName }> = [
@@ -534,7 +544,7 @@ export default function AdminInfrastructurePage() {
       if (state.status === 403) {
         return <Banner tone="danger" icon={icon('shield')} title="관리자 권한이 필요합니다" description="이 화면은 관리자만 볼 수 있습니다. 계정 권한은 서버에서 확인합니다." />;
       }
-      return <ErrorCard onRetry={() => setRefreshKey(value => value + 1)} />;
+      return <ErrorCard onRetry={refresh} />;
     }
     if (state.kind === 'loading') return <StateArea aria-label="노드 정보를 새로고침하는 중"><LoadingCard height={360} /></StateArea>;
     return null;
@@ -581,7 +591,7 @@ export default function AdminInfrastructurePage() {
                 <Title>인프라 현황</Title>
                 <Subtitle>Node 상태와 자원 사용량을 한곳에서 확인하세요.</Subtitle>
               </TitleGroup>
-              <Button variant="secondary" icon={icon('sync')} onClick={() => setRefreshKey(value => value + 1)} disabled={state.kind === 'loading'}>새로고침</Button>
+              <Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>새로고침</Button>
             </Heading>
 
             {hasVisibleData ? (
@@ -590,7 +600,7 @@ export default function AdminInfrastructurePage() {
                   <Banner tone="neutral" icon={icon('sync')} title="Node 정보를 새로고침하는 중입니다" description="이전 조회 결과를 계속 표시합니다." />
                 )}
                 {state.kind === 'error' && state.nodes.length > 0 && (
-                  <Banner tone="warning" icon={icon('alert')} title="최신 Node 정보를 불러오지 못했습니다" description="이전 조회 결과를 표시하고 있습니다." action={<Button variant="secondary" onClick={() => setRefreshKey(value => value + 1)}>다시 시도</Button>} />
+                  <Banner tone="warning" icon={icon('alert')} title="최신 Node 정보를 불러오지 못했습니다" description="이전 조회 결과를 표시하고 있습니다." action={<Button variant="secondary" onClick={refresh}>다시 시도</Button>} />
                 )}
                 <Summary aria-label="인프라 요약">
                   <SummaryCard>
@@ -621,7 +631,7 @@ export default function AdminInfrastructurePage() {
                     icon={icon('alert')}
                     title={`${offlineNodes.length}개 Node의 상태를 확인할 수 없습니다`}
                     description="오프라인 Node의 CPU·메모리·가동 시간은 API 값 그대로 비워 두었습니다. 온라인 Node 조회와 관리는 계속할 수 있습니다."
-                    action={<Button variant="secondary" icon={icon('sync')} onClick={() => setRefreshKey(value => value + 1)} disabled={state.kind === 'loading'}>다시 확인</Button>}
+                    action={<Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>다시 확인</Button>}
                   />
                 )}
 
@@ -648,14 +658,17 @@ export default function AdminInfrastructurePage() {
                               <NodeMeta>{formatUptime(node.usage.uptime_sec)}</NodeMeta>
                               <CardFooter>
                                 <span>vCPU {formatGb(node.allocation.vcpu.allocated)} / {formatGb(node.allocation.vcpu.allocatable)}</span>
-                                <Button variant="ghost" onClick={() => void loadNodeVms(node.node)} aria-expanded={expandedNode === node.node}>VM 목록 보기</Button>
+                                <Button variant="ghost" onClick={() => toggleNodeVms(node.node)} aria-expanded={expandedNode === node.node}>VM 목록 보기</Button>
                               </CardFooter>
                             </>
                           ) : (
                             <>
                               <NodeMeta>CPU — · 메모리 —</NodeMeta>
                               <NodeMeta>가동 시간 확인 불가</NodeMeta>
-                              <CardFooter><span>VM 목록은 노드가 복구된 뒤 확인할 수 있습니다.</span></CardFooter>
+                              <CardFooter>
+                                <span>VM 목록은 노드가 복구된 뒤 확인할 수 있습니다.</span>
+                                <Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>다시 확인</Button>
+                              </CardFooter>
                             </>
                           )}
                           {expandedNode === node.node && (
