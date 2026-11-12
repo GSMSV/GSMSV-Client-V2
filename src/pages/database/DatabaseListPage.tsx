@@ -418,7 +418,18 @@ export default function DatabaseListPage() {
               <Title>Database</Title>
               <Description>VM에 설치하지 않고 발급받아 쓰는 데이터베이스입니다.</Description>
             </TitleBlock>
-            {isTeamScope ? <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled title="팀 Database 발급 화면이 연결되지 않았습니다.">새 Database</Button> : <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>}
+            {isTeamScope ? (
+              <Button
+                variant="primary"
+                icon={<Octicon name="plus" size={16} />}
+                disabled={!teamId}
+                title={!teamId ? '팀 범위를 확인할 수 없습니다.' : undefined}
+                onClick={() => {
+                  if (!teamId) return;
+                  void navigate(`/databases/new?owner=${encodeURIComponent(teamId)}`);
+                }}
+              >새 Database</Button>
+            ) : <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>}
           </HeadingRow>
         </HeadingGroup>
 
