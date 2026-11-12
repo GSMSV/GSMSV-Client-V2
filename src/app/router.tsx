@@ -15,6 +15,15 @@ const AppCreateSourcePage = lazy(() => import('../pages/apps/AppCreateSourcePage
 const AppCreateServicePage = lazy(() => import('../pages/apps/AppCreateServicePage'));
 const AppSettingsPage = lazy(() => import('../pages/apps/AppSettingsPage'));
 const AppOverviewPage = lazy(() => import('../pages/apps/AppOverviewPage'));
+const TeamsHomePage = lazy(() => import('../pages/teams/TeamsHomePage'));
+const TeamCreatePage = lazy(() => import('../pages/teams/TeamCreatePage'));
+const TeamSettingsPage = lazy(() => import('../pages/teams/TeamSettingsPage'));
+const TeamInvitationAcceptPage = lazy(() => import('../pages/teams/TeamInvitationAcceptPage'));
+
+function TeamHomeRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamsHomePage teamId={teamId} />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +51,46 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <AppCreateServicePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/invitations/accept',
+    element: (
+      <Suspense fallback={null}>
+        <TeamInvitationAcceptPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/new',
+    element: (
+      <Suspense fallback={null}>
+        <TeamCreatePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/settings',
+    element: (
+      <Suspense fallback={null}>
+        <TeamSettingsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId',
+    element: (
+      <Suspense fallback={null}>
+        <TeamHomeRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams',
+    element: (
+      <Suspense fallback={null}>
+        <TeamHomeRoute />
       </Suspense>
     ),
   },
@@ -135,6 +184,11 @@ function AppSettingsRoute() {
 function AppOverviewRoute() {
   const { appGrn } = useParams<{ appGrn: string }>();
   return <AppOverviewPage key={appGrn} />;
+}
+
+function TeamSettingsRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamSettingsPage key={teamId} teamId={teamId ?? ''} />;
 }
 
 function DatabaseDetailRoute() {
