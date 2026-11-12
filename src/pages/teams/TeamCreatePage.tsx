@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { createTeam } from '../../features/team/create-team';
+import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
@@ -219,10 +220,34 @@ function createErrorMessage(error: unknown) {
 export default function TeamCreatePage() {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMyTeams(controller.signal).then(value => {
+      if (!controller.signal.aborted) setTeams(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTeams([]);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const scopeOptions = useMemo(() => {
+    const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
+    return [
+      { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigate('/') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabels[team.my_role]}`,
+        selected: false,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}`),
+      })),
+    ];
+  }, [navigate, teams]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -247,6 +272,7 @@ export default function TeamCreatePage() {
     <StudentShell
       activeItem="team"
       scopeLabel="내 Resources"
+      scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}
       onNavigate={(item) => {
         if (item === 'team') navigate('/teams');
