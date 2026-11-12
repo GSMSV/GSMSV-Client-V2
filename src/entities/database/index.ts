@@ -1,5 +1,6 @@
 export { extendDatabase } from './api/extendDatabase';
 export { createPersonalDatabase } from './api/createPersonalDatabase';
+export { createTeamDatabase } from './api/createTeamDatabase';
 export { downloadDatabaseBackup } from './api/downloadDatabaseBackup';
 export { deleteDatabase } from './api/deleteDatabase';
 export { getDatabase } from './api/getDatabase';
