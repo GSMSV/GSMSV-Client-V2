@@ -210,7 +210,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'home' || item === 'team') navigate(`/teams/${encodeURIComponent(teamId)}`);
     if (item === 'apps') navigate(`/teams/${encodeURIComponent(teamId)}/apps`);
-    if (item === 'database') navigate(`/databases?owner=${encodeURIComponent(`team-${teamId}`)}`);
+    if (item === 'database') navigate(`/databases?owner=${encodeURIComponent(teamId)}`);
   };
   const retry = () => setRetryKey(value => value + 1);
   const appCount = apps.value?.length ?? 0;
