@@ -70,6 +70,7 @@ export interface RevealableSecretProps {
   showLabel?: string;
   hideLabel?: string;
   copyLabel?: string;
+  initiallyShown?: boolean;
   onReveal?: () => void;
   onCopy?: (value: string) => void | Promise<void>;
   actions?: ReactNode;
@@ -82,12 +83,13 @@ export function RevealableSecret({
   showLabel = '표시',
   hideLabel = '숨기기',
   copyLabel = '복사',
+  initiallyShown = false,
   onReveal,
   onCopy,
   actions,
   className,
 }: RevealableSecretProps) {
-  const [shown, setShown] = useState(false);
+  const [shown, setShown] = useState(initiallyShown);
 
   const toggle = () => {
     if (!shown) onReveal?.();

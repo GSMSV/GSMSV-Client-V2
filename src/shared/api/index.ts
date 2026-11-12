@@ -1,1 +1,1 @@
-export { ApiRequestError, requestJson, type ApiErrorPayload } from './requestJson';
+export { ApiRequestError, requestBlob, requestJson, type ApiErrorPayload } from './requestJson';

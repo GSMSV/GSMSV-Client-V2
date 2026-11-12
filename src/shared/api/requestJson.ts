@@ -54,3 +54,20 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
     throw new ApiRequestError(response.status, 'INVALID_RESPONSE');
   }
 }
+
+export async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(getApiUrl(path), { ...init, credentials: 'include' });
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
+    throw new ApiRequestError(null, 'NETWORK_ERROR');
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as ApiErrorPayload | null;
+    throw new ApiRequestError(response.status, payload?.code ?? 'UNKNOWN_ERROR', payload?.request_id);
+  }
+
+  return response.blob();
+}
