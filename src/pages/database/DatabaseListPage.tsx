@@ -401,6 +401,7 @@ export default function DatabaseListPage() {
       activeItem="database"
       scopeLabel={scopeLabel}
       scopeOptions={scopeOptions}
+      teamScopeId={teamId}
       userName={user?.name ?? '사용자'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}

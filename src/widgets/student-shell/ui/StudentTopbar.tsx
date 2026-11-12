@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
@@ -153,6 +153,7 @@ const Count = styled.span`
 
 export interface StudentTopbarProps {
   scopeLabel: string;
+  teamScopeId?: string;
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
@@ -166,6 +167,7 @@ export interface StudentTopbarProps {
 
 export function StudentTopbar({
   scopeLabel,
+  teamScopeId,
   userName,
   notificationCount,
   scopeOptions,
@@ -177,6 +179,8 @@ export function StudentTopbar({
   hasUnsavedInput,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
+  const { teamId: routeTeamId } = useParams<{ teamId: string }>();
+  const selectedTeamId = scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id;
   const [scopeOpen, setScopeOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
@@ -305,7 +309,7 @@ export function StudentTopbar({
           </Button>
           <StudentProfile
             userName={userName}
-            activeTeamId={scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id}
+            activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
             hasUnsavedInput={hasUnsavedInput}
             onOpen={() => setNotificationsOpen(false)}
           />

@@ -150,7 +150,10 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
   const roleLabel = isAdmin ? '관리자' : user ? '일반 사용자' : '역할 확인 불가';
   const teams = teamsState.status === 'ready' ? teamsState.teams : [];
   const activeTeam = teams.find(team => team.id === activeTeamId);
-  const settingsTeam = activeTeamId ? activeTeam : teams.length === 1 ? teams[0] : undefined;
+  const settingsTeamId = activeTeamId ?? (teams.length === 1 ? teams[0].id : undefined);
+  const teamSettingsPath = settingsTeamId
+    ? `/teams/${encodeURIComponent(settingsTeamId)}/settings`
+    : teams.length > 1 ? '/teams' : null;
   const visibleTeams = activeTeam ? [activeTeam] : teams;
   const teamStatusLabel = teamsState.status === 'loading' ? '소속 팀을 불러오는 중입니다.'
     : teamsState.status === 'error' ? '소속 팀을 불러오지 못했습니다.'
@@ -176,7 +179,6 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
   };
 
   const openAdmin = () => {
-    if (!isAdmin) return;
     if (hasUnsavedInput && !window.confirm('저장하지 않은 입력이 있습니다. 관리자 콘솔로 이동할까요?')) return;
     setOpen(false);
     void navigate('/admin/infra');
@@ -241,12 +243,11 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
               $minWidth={98}
               variant="secondary"
               icon={<Octicon name="gear" size={16} />}
-              disabled={!settingsTeam || loggingOut}
-              title={teams.length > 1 && !settingsTeam ? '범위 선택에서 팀을 먼저 선택하세요.' : undefined}
+              disabled={!teamSettingsPath || loggingOut}
               onClick={() => {
-                if (!settingsTeam) return;
+                if (!teamSettingsPath) return;
                 setOpen(false);
-                void navigate(`/teams/${encodeURIComponent(settingsTeam.id)}/settings`);
+                void navigate(teamSettingsPath);
               }}
             >
               팀 설정
@@ -255,8 +256,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
               $minWidth={137}
               variant="secondary"
               icon={<Octicon name="shield" size={16} />}
-              disabled={!isAdmin || loggingOut}
-              title={isAdmin ? undefined : '관리자 권한이 필요합니다.'}
+              disabled={loggingOut}
               onClick={openAdmin}
             >
               관리자로 전환

@@ -26,6 +26,7 @@ export interface StudentShellProps {
   children: ReactNode;
   activeItem: StudentNavigationKey;
   scopeLabel: string;
+  teamScopeId?: string;
   userName: string;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
@@ -44,6 +45,7 @@ export function StudentShell({
   children,
   activeItem,
   scopeLabel,
+  teamScopeId,
   userName,
   notificationCount,
   scopeOptions,
@@ -68,6 +70,7 @@ export function StudentShell({
       <MainColumn>
         <StudentTopbar
           scopeLabel={scopeLabel}
+          teamScopeId={teamScopeId}
           userName={userName}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
