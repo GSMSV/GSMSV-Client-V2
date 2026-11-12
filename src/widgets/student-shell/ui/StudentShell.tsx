@@ -39,6 +39,7 @@ export interface StudentShellProps {
   onSearch: () => void;
   onOpenNotifications: () => void;
   hasUnsavedInput?: boolean;
+  onLogoutPendingChange?: (pending: boolean) => void;
 }
 
 export function StudentShell({
@@ -58,6 +59,7 @@ export function StudentShell({
   onSearch,
   onOpenNotifications,
   hasUnsavedInput = false,
+  onLogoutPendingChange,
 }: StudentShellProps) {
   return (
     <Layout>
@@ -80,6 +82,7 @@ export function StudentShell({
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}
           hasUnsavedInput={hasUnsavedInput}
+          onLogoutPendingChange={onLogoutPendingChange}
         />
         <PageContent>{children}</PageContent>
       </MainColumn>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useBlocker, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -55,6 +55,7 @@ export default function NotificationSettingsPage() {
   const user = getSessionUser();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +71,24 @@ export default function NotificationSettingsPage() {
     if (pathname !== path && hasChanges && !window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) return;
     void navigate(path);
   }, [hasChanges, navigate, pathname]);
+
+  const blocker = useBlocker(useCallback(({ historyAction }) => historyAction === 'POP' && hasChanges, [hasChanges]));
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+
+  useEffect(() => {
+    if (!hasChanges) return;
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [hasChanges]);
 
   const scopeOptions = useMemo(() => [
     { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },
@@ -99,6 +118,7 @@ export default function NotificationSettingsPage() {
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
       hasUnsavedInput={hasChanges}
+      onLogoutPendingChange={setLogoutPending}
     >
       <Page>
         <Breadcrumb>설정 / 알림 설정</Breadcrumb>
@@ -106,7 +126,7 @@ export default function NotificationSettingsPage() {
           <Title>알림 설정</Title>
           <Description>계약된 알림 그룹의 이메일 및 Discord 수신 여부를 관리합니다.</Description>
         </TitleBlock>
-        <NotificationSettingsPanel showChannelBanner onUnsavedInputChange={setHasChanges} />
+        <NotificationSettingsPanel showChannelBanner disabled={logoutPending} onUnsavedInputChange={setHasChanges} />
       </Page>
     </StudentShell>
   );

@@ -163,6 +163,7 @@ export interface StudentTopbarProps {
   onSearch: () => void;
   onOpenNotifications: () => void;
   hasUnsavedInput: boolean;
+  onLogoutPendingChange?: (pending: boolean) => void;
 }
 
 export function StudentTopbar({
@@ -177,6 +178,7 @@ export function StudentTopbar({
   onSearch,
   onOpenNotifications,
   hasUnsavedInput,
+  onLogoutPendingChange,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
@@ -311,6 +313,7 @@ export function StudentTopbar({
             userName={userName}
             activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
             hasUnsavedInput={hasUnsavedInput}
+          onLogoutPendingChange={onLogoutPendingChange}
             onOpen={() => setNotificationsOpen(false)}
           />
         </RightActions>
@@ -319,7 +322,10 @@ export function StudentTopbar({
         open={notificationsOpen}
         onClose={closeNotifications}
         onUnreadCountChange={setUnreadCount}
-        onOpenResource={path => navigate(path)}
+        onOpenResource={path => {
+          if (hasUnsavedInput && !window.confirm('저장하지 않은 입력이 있습니다. 알림에서 선택한 화면으로 이동할까요?')) return;
+          void navigate(path);
+        }}
       />
     </Header>
   );

@@ -115,9 +115,10 @@ const GroupHint = styled.p`
 export interface NotificationSettingsPanelProps {
   onUnsavedInputChange?: (hasUnsavedInput: boolean) => void;
   showChannelBanner?: boolean;
+  disabled?: boolean;
 }
 
-export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBanner = false }: NotificationSettingsPanelProps) {
+export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBanner = false, disabled = false }: NotificationSettingsPanelProps) {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [draft, setDraft] = useState<NotificationSettings['items']>([]);
   const [loading, setLoading] = useState(true);
@@ -200,7 +201,7 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
             <PanelTitle id="notification-settings-title">알림 받기</PanelTitle>
             <Description>필수 알림은 이메일로 계속 보냅니다. Discord를 연결하면 Discord로도 받습니다.</Description>
           </TitleBlock>
-          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!hasChanges || saving || loading || loadError} onClick={() => void save()}>
+          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={disabled || !hasChanges || saving || loading || loadError} onClick={() => void save()}>
             {saving ? '저장 중…' : '알림 설정 저장'}
           </Button>
         </PanelHeading>
@@ -218,8 +219,8 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
                   <span>{item.group}</span>
                   {item.locked && <LockedHint>필수 알림 · 해제할 수 없습니다</LockedHint>}
                 </RowLabel>
-                <ToggleCell><ChannelSwitch label={`${item.group} 이메일 수신`} checked={item.email} disabled={item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
-                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={item.discord} disabled={item.locked || saving} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
+                <ToggleCell><ChannelSwitch label={`${item.group} 이메일 수신`} checked={item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
+                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={item.discord} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
               </Row>)}
               {draft.length === 0 && <GroupHint>설정할 알림 그룹이 없습니다.</GroupHint>}
             </Rows>

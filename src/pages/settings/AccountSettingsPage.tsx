@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useBlocker, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -199,6 +199,24 @@ export default function AccountSettingsPage() {
     void navigate(path);
   }, [confirmUnsavedNavigation, navigate]);
 
+  const blocker = useBlocker(useCallback(({ historyAction }) => historyAction === 'POP' && notificationUnsaved, [notificationUnsaved]));
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+
+  useEffect(() => {
+    if (!notificationUnsaved) return;
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [notificationUnsaved]);
+
   const scopeOptions = useMemo(() => [
     { id: 'personal', label: '내 Resources', selected: true, onSelect: () => navigateWithUnsavedCheck('/') },
     ...(teamsState.status === 'ready' ? teamsState.teams : []).map(team => ({
@@ -238,6 +256,7 @@ export default function AccountSettingsPage() {
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
       hasUnsavedInput={notificationUnsaved}
+      onLogoutPendingChange={pending => setLogoutState(pending ? 'pending' : 'idle')}
     >
       <Content>
         <Page>
@@ -309,7 +328,7 @@ export default function AccountSettingsPage() {
             </FeatureActions>
           </Panel>
 
-          <NotificationSettingsPanel onUnsavedInputChange={setNotificationUnsaved} />
+        <NotificationSettingsPanel disabled={logoutState === 'pending'} onUnsavedInputChange={setNotificationUnsaved} />
 
           <Panel aria-labelledby="account-session-title">
             <ActionRow>
