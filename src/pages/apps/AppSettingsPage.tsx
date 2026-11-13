@@ -361,7 +361,6 @@ export default function AppSettingsPage() {
   }, [current?.owner, navigate, teams]);
   const canSaveName = Boolean(current?.permissions.update && name.trim() && name.trim() !== current.name && name.trim().length <= 30 && !saving);
   const envLabel = useMemo(() => current ? `환경 · ${current.envs.length}개` : '환경', [current]);
-  const serviceCounts = current ? `${current.services.length}개 서비스 · ${current.envs.length}개 환경 · ${current.deployments.length}개 배포 기록` : '';
 
   const saveName = async () => {
     if (!appGrn || !current || !canSaveName) return;
@@ -518,7 +517,10 @@ export default function AppSettingsPage() {
             </CardHeader>
             <DeleteWarning>
               <Octicon name="alert" size={16} />
-              <span>삭제하면 {serviceCounts}가 정리됩니다. 연결된 Database는 삭제되지 않고 앱과의 연결만 끊깁니다.</span>
+              <span>
+                삭제하면 서비스 {current.services.length}개 · 환경 {current.envs.length}개 · 배포 기록과 변수가 지워집니다.
+                <br />연결한 Database는 남습니다. 삭제할 때 앱 이름을 입력해 확인합니다.
+              </span>
             </DeleteWarning>
           </DeleteCard>
         </>}
