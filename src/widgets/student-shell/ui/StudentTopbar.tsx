@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
+import { ResourceSearchPanel } from '../../../features/global-resource-search';
 import { NotificationPanel } from '../../notification-panel';
 import { StudentProfile } from './StudentProfile';
 
@@ -187,6 +188,7 @@ export function StudentTopbar({
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
   const selectedTeamId = scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id;
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
   const [activeScopeIndex, setActiveScopeIndex] = useState(0);
@@ -215,6 +217,17 @@ export function StudentTopbar({
     setNotificationsOpen(false);
     window.requestAnimationFrame(() => document.getElementById('student-notifications-trigger')?.focus());
   }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    window.requestAnimationFrame(() => document.getElementById('student-search-trigger')?.focus());
+  }, []);
+
+  const openSearchResource = useCallback((path: string) => {
+    if (hasUnsavedInputRef.current && !window.confirm('저장하지 않은 입력이 있습니다. 검색 결과 화면으로 이동할까요?')) return;
+    setSearchOpen(false);
+    void navigate(path);
+  }, [navigate]);
 
   const onScopeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const optionCount = scopeOptions?.length ?? 0;
@@ -264,6 +277,7 @@ export function StudentTopbar({
               onClick={() => {
                 if (scopeDisabled) return;
                 onSelectScope();
+                setSearchOpen(false);
                 if (scopeOptions?.length) {
                   const selectedIndex = scopeOptions.findIndex(option => option.selected);
                   setActiveScopeIndex(selectedIndex >= 0 ? selectedIndex : 0);
@@ -296,7 +310,20 @@ export function StudentTopbar({
               </ScopeMenu>
             )}
           </ScopeSelector>
-          <SearchAction variant="secondary" icon={<Octicon name="search" size={16} />} onClick={onSearch}>
+          <SearchAction
+            id="student-search-trigger"
+            variant="secondary"
+            icon={<Octicon name="search" size={16} />}
+            aria-expanded={searchOpen}
+            aria-controls="resource-search-panel"
+            aria-haspopup="dialog"
+            onClick={() => {
+              onSearch();
+              setNotificationsOpen(false);
+              setScopeOpen(false);
+              setSearchOpen(value => !value);
+            }}
+          >
             이름 또는 GRN으로 검색
           </SearchAction>
         </HeaderStart>
@@ -309,6 +336,7 @@ export function StudentTopbar({
             aria-controls="notification-panel"
             onClick={() => {
               onOpenNotifications();
+              setSearchOpen(false);
               setNotificationsOpen(open => !open);
             }}
           >
@@ -319,7 +347,10 @@ export function StudentTopbar({
             activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
             hasUnsavedInput={hasUnsavedInput}
           onLogoutPendingChange={onLogoutPendingChange}
-            onOpen={() => setNotificationsOpen(false)}
+            onOpen={() => {
+              setNotificationsOpen(false);
+              setSearchOpen(false);
+            }}
           />
         </RightActions>
       </HeaderContent>
@@ -332,6 +363,7 @@ export function StudentTopbar({
           void navigate(path);
         }}
       />
+      <ResourceSearchPanel open={searchOpen} onClose={closeSearch} onOpenResource={openSearchResource} />
     </Header>
   );
 }
