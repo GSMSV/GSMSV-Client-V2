@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
+import { getAppStatusDisplay } from '../../entities/app';
 import { deleteApp, extendApp, getApp, updateApp, type AppDetail } from '../../features/app/manage-app';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -262,7 +263,7 @@ function formatDate(value: string) {
 }
 
 function getStatusLabel(status: string) {
-  return status === 'deleting' ? '삭제 중' : '상태 확인 중';
+  return getAppStatusDisplay(status).label;
 }
 
 function canExtendNow(app: AppDetail) {

@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { getAppStatusDisplay } from '../model/getAppStatusDisplay';
 import type { AppSummary } from '../model/types';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
@@ -88,20 +89,7 @@ function formatExpiry(value: string) {
 }
 
 export function AppResourceCard({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
-  const normalizedStatus = app.status.toLowerCase();
-  const statusLabels: Record<string, string> = {
-    active: '실행 중',
-    running: '실행 중',
-    stopped: '정지',
-    suspended: '정지',
-    creating: '생성 중',
-    deploying: '배포 중',
-    failed: '오류',
-    expired: '만료',
-    deleting: '삭제 중',
-  };
-  const statusLabel = statusLabels[normalizedStatus] ?? app.status;
-  const isWarning = ['failed', 'expired', 'deleting'].includes(normalizedStatus);
+  const status = getAppStatusDisplay(app.status);
 
   return (
     <Card>
@@ -115,7 +103,7 @@ export function AppResourceCard({ app, onOpen }: { app: AppSummary; onOpen: () =
       </Metadata>
       <CardFooter>
         <Expiry>{formatExpiry(app.expires_at)}</Expiry>
-        <StatusText $tone={isWarning ? 'warning' : 'neutral'}>{statusLabel}</StatusText>
+        <StatusText $tone={status.tone}>{status.label}</StatusText>
       </CardFooter>
     </Card>
   );
