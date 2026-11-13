@@ -32,8 +32,6 @@ const Breadcrumb = styled.button`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 3px; }
 `;
 const Heading = styled.section`display: flex; flex-direction: column; gap: 8px; width: 100%;`;
-const HeadingRow = styled.div`display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; width: 100%;`;
-const TitleBlock = styled.div`display: flex; min-width: 0; flex-direction: column; gap: 8px;`;
 const Title = styled.h1`
   margin: 0; color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.h1.weight} ${({ theme }) => theme.typography.h1.size}px/${({ theme }) => theme.typography.h1.lineHeight}px ${({ theme }) => theme.typography.h1.family}, sans-serif;
@@ -42,12 +40,6 @@ const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
-const Metadata = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  color: ${({ theme }) => theme.colors.faint};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-const Dot = styled.span`width: 3px; height: 3px; border-radius: 50%; background: ${({ theme }) => theme.colors.faint};`;
 const Tabs = styled.nav`display: flex; width: 100%; gap: 8px;`;
 const Tab = styled.button<{ $active?: boolean }>`
   display: inline-flex; min-height: 42px; align-items: center; padding: 0 12px; border: 0; border-radius: ${({ theme }) => theme.radii.base}px;
@@ -88,7 +80,6 @@ const HelpText = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
-const EmptyValue = styled.span`color: ${({ theme }) => theme.colors.faint}; font-family: ${({ theme }) => theme.typography.bodySmall.family};`;
 const FieldValueRow = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;`;
 const CopyButton = styled.button`
   flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: ${({ theme }) => theme.colors.primary};
@@ -121,14 +112,6 @@ function sqlExample(database: DatabaseDetail) {
     help: 'PostgreSQL에 연결된 뒤 public 스키마의 테이블을 조회하는 예시입니다.',
   };
 }
-function statusText(database: DatabaseDetail) {
-  if (database.status === 'suspended') return '정지됨';
-  if (database.status === 'creating') return '생성 중';
-  if (database.status === 'deleting') return '삭제 중';
-  if (database.status === 'failed') return '실패';
-  return database.write_locked ? '쓰기 잠김' : '사용 중';
-}
-
 export default function DatabaseDetailPage() {
   const { databaseGrn = '' } = useParams();
   const navigate = useNavigate();
@@ -289,8 +272,8 @@ export default function DatabaseDetailPage() {
         ) : detail.value && (
           <>
             <Heading>
-              <HeadingRow><TitleBlock><Title>{detail.value.name}</Title><Subtitle>{engineName(detail.value.engine)} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle></TitleBlock><Button variant="secondary" onClick={() => navigate(databaseListPath(detail.value!))}>목록으로</Button></HeadingRow>
-              <Metadata><span>{detail.value.owner.name}</span><Dot /><span>{statusText(detail.value)}</span><Dot /><span>생성 {dateTime(detail.value.created_at)}</span></Metadata>
+              <Title>{detail.value.name}</Title>
+              <Subtitle>{engineName(detail.value.engine)} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle>
             </Heading>
             <Tabs aria-label="Database 상세 메뉴">
               <Tab type="button" $active aria-current="page">접속 정보</Tab>
@@ -308,9 +291,9 @@ export default function DatabaseDetailPage() {
               <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`— / ${formatNumber(detail.value.max_connections)}`} caption="현재 연결 수는 API에서 제공하지 않습니다" />
               <FlexibleUsageCard label="최근 백업" icon={<Octicon name="history" size={16} />} value={backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : latestBackup ? dateTime(latestBackup.created_at) : '백업 없음'} caption={latestBackup ? `자동 백업 · ${formatNumber(latestBackup.size_mb)} MB · 7일 보관` : backups.error ? '백업 목록을 불러오지 못했습니다' : '매일 자동 백업 · 7일 보관'} />
             </Summary>
-            <Section><SectionTitle>접속 정보</SectionTitle>
+            <Section>
               <Card>
-                <CardHeading>연결 설정</CardHeading>
+                <SectionTitle>접속 정보</SectionTitle>
                 <DetailGrid>
                   {copyableField('Host', detail.value.connection.host)}
                   {copyableField('Port', String(detail.value.connection.port))}
@@ -322,13 +305,12 @@ export default function DatabaseDetailPage() {
                 <Banner title="암호화된 연결만 받습니다" description="접속 도구에서 SSL/TLS를 켜 주세요." tone="neutral" icon={<Octicon name="shield" size={20} />} />
               </Card>
             </Section>
-            <Section><SectionTitle>SQL에서 이름 쓰기</SectionTitle>
-              <Card><CardHeading>{detail.value.engine === 'mysql' ? 'Database 선택 예시' : '테이블 조회 예시'}</CardHeading><Code>{databaseSql?.code}</Code><HelpText>{databaseSql?.help} 쿼리 실행은 현재 API 계약에서 제공되지 않습니다.</HelpText></Card>
+            <Section>
+              <Card><SectionTitle>SQL에서 이름 쓰기</SectionTitle><Code>{databaseSql?.code}</Code><HelpText>{databaseSql?.help} 쿼리 실행은 현재 API 계약에서 제공되지 않습니다.</HelpText></Card>
             </Section>
-            <Section><SectionTitle>SSH 터널</SectionTitle>
-              <Card><CardHeading>VM을 통해 연결</CardHeading><Code>{`ssh -L 13306:${detail.value.connection.host}:${detail.value.connection.port} ubuntu@{VM 접속 주소} -p {SSH 포트}`}</Code><HelpText>SSH 터널의 VM 주소·계정·포트는 이 API에서 제공하지 않습니다. DB 도구에서 터널을 연 뒤 127.0.0.1:13306으로 연결하세요.</HelpText></Card>
+            <Section>
+              <Card><SectionTitle>PC의 DB 도구에서 접속하기</SectionTitle><Code>{`ssh -L 13306:${detail.value.connection.host}:${detail.value.connection.port} ubuntu@{VM 접속 주소} -p {SSH 포트}`}</Code><HelpText>SSH 터널의 VM 주소·계정·포트는 이 API에서 제공하지 않습니다. DB 도구에서 터널을 연 뒤 127.0.0.1:13306으로 연결하세요.</HelpText></Card>
             </Section>
-            <Section><SectionTitle>세부 정보</SectionTitle><Card><DetailGrid><Field><Label>소유자</Label><PlainValue>{detail.value.owner.name} · {detail.value.owner.type === 'team' ? '팀' : '개인'}</PlainValue></Field><Field><Label>생성자</Label><PlainValue>{detail.value.created_by.name}</PlainValue></Field><Field><Label>생성일</Label><PlainValue>{dateTime(detail.value.created_at)}</PlainValue></Field><Field><Label>만료일</Label><PlainValue>{dateTime(detail.value.expires_at)}</PlainValue></Field><Field><Label>최근 업데이트</Label><PlainValue>{dateTime(detail.value.updated_at)}</PlainValue></Field><Field><Label>최근 백업</Label><PlainValue>{latestBackup ? dateTime(latestBackup.created_at) : backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : <EmptyValue>백업 없음</EmptyValue>}</PlainValue></Field></DetailGrid></Card></Section>
           </>
         )}
       </Page>
