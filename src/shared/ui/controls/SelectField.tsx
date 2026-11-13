@@ -186,17 +186,18 @@ export function SelectField({
   const listId = `${id}-listbox`;
   const [open, setOpen] = useState(false);
   const [internalValue, setInternalValue] = useState(defaultValue);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const [activeValue, setActiveValue] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedValue = value ?? internalValue;
   const selectedLabel = getOptionLabel(options, selectedValue);
+  const activeIndex = activeValue === null ? -1 : options.findIndex(option => option.value === activeValue);
 
   const commit = (option: SelectOption) => {
     if (option.disabled) return;
     if (value === undefined) setInternalValue(option.value);
     onChange?.(option.value);
     setOpen(false);
-    setActiveIndex(-1);
+    setActiveValue(null);
     triggerRef.current?.focus();
   };
 
@@ -207,7 +208,7 @@ export function SelectField({
     const nextPosition = currentPosition < 0
       ? (direction === 1 ? 0 : enabled.length - 1)
       : (currentPosition + direction + enabled.length) % enabled.length;
-    setActiveIndex(enabled[nextPosition]);
+    setActiveValue(options[enabled[nextPosition]].value);
   };
 
   const onTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -217,10 +218,16 @@ export function SelectField({
       move(event.key === 'ArrowDown' ? 1 : -1);
     } else if (event.key === 'Escape') {
       setOpen(false);
-      setActiveIndex(-1);
+      setActiveValue(null);
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      setOpen((current) => !current);
+      const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;
+      if (open && activeOption) {
+        commit(activeOption);
+      } else {
+        setOpen(current => !current);
+        if (open) setActiveValue(null);
+      }
     }
   };
 
@@ -242,7 +249,10 @@ export function SelectField({
         aria-controls={listId}
         aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         aria-invalid={error ? 'true' : undefined}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setOpen(current => !current);
+          if (open) setActiveValue(null);
+        }}
         onKeyDown={onTriggerKeyDown}
       >
         <ValueText $placeholder={!selectedLabel}>{selectedLabel ?? placeholder}</ValueText>
@@ -258,8 +268,8 @@ export function SelectField({
                 role="option"
                 aria-selected={option.value === selectedValue}
                 disabled={option.disabled}
-                $selected={option.value === selectedValue}
-                onMouseEnter={() => setActiveIndex(index)}
+                $selected={option.value === selectedValue || index === activeIndex}
+                onMouseEnter={() => setActiveValue(option.value)}
                 onClick={() => commit(option)}
               >
                 <OptionCopy>
