@@ -27,6 +27,23 @@ const PublicStatusPage = lazy(() => import('../pages/status/PublicStatusPage'));
 const PublicDocsPage = lazy(() => import('../pages/docs/PublicDocsPage'));
 const AuthenticatedDocsPage = lazy(() => import('../pages/docs/AuthenticatedDocsPage'));
 const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
+const ServerlessListPage = lazy(() => import('../pages/serverless/ServerlessListPage'));
+const ServerlessCreateRoute = lazy(async () => {
+  const module = await import('../pages/serverless/routes');
+  return { default: module.ServerlessCreateRoute };
+});
+const ServerlessFunctionRoute = lazy(async () => {
+  const module = await import('../pages/serverless/routes');
+  return { default: module.ServerlessFunctionRoute };
+});
+const ServerlessTriggersRoute = lazy(async () => {
+  const module = await import('../pages/serverless/routes');
+  return { default: module.ServerlessTriggersRoute };
+});
+const ServerlessTabRoute = lazy(async () => {
+  const module = await import('../pages/serverless/routes');
+  return { default: module.ServerlessTabRoute };
+});
 
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -79,6 +96,46 @@ export const router = createBrowserRouter([
     element: (
       <Suspense fallback={null}>
         <AppCreateServicePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless/new',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessCreateRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessListPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless/:functionId/triggers',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessTriggersRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless/:functionId',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessFunctionRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless/:functionId/:tab',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessTabRoute />
       </Suspense>
     ),
   },

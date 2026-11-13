@@ -3,6 +3,7 @@ import styled from 'styled-components';
 
 export interface SwitchProps {
   label: string;
+  ariaLabel?: string;
   checked?: boolean;
   defaultChecked?: boolean;
   disabled?: boolean;
@@ -66,7 +67,7 @@ const SwitchText = styled.span`
   line-height: ${({ theme }) => theme.typography.caption.lineHeight}px;
 `;
 
-export function Switch({ label, checked, defaultChecked, disabled = false, onChange }: SwitchProps) {
+export function Switch({ label, ariaLabel, checked, defaultChecked, disabled = false, onChange }: SwitchProps) {
   const id = useId();
   const [internalChecked, setInternalChecked] = useState(Boolean(defaultChecked));
   const isChecked = checked ?? internalChecked;
@@ -86,6 +87,7 @@ export function Switch({ label, checked, defaultChecked, disabled = false, onCha
         disabled={disabled}
         onChange={handleChange}
         aria-checked={isChecked}
+        aria-label={ariaLabel}
       />
       <SwitchTrack $checked={isChecked} $disabled={disabled} aria-hidden="true" />
       <span>{label}</span>
