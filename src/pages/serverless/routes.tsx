@@ -40,6 +40,11 @@ const tabSlugs: Record<string, string> = {
 };
 
 const previewDailyExecutions = { used: 1284, limit: 10_000 };
+const healthCheckCode = `def handler(request, env):
+    return {
+        "status": "ok",
+        "service": "health-check"
+    }`;
 const previewVersions = [
   { id: '7', label: '버전 7', savedAt: '2026. 09. 29. 14:32', author: '김지민', changeSummary: '코드', current: true },
   { id: '6', label: '버전 6', savedAt: '2026. 09. 29. 11:05', author: '김지민', changeSummary: '실행 제한', current: false },
@@ -128,7 +133,7 @@ export function ServerlessFunctionRoute() {
         runtime={draft?.runtime ?? (isHealthCheck ? 'python' : 'javascript')}
         timeoutSeconds={draft?.timeoutSeconds}
         memoryMb={draft?.memoryMb}
-        code={draft?.code}
+        code={draft?.code ?? (isHealthCheck ? healthCheckCode : undefined)}
         active={draft ? false : !isHealthCheck}
         expiresAtLabel={draft ? '저장되지 않은 초안' : isHealthCheck ? '2026. 10. 02.' : '2026. 10. 06.'}
         enabledTabs={['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs']}
@@ -145,6 +150,7 @@ export function ServerlessTriggersRoute() {
   const { functionId } = useParams<{ functionId: string }>();
   const [dailyExecutions, setDailyExecutions] = useState<{ used: number; limit: number } | undefined>();
   const draft = getDraft(location.state);
+  const isHealthCheck = safeDecode(functionId) === 'health-check';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -161,11 +167,13 @@ export function ServerlessTriggersRoute() {
     <ServerlessShell>
       <TriggersPage
         functionName={draft?.name ?? safeDecode(functionId)}
-        publicUrl={draft ? undefined : 'https://q8w2n5r7t1vz.example.com'}
-        httpMethod={draft ? undefined : 'POST'}
-        concurrentLimit={draft ? undefined : 2}
+        publicUrl={draft || isHealthCheck ? undefined : 'https://q8w2n5r7t1vz.example.com'}
+        httpMethod={draft ? undefined : isHealthCheck ? 'GET' : 'POST'}
+        concurrentLimit={draft ? undefined : isHealthCheck ? undefined : 2}
         dailyExecutions={dailyExecutions}
-        triggers={draft ? [] : [
+        triggers={draft ? [] : isHealthCheck ? [
+          { id: 'health-http', type: 'HTTP', schedule: 'GET 요청 시', enabled: false },
+        ] : [
           { id: 'http', type: 'HTTP', schedule: 'POST 요청 시', enabled: true },
           { id: 'cron', type: 'Cron', schedule: '매일 오전 9:00', enabled: true },
         ]}
@@ -185,18 +193,19 @@ export function ServerlessTabRoute() {
   if (!Object.hasOwn(tabSlugs, tab) || tab === 'triggers') return <Navigate to={tabPath(functionId, '코드')} replace />;
 
   const name = draft?.name ?? safeDecode(functionId);
+  const isHealthCheck = safeDecode(functionId) === 'health-check';
   const description = draft?.description ?? getFunctionDescription(functionId);
   const onSelectTab = (nextTab: string) => void navigate(tabPath(functionId, nextTab), { state: location.state });
   let content = null;
 
   if (tab === 'versions') {
-    content = <VersionsPage functionName={name} description={description} versions={draft ? [] : previewVersions} onSelectTab={onSelectTab} />;
+    content = <VersionsPage functionName={name} description={description} versions={draft || isHealthCheck ? [] : previewVersions} onSelectTab={onSelectTab} />;
   } else if (tab === 'environment') {
-    content = <EnvironmentPage functionName={name} variables={draft ? [] : previewVariables} storageBytesUsed={draft ? undefined : 205} storageBytesLimit={draft ? undefined : 8192} onSelectTab={onSelectTab} />;
+    content = <EnvironmentPage functionName={name} variables={draft || isHealthCheck ? [] : previewVariables} storageBytesUsed={draft || isHealthCheck ? undefined : 205} storageBytesLimit={draft || isHealthCheck ? undefined : 8192} onSelectTab={onSelectTab} />;
   } else if (tab === 'test') {
-    content = <TestPage functionName={name} result={draft ? null : previewTestResult} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
+    content = <TestPage functionName={name} result={draft || isHealthCheck ? null : previewTestResult} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
   } else if (tab === 'logs') {
-    content = <LogsPage functionName={name} runs={draft ? [] : previewRuns} totalCount={draft ? 0 : 248} page={1} pageSize={100} selectedRunId={draft ? undefined : 'run-1'} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
+    content = <LogsPage functionName={name} runs={draft || isHealthCheck ? [] : previewRuns} totalCount={draft || isHealthCheck ? 0 : 248} page={1} pageSize={100} selectedRunId={draft || isHealthCheck ? undefined : 'run-1'} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
   } else {
     return <Navigate to={tabPath(functionId, '코드')} replace />;
   }

@@ -381,7 +381,8 @@ export function ServerlessTriggersPage({
               <Cell role="cell">{trigger.schedule}</Cell>
               <Cell role="cell">
                 <Switch
-                  label={trigger.enabled ? '켜짐' : '꺼짐'}
+                  label=""
+                  ariaLabel={`${trigger.type} Trigger`}
                   checked={trigger.enabled}
                   disabled={!onToggleTrigger}
                   onChange={checked => onToggleTrigger?.(trigger.id, checked)}

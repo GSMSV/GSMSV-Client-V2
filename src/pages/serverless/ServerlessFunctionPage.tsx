@@ -432,14 +432,14 @@ export function ServerlessFunctionPage({
             <ToggleTitle>함수 활성화</ToggleTitle>
             <ToggleDescription>끄면 HTTP 호출 · 예약 실행 · 수동 실행이 모두 멈춥니다.</ToggleDescription>
           </ToggleCopy>
-          <Switch label="" checked={active} disabled={!onToggleActive} onChange={toggleActive} />
+          <Switch label="" ariaLabel="함수 활성화" checked={active} disabled={!onToggleActive} onChange={toggleActive} />
         </ToggleRow>
       </Panel>
 
       <Panel aria-labelledby="code-editor-title">
         <EditorHeader>
           <Octicon name="code" size={16} aria-hidden="true" />
-          <EditorTitle id="code-editor-title">index.js</EditorTitle>
+          <EditorTitle id="code-editor-title">{runtime === 'python' ? 'main.py' : 'index.js'}</EditorTitle>
         </EditorHeader>
         <CodeEditor>
           <LineNumbers aria-hidden="true">{Array.from({ length: lineCount }, (_, index) => index + 1).join('\n')}</LineNumbers>
