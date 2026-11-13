@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { matchPath, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, type InfraNode, type NodeVm } from '../../entities/infra-node';
 import { listNotifications } from '../../entities/notification';
+import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -81,7 +82,7 @@ const NavigationItem = styled.button<{ $active?: boolean }>`
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   text-align: left;
-  cursor: ${({ $active }) => $active ? 'default' : 'not-allowed'};
+  cursor: ${({ $active, disabled }) => $active ? 'default' : disabled ? 'not-allowed' : 'pointer'};
 
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
   &:disabled { opacity: .72; }
@@ -437,6 +438,8 @@ function summarizeMemory(node: InfraNode) {
 
 export default function AdminInfrastructurePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
   const [refreshKey, setRefreshKey] = useState(0);
   const [nodeVmStates, setNodeVmStates] = useState<Record<string, NodeVmState>>({});
@@ -551,6 +554,7 @@ export default function AdminInfrastructurePage() {
   };
 
   const hasVisibleData = state.kind === 'ready' || state.nodes.length > 0;
+  const hasVmSnapshot = state.kind === 'ready' || state.checkedAt !== null;
 
   return (
     <Layout>
@@ -558,7 +562,21 @@ export default function AdminInfrastructurePage() {
         <Brand><Logo src="/assets/gsmsv-logo.svg" alt="" /><BrandText>GSM SV</BrandText></Brand>
         <WorkspaceLabel>관리자 워크스페이스</WorkspaceLabel>
         <Navigation aria-label="관리자 메뉴">
-          {navItems.map((item, index) => <NavigationItem key={item.label} type="button" $active={index === 0} disabled={index !== 0} aria-current={index === 0 ? 'page' : undefined} title={index === 0 ? undefined : '해당 화면은 아직 연결되지 않았습니다'}>{icon(item.icon)}{item.label}</NavigationItem>)}
+          {navItems.map((item, index) => {
+            const href = index === 0 ? '/admin/infra' : index === 2 ? '/admin/vms' : undefined;
+            const active = href ? Boolean(matchPath(href, location.pathname)) : false;
+            return (
+              <NavigationItem
+                key={item.label}
+                type="button"
+                $active={active}
+                disabled={!href}
+                aria-current={active ? 'page' : undefined}
+                title={!href ? '해당 화면은 아직 연결되지 않았습니다' : undefined}
+                onClick={href ? () => navigate(href) : undefined}
+              >{icon(item.icon)}{item.label}</NavigationItem>
+            );
+          })}
           <Divider aria-hidden="true" />
           <NavigationItem type="button" disabled>{icon('book')}Docs</NavigationItem>
           <NavigationItem type="button" disabled>{icon('comment-discussion')}문의</NavigationItem>
@@ -585,6 +603,36 @@ export default function AdminInfrastructurePage() {
 
         <Main>
           <Page>
+            {isAllVmsView ? (
+              <>
+                <Breadcrumb>관리자 / 전체 VM</Breadcrumb>
+                <Heading>
+                  <TitleGroup>
+                    <Title>전체 VM</Title>
+                    <Subtitle>소유자, Node, 상태와 사용 목적을 확인하고 필요한 조치를 진행하세요.</Subtitle>
+                  </TitleGroup>
+                </Heading>
+                {hasVmSnapshot ? (
+                  <>
+                    {state.kind === 'loading' && hasVmSnapshot && (
+                      <Banner tone="neutral" icon={icon('sync')} title="VM 정보를 새로고침하는 중입니다" description="이전 조회 결과를 계속 표시합니다." />
+                    )}
+                    {state.kind === 'error' && hasVmSnapshot && (
+                      <Banner tone="warning" icon={icon('alert')} title="최신 VM 정보를 불러오지 못했습니다" description="이전 조회 결과를 표시하고 있습니다." action={<Button variant="secondary" onClick={refresh}>다시 시도</Button>} />
+                    )}
+                    <AdminAllVmsContent
+                      resources={vmResources}
+                      nodes={nodes}
+                      nodeVmStates={nodeVmStates}
+                      onRefresh={refresh}
+                      refreshDisabled={state.kind === 'loading'}
+                    />
+                  </>
+                ) : stateContent()}
+                <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>
+              </>
+            ) : (
+              <>
             <Breadcrumb>관리자 / 인프라 현황</Breadcrumb>
             <Heading>
               <TitleGroup>
@@ -705,6 +753,8 @@ export default function AdminInfrastructurePage() {
                 <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>
               </>
             ) : stateContent()}
+              </>
+            )}
           </Page>
         </Main>
       </MainColumn>

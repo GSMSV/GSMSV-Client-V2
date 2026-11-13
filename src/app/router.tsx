@@ -292,6 +292,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/admin/vms',
+    element: (
+      <Suspense fallback={null}>
+        <AdminInfrastructurePage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/databases/new',
     element: (
       <Suspense fallback={null}>
