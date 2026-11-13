@@ -247,6 +247,10 @@ const SummaryCaption = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+const SummaryEmphasis = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
 const Section = styled.section`
   display: flex;
   width: 100%;
@@ -502,9 +506,10 @@ export default function AdminInfrastructurePage() {
   const onlineCount = nodes.filter(node => node.online).length;
   const offlineNodes = nodes.filter(node => !node.online);
   const cloneQueue = nodes.reduce((total, node) => total + Math.max(0, node.clone_queue_length), 0);
-  const allocatedVcpu = nodes.reduce((total, node) => total + node.allocation.vcpu.allocated, 0);
-  const availableVcpu = nodes.reduce((total, node) => total + node.allocation.vcpu.allocatable, 0);
   const vmResources = state.resources.filter(resource => resource.type === 'vm');
+  const runningVmCount = vmResources.filter(resource => resource.power_state === 'running').length;
+  const stoppedVmCount = vmResources.filter(resource => resource.power_state === 'stopped').length;
+  const unknownPowerStateCount = vmResources.length - runningVmCount - stoppedVmCount;
   const refresh = () => setRefreshKey(value => value + 1);
 
   const loadNodeVms = async (node: string) => {
@@ -637,7 +642,7 @@ export default function AdminInfrastructurePage() {
             <Heading>
               <TitleGroup>
                 <Title>인프라 현황</Title>
-                <Subtitle>Node 상태와 자원 사용량을 한곳에서 확인하세요.</Subtitle>
+                <Subtitle>Node 상태와 생성 대기열을 한곳에서 확인하세요.</Subtitle>
               </TitleGroup>
               <Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>새로고침</Button>
             </Heading>
@@ -657,19 +662,23 @@ export default function AdminInfrastructurePage() {
                     <SummaryCaption>{offlineNodes.length > 0 ? `Node ${offlineNodes.length}개 확인 필요` : '모든 Node가 온라인입니다'}</SummaryCaption>
                   </SummaryCard>
                   <SummaryCard>
-                    <SummaryLabel>{icon('server')}전체 VM</SummaryLabel>
+                    <SummaryLabel>{icon('cpu')}전체 VM</SummaryLabel>
                     <SummaryValue>{vmResources.length}</SummaryValue>
-                    <SummaryCaption>DB 기준으로 관리 중인 VM</SummaryCaption>
+                    <SummaryCaption>
+                      {unknownPowerStateCount === 0
+                        ? <>실행 중 <SummaryEmphasis>{runningVmCount}</SummaryEmphasis> · 정지 <SummaryEmphasis>{stoppedVmCount}</SummaryEmphasis></>
+                        : `전원 상태 확인 불가 ${unknownPowerStateCount}개`}
+                    </SummaryCaption>
                   </SummaryCard>
                   <SummaryCard>
-                    <SummaryLabel>{icon('cpu')}할당 vCPU</SummaryLabel>
-                    <SummaryValue>{formatGb(allocatedVcpu)} / {formatGb(availableVcpu)}</SummaryValue>
-                    <SummaryCaption>각 노드의 할당 / 할당 가능 vCPU</SummaryCaption>
-                  </SummaryCard>
-                  <SummaryCard>
-                    <SummaryLabel>{icon('clock')}Node 복제 대기</SummaryLabel>
+                    <SummaryLabel>{icon('clock')}생성 대기</SummaryLabel>
                     <SummaryValue>{cloneQueue}</SummaryValue>
-                    <SummaryCaption>노드별 clone queue 합계</SummaryCaption>
+                    <SummaryCaption>Node별 clone queue 합계</SummaryCaption>
+                  </SummaryCard>
+                  <SummaryCard>
+                    <SummaryLabel>{icon('calendar')}만료 임박</SummaryLabel>
+                    <SummaryValue title="만료 집계 API가 제공되지 않습니다">—</SummaryValue>
+                    <SummaryCaption>3일 이내 만료 예정</SummaryCaption>
                   </SummaryCard>
                 </Summary>
 
