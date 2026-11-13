@@ -72,6 +72,10 @@ export function StudentShell({
   const [logoutPending, setLogoutPending] = useState(false);
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    if (item === 'serverless') {
+      void navigate('/serverless');
+      return;
+    }
     if (item !== 'docs') {
       onNavigate(item);
       return;
