@@ -1,5 +1,4 @@
-import { listPersonalApps, listTeamApps } from '../../../entities/app';
-import type { AppSummary } from '../../../entities/app';
+import { getAppStatusDisplay, listPersonalApps, listTeamApps, type AppSummary } from '../../../entities/app';
 import { listDatabases } from '../../../entities/database';
 import type { DatabaseSummary } from '../../../entities/database';
 import { listMyTeams } from '../../../entities/team';
@@ -29,20 +28,6 @@ const databaseStatusLabel: Record<DatabaseSummary['status'], string> = {
   failed: '오류',
 };
 
-function appStatusLabel(status: AppSummary['status']) {
-  const labels: Record<string, string> = {
-    active: '실행 중',
-    running: '실행 중',
-    stopped: '정지',
-    suspended: '정지',
-    creating: '생성 중',
-    deploying: '배포 중',
-    failed: '오류',
-    expired: '만료',
-  };
-  return labels[status.toLowerCase()] ?? status;
-}
-
 function mapApps(apps: AppSummary[], teams: Map<string, TeamSummary>): SearchableResource[] {
   return apps.map(app => {
     const team = app.owner.type === 'team' ? teams.get(app.owner.id) : undefined;
@@ -51,7 +36,7 @@ function mapApps(apps: AppSummary[], teams: Map<string, TeamSummary>): Searchabl
       name: app.name,
       grn: app.grn,
       kind: 'app',
-      status: appStatusLabel(app.status),
+      status: getAppStatusDisplay(app.status).label,
       scopeId: team?.id ?? (app.owner.type === 'team' ? app.owner.id : 'personal'),
       scopeLabel: app.owner.type === 'team' ? `${team?.name ?? app.owner.name} · 팀` : '내 Resources',
       path: `/apps/${encodeURIComponent(app.grn)}`,

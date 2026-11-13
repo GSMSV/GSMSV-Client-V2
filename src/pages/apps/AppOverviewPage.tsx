@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
+import { getAppStatusDisplay } from '../../entities/app';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
@@ -274,8 +275,7 @@ function getExpiryDays(value: string) {
 }
 
 function getAppStatus(status: string) {
-  if (status === 'deleting') return { label: '삭제 중', tone: 'warning' as const };
-  return { label: '상태 확인 중', tone: 'neutral' as const };
+  return getAppStatusDisplay(status);
 }
 
 function canExtendNow(app: AppDetail) {
