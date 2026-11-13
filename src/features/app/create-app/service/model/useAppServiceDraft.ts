@@ -23,13 +23,12 @@ function getSourceName(sourceDraftKey: string) {
 }
 
 export function getInitialAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-source-draft'): AppServiceDraft {
-  const preview = import.meta.env.DEV;
   const sourceName = getSourceName(sourceDraftKey);
   return {
     appName: sourceName,
     serviceType: 'web',
-    serviceName: preview ? 'web' : '',
-    subdomain: preview ? sourceName || 'study-log' : '',
+    serviceName: '',
+    subdomain: '',
     memoryMb: 512,
     cpu: 0.5,
   };

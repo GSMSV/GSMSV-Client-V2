@@ -197,17 +197,6 @@ const SourceUnavailable = styled.div`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const PreviewNotice = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.warningSoft};
-  color: ${({ theme }) => theme.colors.warning};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
-`;
-
 type DialogKind = 'unsupported-source' | null;
 
 export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
@@ -238,7 +227,6 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     return () => controller.abort();
   }, [teamId]);
   const [dialog, setDialog] = useState<DialogKind>(null);
-  const isFigmaPreview = import.meta.env.DEV;
   const sourceTypeLabels: Record<AppSourceType, string> = {
     github: 'GitHub 저장소',
     container: '컨테이너 이미지',
@@ -295,11 +283,6 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       <Page>
         <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
         <Heading>어디서 코드를 가져오시겠습니까?</Heading>
-        {isFigmaPreview && <PreviewNotice role="note">
-          <Octicon name="info" size={16} />
-          Figma 미리보기 샘플입니다. 표시된 GitHub 계정과 저장소는 실제 연결 정보가 아닙니다.
-        </PreviewNotice>}
-
         <StepRow>
           <Steps aria-label="앱 만들기 단계">
             <StepIndicator number={1} label="소스" active />
@@ -334,7 +317,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
               <IconSlot aria-hidden="true"><Octicon name="link" size={16} /></IconSlot>
               <AccountText>
                 <Caption>GitHub 계정</Caption>
-                <Body>{isFigmaPreview ? '@gsm-jimin · 연결됨' : 'GitHub 연결 정보를 확인할 API가 준비되지 않았습니다.'}</Body>
+                <Body>GitHub 연결 정보를 확인할 API가 준비되지 않았습니다.</Body>
               </AccountText>
             </AccountRow>
             <AccountRow>
@@ -347,19 +330,19 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                 설치 저장소 바꾸기
               </Button>
             </AccountRow>
-            {!isFigmaPreview && <SourceUnavailable role="status">
+            <SourceUnavailable role="status">
               <Octicon name="info" size={18} />
               GitHub 연결 API가 없어 저장소는 연결되지 않습니다. 다음 단계에서 앱 이름만 저장하는 앱을 만들 수 있고, 소스 설정은 전송하지 않습니다.
-            </SourceUnavailable>}
+            </SourceUnavailable>
               <SelectField
                 label="저장소"
                 value={draft.repository}
                 placeholder="저장소 선택"
-                disabled={!isFigmaPreview}
-                options={isFigmaPreview && draft.repository ? [{ value: draft.repository, label: draft.repository }] : []}
+                disabled
+                options={[]}
                 onChange={value => {
                   update('repository', value);
-                  update('branch', isFigmaPreview ? 'main' : '');
+                  update('branch', '');
                 }}
               />
               <FieldGrid>
@@ -367,14 +350,14 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                   label="브랜치"
                   value={draft.branch}
                   placeholder="브랜치 선택"
-                  disabled={!isFigmaPreview || !draft.repository}
-                  options={isFigmaPreview && draft.branch ? [{ value: draft.branch, label: draft.branch }] : []}
+                  disabled
+                  options={[]}
                   onChange={value => update('branch', value)}
                 />
                 <TextField
                   label="폴더"
                   value={draft.folder}
-                  disabled={!isFigmaPreview}
+                  disabled
                   onChange={event => update('folder', event.currentTarget.value)}
                   hint="저장소 안에서 이 앱의 코드가 있는 폴더입니다."
                 />
@@ -382,7 +365,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
               <TextField
                 label="감시 경로"
                 value={draft.watchPaths}
-                disabled={!isFigmaPreview}
+                disabled
                 onChange={event => update('watchPaths', event.currentTarget.value)}
                 hint="이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를 배포합니다."
               />
@@ -400,7 +383,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
             value={draft.name}
             maxLength={30}
             onChange={event => update('name', event.currentTarget.value)}
-            hint={isFigmaPreview ? 'Figma 미리보기 샘플 이름입니다. 실제 저장 시에는 이 이름만 전송합니다.' : '앞뒤 공백을 제외하고 1~30자로 입력해 주세요. 현재 계약은 이 이름만 저장합니다.'}
+            hint="앞뒤 공백을 제외하고 1~30자로 입력해 주세요. 현재 계약은 이 이름만 저장합니다."
           />
         </Card>}
 
@@ -412,7 +395,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
           <DialogCopy id="source-dialog-copy">
             {dialog === 'unsupported-source' ? <>
               <span>현재 공개 앱 API 계약은 앱 이름만 지원하고, 저장소·이미지·압축 파일 소스 설정은 정의하지 않았습니다.</span>
-              <span>GitHub 소스 화면을 미리 보려면 GitHub 저장소를 선택해 주세요.</span>
+              <span>GitHub를 선택하면 앱 이름만으로 기본 앱을 만들 수 있지만 소스 설정은 저장되지 않습니다.</span>
             </> : null}
           </DialogCopy>
           <DialogActions>

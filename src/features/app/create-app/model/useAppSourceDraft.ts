@@ -11,18 +11,8 @@ export interface AppSourceDraft {
   name: string;
 }
 
-const figmaPreviewDraft: AppSourceDraft = {
-  sourceType: 'github',
-  repository: 'gsm-jimin/study-log',
-  branch: 'main',
-  folder: '/',
-  watchPaths: 'src/**, package.json',
-  name: 'study-log',
-};
-
-/** Figma-only preview data; no repository or account API exists in the current app contract. */
 export function getInitialAppSourceDraft(): AppSourceDraft {
-  return import.meta.env.DEV ? { ...figmaPreviewDraft } : {
+  return {
     sourceType: 'github',
     repository: '',
     branch: '',
