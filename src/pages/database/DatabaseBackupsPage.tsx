@@ -101,7 +101,7 @@ function dateTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' }).format(date);
 }
 function fileSize(value: number) {
-  return value >= 100 ? `${(value / 1024).toFixed(1)} GB` : `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value)} MB`;
+  return value >= 1024 ? `${(value / 1024).toFixed(1)} GB` : `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value)} MB`;
 }
 function backupKind(kind: DatabaseBackup['kind']) { return kind === 'pre_restore' ? '복원 직전' : '매일 자동'; }
 
