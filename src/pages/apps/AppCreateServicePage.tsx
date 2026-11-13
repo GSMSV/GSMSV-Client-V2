@@ -36,15 +36,6 @@ const Breadcrumb = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
-const PreviewBadge = styled.span`
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border-radius: ${({ theme }) => theme.radii.sm}px;
-  background: ${({ theme }) => theme.colors.warningSoft};
-  color: ${({ theme }) => theme.colors.warning};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
-`;
-
 const Heading = styled.h1`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
@@ -214,7 +205,6 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const user = getSessionUser();
   const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
   const { draft, update, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
-  const previewOnly = import.meta.env.DEV;
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
   const [availabilityError, setAvailabilityError] = useState('');
@@ -370,7 +360,6 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
       <Page>
         <PageMeta>
           <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
-          {previewOnly && <PreviewBadge>Figma 미리보기 샘플 · 실제 설정값 아님</PreviewBadge>}
         </PageMeta>
         <Heading>어떤 서비스로 실행하시겠습니까?</Heading>
 
@@ -409,7 +398,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서비스 유형"
             options={[...serviceOptions]}
             value={draft.serviceType}
-            disabled={!previewOnly}
+            disabled
             onChange={value => update('serviceType', value as AppServiceType)}
           />
           <Hint>{serviceDescription(draft.serviceType)}</Hint>
@@ -417,7 +406,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서비스 이름"
             value={draft.serviceName}
             maxLength={30}
-            disabled={!previewOnly}
+            disabled
             onChange={event => update('serviceName', event.currentTarget.value)}
             hint="앱 안에서 서비스를 구분하는 이름입니다."
           />
@@ -430,7 +419,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서브도메인"
             value={draft.subdomain}
             maxLength={63}
-            disabled={!previewOnly}
+            disabled
             onChange={event => updateSubdomain(event.currentTarget.value)}
             onBlur={() => { if (draft.subdomain.trim()) void checkSubdomain(); }}
             hint={`production 주소의 이름입니다. 실제 도메인 주소는 계약에 정의되어 있지 않습니다.`}
@@ -444,7 +433,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         <Card>
           <CardHeader>
             <CardTitle>자원</CardTitle>
-            <QuotaMeta>{previewOnly ? '메모리 할당량 1 / 2 GB 사용 중 · 남은 할당량 1 GB · 미리보기 샘플' : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
+            <QuotaMeta>메모리 할당량 API가 없어 값을 확인할 수 없습니다.</QuotaMeta>
           </CardHeader>
           <ResourceFields>
             <SliderField
@@ -456,7 +445,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
               minLabel="최소 256 MB"
               maxLabel="최대 1 GB"
               valueLabel={draft.memoryMb >= 1024 ? '1 GB' : `${draft.memoryMb} MB`}
-              disabled={!previewOnly}
+              disabled
               onChange={value => update('memoryMb', value)}
             />
             <SliderField
@@ -468,7 +457,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
               minLabel="최소 0.25 vCPU"
               maxLabel="최대 1 vCPU"
               valueLabel={`${draft.cpu} vCPU`}
-              disabled={!previewOnly}
+              disabled
               onChange={value => update('cpu', value)}
             />
           </ResourceFields>
