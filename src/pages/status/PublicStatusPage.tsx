@@ -5,6 +5,8 @@ import { ApiRequestError } from '../../shared/api';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
+
 const Screen = styled.div`
   display: flex;
   min-height: 100vh;
@@ -188,11 +190,17 @@ function initialState(): HealthState {
 }
 
 function formatCheckedAt(value: Date) {
-  return new Intl.DateTimeFormat('ko-KR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
     timeZone: 'Asia/Seoul',
-  }).format(value);
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? '';
+  return `${part('year')}.${part('month')}.${part('day')} ${part('hour')}:${part('minute')}`;
 }
 
 function isUnhealthyError(error: unknown) {
@@ -220,8 +228,23 @@ export default function PublicStatusPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void refresh(controller.signal);
-    return () => controller.abort();
+    let requestInFlight = false;
+    const refreshIfIdle = async () => {
+      if (requestInFlight || controller.signal.aborted) return;
+      requestInFlight = true;
+      try {
+        await refresh(controller.signal);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    void refreshIfIdle();
+    const interval = window.setInterval(() => { void refreshIfIdle(); }, AUTO_REFRESH_INTERVAL_MS);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
   }, [refresh, refreshKey]);
 
   const state = health.loading ? 'unknown' : health.value?.status === 'UP' ? 'up' : health.value?.status === 'DOWN' ? 'down' : 'unknown';
@@ -252,7 +275,7 @@ export default function PublicStatusPage() {
           <Heading>
             <Title>GSM SV 서비스 상태</Title>
             <Subtitle>
-              {health.checkedAt ? `API 상태를 ${formatCheckedAt(health.checkedAt)}에 확인했습니다.` : 'API 상태를 확인합니다.'}
+              {health.checkedAt ? `${formatCheckedAt(health.checkedAt)} 기준 · 1분마다 갱신됩니다` : 'API 상태를 확인합니다. · 1분마다 갱신됩니다'}
             </Subtitle>
           </Heading>
 
