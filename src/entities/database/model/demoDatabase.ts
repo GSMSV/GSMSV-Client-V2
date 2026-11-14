@@ -7,6 +7,7 @@ export interface DemoDatabaseState {
   databases: DatabaseDetail[];
   backups: Record<string, DatabaseBackup[]>;
   passwords: Record<string, string>;
+  deletedBackups?: Record<string, { databaseId: string; databaseName: string; owner: DatabaseDetail['owner']; deletedAt: string; expiresAt: string; backups: DatabaseBackup[] }>;
   lockedFixtureInitialized?: boolean;
   welcomeFixtureInitialized?: boolean;
   welcomeBackupsFixtureInitialized?: boolean;
@@ -49,6 +50,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
   ],
+  deletedBackups: {},
   backups: {
     [welcomeGrn]: [
       { id: 'welcome-db-daily-20260929', kind: 'daily', created_at: '2026-09-28T19:00:00.000Z', size_mb: 307, expires_at: '2026-10-05T19:00:00.000Z' },
@@ -78,9 +80,28 @@ function settleDemoDatabaseTransitions(state: DemoDatabaseState, now: number): b
       database.updated_at = new Date(now).toISOString();
       changed = true;
     } else if (database.status === 'deleting' && elapsed >= 4_000) {
+      const backups = state.backups[database.grn] ?? [];
+      if (backups.length > 0) {
+        const deletedAt = new Date(now).toISOString();
+        state.deletedBackups ??= {};
+        state.deletedBackups[database.grn] = {
+          databaseId: database.id,
+          databaseName: database.name,
+          owner: clone(database.owner),
+          deletedAt,
+          expiresAt: new Date(now + 7 * 86_400_000).toISOString(),
+          backups: clone(backups),
+        };
+      }
       state.databases = state.databases.filter(item => item.grn !== database.grn);
       delete state.backups[database.grn];
       delete state.passwords[database.grn];
+      changed = true;
+    }
+  }
+  for (const [grn, archive] of Object.entries(state.deletedBackups ?? {})) {
+    if (new Date(archive.expiresAt).getTime() <= now) {
+      delete state.deletedBackups?.[grn];
       changed = true;
     }
   }
