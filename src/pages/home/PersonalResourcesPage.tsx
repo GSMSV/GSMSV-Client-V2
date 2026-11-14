@@ -362,7 +362,6 @@ export default function PersonalResourcesPage() {
         import('../../entities/serverless'),
         import('../../entities/database/demo'),
       ]);
-      ]);
       if (signal.aborted) return;
       const homeState = demo.getDemoHomeState();
       const vmState = vmRepository.getDemoVmState();
@@ -417,6 +416,13 @@ export default function PersonalResourcesPage() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, retryKey]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !demoMode) return;
+    const refresh = () => setRetryKey(value => value + 1);
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, [demoMode]);
 
   useEffect(() => {
     if (import.meta.env.DEV && demoMode) {

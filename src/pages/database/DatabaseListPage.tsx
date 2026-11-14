@@ -337,6 +337,16 @@ export default function DatabaseListPage() {
   }, [loadList, retryKey]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV || !demoMode) return;
+    const refresh = () => {
+      setRetryKey(value => value + 1);
+      setQuotaRetryKey(value => value + 1);
+    };
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, [demoMode]);
+
+  useEffect(() => {
     if (owner !== 'me') {
       setQuota({ value: null, loading: false, error: false });
       return;

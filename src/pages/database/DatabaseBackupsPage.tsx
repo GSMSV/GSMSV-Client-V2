@@ -153,6 +153,13 @@ export default function DatabaseBackupsPage() {
   }, [load, retryKey]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV || !isDemoMode()) return;
+    const refresh = () => setRetryKey(value => value + 1);
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, []);
+
+  useEffect(() => {
     if (import.meta.env.DEV && isDemoMode()) {
       let cancelled = false;
       void import('../../entities/home').then(({ demoHomeTeams }) => {

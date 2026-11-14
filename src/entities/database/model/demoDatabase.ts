@@ -9,6 +9,7 @@ export interface DemoDatabaseState {
   passwords: Record<string, string>;
   lockedFixtureInitialized?: boolean;
   welcomeFixtureInitialized?: boolean;
+  welcomeBackupsFixtureInitialized?: boolean;
 }
 
 const legacyWelcomeGrn = 'grn:gsmsv:database:demo-student:student-db';
@@ -18,6 +19,7 @@ const teamGrn = 'grn:gsmsv:database:demo-team:connect-db';
 const demoDatabaseSeed: DemoDatabaseState = {
   lockedFixtureInitialized: true,
   welcomeFixtureInitialized: true,
+  welcomeBackupsFixtureInitialized: true,
   databases: [
     {
       grn: welcomeGrn, id: 'welcome-db', name: 'welcome-db',
@@ -49,8 +51,13 @@ const demoDatabaseSeed: DemoDatabaseState = {
   ],
   backups: {
     [welcomeGrn]: [
-      { id: 'welcome-db-daily-20261006', kind: 'daily', created_at: '2026-10-06T00:00:00.000Z', size_mb: 82, expires_at: '2026-10-13T00:00:00.000Z' },
-      { id: 'welcome-db-daily-20261005', kind: 'daily', created_at: '2026-10-05T00:00:00.000Z', size_mb: 79, expires_at: '2026-10-12T00:00:00.000Z' },
+      { id: 'welcome-db-daily-20260929', kind: 'daily', created_at: '2026-09-28T19:00:00.000Z', size_mb: 307, expires_at: '2026-10-05T19:00:00.000Z' },
+      { id: 'welcome-db-daily-20260928', kind: 'daily', created_at: '2026-09-27T19:00:00.000Z', size_mb: 307, expires_at: '2026-10-04T19:00:00.000Z' },
+      { id: 'welcome-db-pre-restore-20260927-1512', kind: 'pre_restore', created_at: '2026-09-27T06:12:00.000Z', size_mb: 205, expires_at: '2026-10-04T06:12:00.000Z' },
+      { id: 'welcome-db-daily-20260927', kind: 'daily', created_at: '2026-09-26T19:00:00.000Z', size_mb: 205, expires_at: '2026-10-03T19:00:00.000Z' },
+      { id: 'welcome-db-daily-20260926', kind: 'daily', created_at: '2026-09-25T19:00:00.000Z', size_mb: 205, expires_at: '2026-10-02T19:00:00.000Z' },
+      { id: 'welcome-db-daily-20260925', kind: 'daily', created_at: '2026-09-24T19:00:00.000Z', size_mb: 205, expires_at: '2026-10-01T19:00:00.000Z' },
+      { id: 'welcome-db-daily-20260924', kind: 'daily', created_at: '2026-09-23T19:00:00.000Z', size_mb: 205, expires_at: '2026-09-30T19:00:00.000Z' },
     ],
     [lockedGrn]: [],
     [teamGrn]: [
@@ -119,12 +126,14 @@ export function getDemoDatabaseState(): DemoDatabaseState {
       validState.databases[sourceIndex] = canonical;
       const duplicateIndex = validState.databases.findIndex((database, index) => index !== sourceIndex && (database.grn === welcomeGrn || database.id === 'welcome-db'));
       if (duplicateIndex >= 0) validState.databases.splice(duplicateIndex, 1);
-      const sourceBackups = validState.backups[source.grn] ?? [];
-      const canonicalBackups = validState.backups[welcomeGrn] ?? [];
-      const mergedBackups = [...sourceBackups, ...canonicalBackups];
-      validState.backups[welcomeGrn] = mergedBackups.length
-        ? [...new Map(mergedBackups.map(backup => [backup.id, backup])).values()]
-        : clone(demoDatabaseSeed.backups[welcomeGrn]);
+      const staleSeedBackupIds = new Set(['student-db-daily-20261114', 'student-db-daily-20261113', 'welcome-db-daily-20261006', 'welcome-db-daily-20261005']);
+      const sourceBackups = (validState.backups[source.grn] ?? []).filter(backup => !staleSeedBackupIds.has(backup.id));
+      const canonicalBackups = (validState.backups[welcomeGrn] ?? []).filter(backup => !staleSeedBackupIds.has(backup.id));
+      const userBackups = [...sourceBackups, ...canonicalBackups];
+      validState.backups[welcomeGrn] = [
+        ...clone(demoDatabaseSeed.backups[welcomeGrn]),
+        ...new Map(userBackups.map(backup => [backup.id, backup])).values(),
+      ];
       const sourcePassword = validState.passwords[source.grn];
       validState.passwords[welcomeGrn] = isLegacyWelcome && sourcePassword === 'demo-local-pass-student'
         ? 'demo-local-pass-welcome'
@@ -139,6 +148,15 @@ export function getDemoDatabaseState(): DemoDatabaseState {
       validState.passwords[welcomeGrn] ??= 'demo-local-pass-welcome';
     }
     validState.welcomeFixtureInitialized = true;
+    changed = true;
+  }
+  if (!validState.welcomeBackupsFixtureInitialized) {
+    const seedBackups = demoDatabaseSeed.backups[welcomeGrn] ?? [];
+    const seedIds = new Set(seedBackups.map(backup => backup.id));
+    const staleSeedIds = new Set(['student-db-daily-20261114', 'student-db-daily-20261113', 'welcome-db-daily-20261006', 'welcome-db-daily-20261005']);
+    const retainedBackups = (validState.backups[welcomeGrn] ?? []).filter(backup => !staleSeedIds.has(backup.id) && !seedIds.has(backup.id));
+    validState.backups[welcomeGrn] = [...clone(seedBackups), ...retainedBackups];
+    validState.welcomeBackupsFixtureInitialized = true;
     changed = true;
   }
   if (!validState.lockedFixtureInitialized) {
@@ -157,7 +175,11 @@ export function getDemoDatabaseState(): DemoDatabaseState {
 }
 
 export function saveDemoDatabaseState(state: DemoDatabaseState): boolean {
-  return writeDemoState('database.resources', state);
+  const saved = writeDemoState('database.resources', state);
+  if (saved && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('gsmsv:demo-database-state-change'));
+  }
+  return saved;
 }
 
 export function listDemoDatabases(owner = 'me'): DatabaseSummary[] {
