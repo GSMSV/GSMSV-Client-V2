@@ -71,15 +71,17 @@ function VMNetworkRoute() {
   return <VMNetworkPage key={vmGrn} />;
 }
 
+const demoEntryRoutes = import.meta.env.DEV ? [{
+  path: '/__demo',
+  element: (
+    <Suspense fallback={null}>
+      <DemoEntryPage />
+    </Suspense>
+  ),
+}] : [];
+
 export const router = createBrowserRouter([
-  {
-    path: '/__demo',
-    element: (
-      <Suspense fallback={null}>
-        <DemoEntryPage />
-      </Suspense>
-    ),
-  },
+  ...demoEntryRoutes,
   {
     path: '/',
     element: (
