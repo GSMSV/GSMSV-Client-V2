@@ -82,14 +82,14 @@ function settleDemoDatabaseTransitions(state: DemoDatabaseState, now: number): b
     } else if (database.status === 'deleting' && elapsed >= 4_000) {
       const backups = state.backups[database.grn] ?? [];
       if (backups.length > 0) {
-        const deletedAt = new Date(now).toISOString();
+        const deletionDeadline = new Date(database.updated_at).getTime() + 4_000;
         state.deletedBackups ??= {};
         state.deletedBackups[database.grn] = {
           databaseId: database.id,
           databaseName: database.name,
           owner: clone(database.owner),
-          deletedAt,
-          expiresAt: new Date(now + 7 * 86_400_000).toISOString(),
+          deletedAt: new Date(deletionDeadline).toISOString(),
+          expiresAt: new Date(deletionDeadline + 7 * 86_400_000).toISOString(),
           backups: clone(backups),
         };
       }
