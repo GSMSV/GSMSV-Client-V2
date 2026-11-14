@@ -297,7 +297,14 @@ export default function DatabaseBackupsPage() {
           <HeadingGroup><HeadingRow><TitleBlock><Title>{detail.value.name}</Title><Subtitle>{detail.value.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle></TitleBlock></HeadingRow></HeadingGroup>
           <Tabs aria-label="Database 상세 메뉴">
             <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}`)}>접속 정보</Tab>
-            <Tab type="button" title="쿼리 실행 API가 계약에 없어 아직 제공되지 않습니다" disabled>쿼리 콘솔</Tab>
+            <Tab
+              type="button"
+              title={isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 아직 제공되지 않습니다'}
+              disabled={!isDemoMode()}
+              onClick={() => {
+                if (isDemoMode()) navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/query`);
+              }}
+            >쿼리 콘솔</Tab>
             <Tab type="button" $active aria-current="page">백업</Tab>
             <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>설정</Tab>
           </Tabs>
