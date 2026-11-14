@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoVmState, saveDemoVmState, type DemoSnapshot } from '../../entities/vm';
@@ -128,6 +128,7 @@ const IconButton = styled.button`
 export function VmSnapshotsPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [state, setState] = useState(() => getDemoVmState());
+  const latestState = useRef(state);
   const [notice, setNotice] = useState('');
   const [dialog, setDialog] = useState<SnapshotDialog>(null);
   const [snapshotName, setSnapshotName] = useState('');
@@ -152,8 +153,9 @@ export function VmSnapshotsPage() {
   const totalCount = vmRecord.snapshots.length;
 
   function persist(update: (current: typeof state) => typeof state) {
-    const next = update(state);
+    const next = update(latestState.current);
     if (!saveDemoVmState(next)) return false;
+    latestState.current = next;
     setState(next);
     return true;
   }
