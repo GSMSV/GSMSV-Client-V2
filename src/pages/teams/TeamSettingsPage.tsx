@@ -9,6 +9,7 @@ import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { cancelTeamInvitation, inviteTeamMember, listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { ApiRequestError } from '../../shared/api';
+import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
 import type { DemoTeamDetail } from '../../entities/team/demo';
 import type { TeamMember } from '../../entities/team';
 import { isDemoMode } from '../../shared/demo';
@@ -171,6 +172,8 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const [refreshKey, setRefreshKey] = useState(0);
   const [successor, setSuccessor] = useState<TeamMember | null>(null);
   const [showDisband, setShowDisband] = useState(false);
+  const [showQuotaRequest, setShowQuotaRequest] = useState(false);
+  const [quotaRequestSent, setQuotaRequestSent] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [memberAction, setMemberAction] = useState<{ member: TeamMember; action: 'grant' | 'revoke' | 'remove' } | null>(null);
   const demoMode = import.meta.env.DEV && isDemoMode();
@@ -206,6 +209,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
       } } } : detail;
       setTeam(syncedDetail); setTeams(myTeams);
       setInvitations(demo.listDemoTeamInvitations(selectedTeamId));
+      setQuotaRequestSent(demo.listDemoTeamQuotaRequests(selectedTeamId).length > 0);
       setLoading(false);
       return;
     }
@@ -301,6 +305,16 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     } catch (cause) {
       setInviteError(errorMessage(cause, '초대를 다시 보내지 못했습니다.'));
     } finally { setBusyAction(null); }
+  };
+
+  const submitQuotaRequest = async (tier: '소형' | '중형' | '대형', reason: string) => {
+    if (!demoMode || !selectedTeamId) return false;
+    const { createDemoTeamQuotaRequest } = await import('../../entities/team/demo');
+    const request = createDemoTeamQuotaRequest(selectedTeamId, tier, reason);
+    if (!request) return false;
+    setQuotaRequestSent(true);
+    setShowQuotaRequest(false);
+    return true;
   };
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
@@ -399,7 +413,14 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
               return <QuotaRow key={label}><QuotaLabel><span>{label}</span><span>{getQuotaLabel(usage)}{suffix}</span></QuotaLabel><Meter role="meter" aria-label={`${label} 할당량`} aria-valuemin={0} aria-valuemax={usage.limit} aria-valuenow={usage.used}><MeterFill $percent={percent} $warning={warning} /></Meter></QuotaRow>;
             })}
           </QuotaRows>}
-          <QuotaFooter><Muted>할당량 요청 API가 아직 공개 계약에 없습니다.</Muted><Button variant="secondary" disabled title="팀 할당량 요청 API가 없습니다." icon={<Octicon name="graph" size={16} />}>할당량 늘리기 요청</Button></QuotaFooter>
+          <QuotaFooter>
+            <Muted role={quotaRequestSent ? 'status' : undefined}>{demoMode ? (quotaRequestSent ? '할당량 요청을 보냈습니다. 관리자가 승인하면 팀원 전원에게 알립니다.' : '팀 운영에 더 많은 자원이 필요하면 관리자에게 요청하세요.') : '할당량 요청 API가 아직 공개 계약에 없습니다.'}</Muted>
+            <Button variant="secondary" disabled={!demoMode || team.status !== 'approved' || (team.my_role !== 'leader' && team.my_role !== 'devops') || quotaRequestSent}
+              title={!demoMode ? '팀 할당량 요청 API가 없습니다.' : undefined}
+              onClick={() => setShowQuotaRequest(true)} icon={<Octicon name="graph" size={16} />}>
+              {quotaRequestSent ? '요청 검토 중' : '할당량 늘리기 요청'}
+            </Button>
+          </QuotaFooter>
         </Panel>
 
         <Panel aria-labelledby="role-descriptions-title">
@@ -428,6 +449,8 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
             onSave={() => { setShowDisband(false); refresh(); }} />
         </Suspense>}
+        {demoMode && showQuotaRequest && <TeamQuotaRequestDialog
+          onDismiss={() => setShowQuotaRequest(false)} onSubmit={submitQuotaRequest} />}
         {demoMode && showLeave && LeaveDemoTeam && <Suspense fallback={null}>
           <LeaveDemoTeam team={team} onDismiss={() => setShowLeave(false)}
             onLeave={() => { setShowLeave(false); navigate('/teams'); }}

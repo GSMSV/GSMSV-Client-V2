@@ -16,3 +16,5 @@ export { StepConnector, StepIndicator } from './StepIndicator';
 export type { StepConnectorProps, StepIndicatorProps } from './StepIndicator';
 export { TextField } from './TextField';
 export type { TextFieldProps } from './TextField';
+export { TextareaField } from './TextareaField';
+export type { TextareaFieldProps } from './TextareaField';

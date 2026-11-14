@@ -242,6 +242,7 @@ const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
   apps: '/apps',
   team: '/teams',
   settings: '/settings',
+  ...(import.meta.env.DEV ? { support: '/support/inquiries?demo=1' } : {}),
 };
 
 export default function AuthenticatedDocsPage() {
@@ -292,7 +293,7 @@ export default function AuthenticatedDocsPage() {
       activeItem="docs"
       scopeLabel="내 Resources"
       scopeOptions={scopeOptions}
-      disabledNavigationItems={['vm-create', 'serverless', 'support']}
+      disabledNavigationItems={import.meta.env.DEV ? ['vm-create', 'serverless'] : ['vm-create', 'serverless', 'support']}
       sidebarActionsAtBottom={false}
       showTopbarDivider
       userName={user?.name ?? '사용자'}
@@ -315,7 +316,7 @@ export default function AuthenticatedDocsPage() {
           {unsupportedTopics.slice(2).map(topic => <UnavailableTopic key={topic} aria-disabled="true" title="이 문서는 아직 제공되지 않습니다">{topic}</UnavailableTopic>)}
           <Topic href="#faq">FAQ</Topic>
           <TopicAction>
-            <Button variant="secondary" disabled title="문의 기능은 아직 제공되지 않습니다" icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
+            <Button variant="secondary" disabled={!import.meta.env.DEV} title={!import.meta.env.DEV ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries?demo=1')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </TopicAction>
         </TopicBar>
 
@@ -363,11 +364,11 @@ export default function AuthenticatedDocsPage() {
         <Card aria-labelledby="feedback-title">
           <FeedbackHeader>
             <CardTitle id="feedback-title">문제가 해결됐습니까?</CardTitle>
-            <Button variant="ghost" disabled title="문의 기능은 아직 제공되지 않습니다" icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
+            <Button variant="ghost" disabled={!import.meta.env.DEV} title={!import.meta.env.DEV ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries?demo=1')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </FeedbackHeader>
           <FeedbackBody>
             <Octicon name="question" size={16} aria-hidden="true" />
-            <span>문의 기능은 아직 제공되지 않습니다.<br />이 문서와 FAQ에서 접속 방법을 확인할 수 있습니다.</span>
+            <span>Docs를 확인해도 해결되지 않는 문제가 있다면 문의를 남겨주세요.<br />답변이 등록되면 알림으로 알려드립니다.</span>
           </FeedbackBody>
           <FeedbackActions>
             <Button variant="secondary" aria-pressed={feedback === 'yes'} onClick={() => setFeedback('yes')} icon={<Octicon name="check" size={16} />}>도움이 됐습니다</Button>
