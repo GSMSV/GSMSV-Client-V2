@@ -83,21 +83,46 @@ function parseCron(expression: string): ParsedCron | undefined {
   };
 }
 
-function getMinimumMinuteInterval(minutes: Set<number>): number | null {
-  const sorted = [...minutes].sort((left, right) => left - right);
-  if (sorted.length < 2) return null;
-  let minimum = 60;
-  for (let index = 1; index < sorted.length; index += 1) {
-    minimum = Math.min(minimum, sorted[index] - sorted[index - 1]);
+function hasAdjacentMatchingDates(parsed: ParsedCron): boolean {
+  const cycleStart = Date.UTC(2000, 0, 1);
+  const dayMilliseconds = 24 * 60 * 60 * 1000;
+  const daysInGregorianCycle = 146_097;
+  let firstDateMatches = false;
+  let previousDateMatches = false;
+
+  for (let day = 0; day < daysInGregorianCycle; day += 1) {
+    const matches = matchesCronDate(parsed, new Date(cycleStart + day * dayMilliseconds));
+    if (day === 0) firstDateMatches = matches;
+    if (matches && previousDateMatches) return true;
+    previousDateMatches = matches;
   }
-  minimum = Math.min(minimum, sorted[0] + 60 - sorted[sorted.length - 1]);
+
+  return previousDateMatches && firstDateMatches;
+}
+
+function getMinimumScheduleInterval(parsed: ParsedCron): number | null {
+  const times = [...parsed.hour.values]
+    .flatMap(hour => [...parsed.minute.values].map(minute => hour * 60 + minute))
+    .sort((left, right) => left - right);
+  if (!times.length) return null;
+
+  let minimum: number | null = null;
+  for (let index = 1; index < times.length; index += 1) {
+    const interval = times[index] - times[index - 1];
+    minimum = minimum === null ? interval : Math.min(minimum, interval);
+  }
+
+  const overnightInterval = 24 * 60 - times[times.length - 1] + times[0];
+  if (overnightInterval < 5 && hasAdjacentMatchingDates(parsed)) {
+    minimum = minimum === null ? overnightInterval : Math.min(minimum, overnightInterval);
+  }
   return minimum;
 }
 
 export function validateCronExpression(expression: string): CronValidation {
   const parsed = parseCron(expression);
   if (!parsed) return { valid: false, reason: 'syntax' };
-  const minimumIntervalMinutes = getMinimumMinuteInterval(parsed.minute.values);
+  const minimumIntervalMinutes = getMinimumScheduleInterval(parsed);
   if (minimumIntervalMinutes !== null && minimumIntervalMinutes < 5) {
     return { valid: false, reason: 'frequency', minimumIntervalMinutes };
   }

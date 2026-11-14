@@ -86,11 +86,11 @@ export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger
   return undefined;
 }
 
-function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void): DemoServerlessFunction | undefined {
+function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void | false): DemoServerlessFunction | undefined {
   const state = getDemoServerlessState();
   const fn = state.functions.find(item => item.id === id);
   if (!fn) return undefined;
-  update(fn, state);
+  if (update(fn, state) === false) return undefined;
   saveDemoServerlessState(state);
   return fn;
 }
@@ -124,19 +124,16 @@ export function updateDemoServerlessVariable(id: string, name: string, variable:
 export function setDemoServerlessDatabase(id: string, databaseId: string) { return mutate(id, fn => { fn.databaseId = databaseId; fn.variables = [...fn.variables.filter(item => item.name !== 'DATABASE_URL'), ...(databaseId ? [{ name: 'DATABASE_URL', secret: true }] : [])]; }); }
 export function setDemoServerlessDomain(id: string, domain: string | null) { return mutate(id, fn => { fn.domain = domain; }); }
 export function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): boolean {
-  const state = getDemoServerlessState();
-  const fn = state.functions.find(item => item.id === id);
-  if (!fn) return false;
-  if (trigger.type === 'HTTP') {
-    if (fn.triggers.some(item => item.type === 'HTTP')) return false;
-    if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
-  } else {
-    if (fn.triggers.filter(item => item.type === 'Cron').length >= 3) return false;
-    if (!validateCronExpression(trigger.schedule).valid) return false;
-  }
-  fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
-  saveDemoServerlessState(state);
-  return true;
+  return Boolean(mutate(id, fn => {
+    if (trigger.type === 'HTTP') {
+      if (fn.triggers.some(item => item.type === 'HTTP')) return false;
+      if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
+    } else {
+      if (fn.triggers.filter(item => item.type === 'Cron').length >= 3) return false;
+      if (!validateCronExpression(trigger.schedule).valid) return false;
+    }
+    fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
+  }));
 }
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
