@@ -294,7 +294,7 @@ export function createDemoDatabase(name: string, engine: DatabaseEngine, owner?:
   state.databases.unshift(database);
   state.backups[database.grn] = [];
   state.passwords[database.grn] = `demo-${crypto.randomUUID().slice(0, 18)}`;
-  saveDemoDatabaseState(state);
+  if (!saveDemoDatabaseState(state)) throw new Error('DEMO_DATABASE_SAVE_FAILED');
   setTimeout(() => { getDemoDatabaseState(); }, 2_000);
   return database;
 }
@@ -320,22 +320,23 @@ export function updateDemoDatabase(grn: string, patch: Partial<DatabaseDetail>):
   const database = state.databases.find(item => item.grn === grn || item.id === grn);
   if (!database) return null;
   Object.assign(database, patch);
-  saveDemoDatabaseState(state);
+  if (!saveDemoDatabaseState(state)) return null;
   return database;
 }
 
-export function setDemoDatabasePassword(grn: string, password: string): void {
+export function setDemoDatabasePassword(grn: string, password: string): boolean {
   const state = getDemoDatabaseState();
   const database = state.databases.find(item => item.grn === grn || item.id === grn);
-  if (!database) return;
+  if (!database) return false;
   state.passwords[database.grn] = password;
-  saveDemoDatabaseState(state);
+  return saveDemoDatabaseState(state);
 }
 
-export function addDemoPreRestoreBackup(grn: string, backup: DatabaseBackup): void {
+export function addDemoPreRestoreBackup(grn: string, backup: DatabaseBackup): boolean {
   const state = getDemoDatabaseState();
+  if (!state.databases.some(item => item.grn === grn || item.id === grn)) return false;
   state.backups[grn] = [backup, ...(state.backups[grn] ?? [])];
-  saveDemoDatabaseState(state);
+  return saveDemoDatabaseState(state);
 }
 
 export function deleteDemoDatabase(grn: string): boolean {
@@ -344,7 +345,7 @@ export function deleteDemoDatabase(grn: string): boolean {
   if (!database) return false;
   database.status = 'deleting';
   database.updated_at = new Date().toISOString();
-  saveDemoDatabaseState(state);
+  if (!saveDemoDatabaseState(state)) return false;
   setTimeout(() => { getDemoDatabaseState(); }, 4_000);
   return true;
 }

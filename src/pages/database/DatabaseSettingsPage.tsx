@@ -217,7 +217,7 @@ export default function DatabaseSettingsPage(){
       if(import.meta.env.DEV&&isDemoMode()){
         const demo=await import('../../entities/database/demo');
         const password=`demo-${crypto.randomUUID().slice(0,18)}`;
-        demo.setDemoDatabasePassword(value.grn,password);
+        if (!demo.setDemoDatabasePassword(value.grn,password)) throw new Error('Database password could not be saved');
         setRotationResult({password,rotated_at:new Date().toISOString(),reconnected:{functions:connectedFunctions.length,app_cells:0}});
         setShowRotationDialog(false);return;
       }
