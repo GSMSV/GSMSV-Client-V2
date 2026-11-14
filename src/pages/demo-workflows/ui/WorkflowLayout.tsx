@@ -7,6 +7,7 @@ import type { StudentNavigationKey } from '../../../widgets/student-shell';
 import { StudentShell } from '../../../widgets/student-shell';
 import { Octicon } from '../../../shared/ui/icons';
 import { getSessionUser } from '../../../entities/session';
+import { listDemoTeams } from '../../../entities/team/demo';
 
 const AdminLayout = styled.div`
   display: flex;
@@ -280,7 +281,7 @@ export const Stat = styled.div`
   strong { display: block; margin: 12px 0 4px; color: ${({ theme }) => theme.colors.text}; font-size: 24px; }
 `;
 
-export function WorkflowLayout({ children, admin = false, activeAdminItem = '승인', activeStudentItem = 'none', scopeLabel = '내 Resources' }: { children: ReactNode; admin?: boolean; activeAdminItem?: string; activeStudentItem?: StudentNavigationKey; scopeLabel?: string }) {
+export function WorkflowLayout({ children, admin = false, activeAdminItem = '승인', activeStudentItem = 'none', scopeLabel = '내 Resources', teamScopeId }: { children: ReactNode; admin?: boolean; activeAdminItem?: string; activeStudentItem?: StudentNavigationKey; scopeLabel?: string; teamScopeId?: string }) {
   const navigate = useNavigate();
   if (admin) {
     const primary = [
@@ -304,7 +305,16 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
     };
     void navigate(paths[item]);
   };
-  return <StudentShell activeItem={activeStudentItem} scopeLabel={scopeLabel} userName="김지민" onNavigate={onNavigate} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>{children}</StudentShell>;
+  const scopeOptions = [
+    { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => void navigate('/') },
+    ...listDemoTeams().map(team => ({
+      id: team.id,
+      label: `${team.name} · ${team.my_role === 'leader' ? '팀장' : team.my_role === 'devops' ? 'DevOps' : '멤버'}`,
+      selected: team.id === teamScopeId,
+      onSelect: () => void navigate(`/teams/${encodeURIComponent(team.id)}`),
+    })),
+  ];
+  return <StudentShell activeItem={activeStudentItem} scopeLabel={scopeLabel} scopeOptions={scopeOptions} userName="김지민" onNavigate={onNavigate} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>{children}</StudentShell>;
 }
 
 export function DemoOnlyGate({ children, admin = false }: { children: ReactNode; admin?: boolean }) {

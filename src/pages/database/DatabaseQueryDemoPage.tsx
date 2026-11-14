@@ -75,7 +75,7 @@ export default function DatabaseQueryDemoPage() {
   const timeoutRef = useRef<number | null>(null);
   const [error, setError] = useState('');
   const [ran, setRan] = useState(false);
-  const [database, setDatabase] = useState<{ name: string; engine: 'mysql' | 'postgresql'; isolation: 'shared' | 'dedicated'; status: string; write_locked: boolean } | null>(null);
+  const [database, setDatabase] = useState<{ name: string; engine: 'mysql' | 'postgresql'; isolation: 'shared' | 'dedicated'; status: string; write_locked: boolean; owner?: { type: 'user' | 'team'; id: string; name: string } } | null>(null);
   const [databaseResolved, setDatabaseResolved] = useState(false);
   useEffect(() => {
     setDatabaseResolved(false);
@@ -90,7 +90,7 @@ export default function DatabaseQueryDemoPage() {
       if (cancelled) return;
       const value = demo.getDemoDatabase(databaseId);
       const databaseValue = value
-        ? { name: value.name, engine: value.engine, isolation: value.isolation, status: value.status, write_locked: value.write_locked }
+        ? { name: value.name, engine: value.engine, isolation: value.isolation, status: value.status, write_locked: value.write_locked, owner: value.owner }
         : databaseId === 'welcome-db'
           ? { name: 'welcome-db', engine: 'mysql' as const, isolation: 'shared' as const, status: 'active', write_locked: false }
           : null;
@@ -109,6 +109,7 @@ export default function DatabaseQueryDemoPage() {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
   }, []);
   const databaseName = database?.name ?? databaseId;
+  const teamScopeId = database?.owner?.type === 'team' ? database.owner.id : undefined;
 
   function runQuery() {
     if (!databaseResolved || !database || database.status !== 'active' || executing) return;
@@ -193,7 +194,7 @@ export default function DatabaseQueryDemoPage() {
   }
 
 
-  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database"><PageStack>
+  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · 팀` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>Database</Breadcrumb>
     <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database ? `${database.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · ${database.isolation === 'dedicated' ? '전용형' : '공유형'}` : databaseResolved ? 'Database를 사용할 수 없습니다' : 'Database 확인 중'}</Subtitle></TitleGroup></Heading>
     <nav aria-label="Database 메뉴" style={{ display: 'flex', gap: 8 }}>

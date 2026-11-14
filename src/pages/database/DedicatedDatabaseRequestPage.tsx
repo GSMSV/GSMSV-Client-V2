@@ -51,7 +51,7 @@ export default function DedicatedDatabaseRequestPage() {
     setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
   }
 
-  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel="GSM Connect · 팀"><PageStack>
+  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel="GSM Connect · 팀" teamScopeId="demo-team"><PageStack>
     <Breadcrumb>GSM Connect / Database / 전용형 신청</Breadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
     {notice && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}

@@ -5,6 +5,7 @@ import { Button } from '../../shared/ui/controls';
 import { Octicon, type OcticonName } from '../../shared/ui/icons';
 import { isDemoMode } from '../../shared/demo';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { listDemoTeams } from '../../entities/team/demo';
 
 export const DemoPage = styled.div`
   display: flex;
@@ -279,9 +280,19 @@ export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Res
     };
     routeTo(paths[item]);
   };
+  const scopeOptions = [
+    { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => routeTo('/') },
+    ...listDemoTeams().map(team => ({
+      id: team.id,
+      label: `${team.name} · ${team.my_role === 'leader' ? '팀장' : team.my_role === 'devops' ? 'DevOps' : '멤버'}`,
+      selected: team.id === teamScopeId,
+      onSelect: () => routeTo(`/teams/${encodeURIComponent(team.id)}`),
+    })),
+  ];
   return <StudentShell
     activeItem={activeItem}
     scopeLabel={scopeLabel}
+    scopeOptions={scopeOptions}
     teamScopeId={teamScopeId}
     userName={userName}
     notificationCount={2}
