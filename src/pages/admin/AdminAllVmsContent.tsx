@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import type { AdminResource, InfraNode, NodeVm } from '../../entities/infra-node';
 import { Button, SelectField, TextField } from '../../shared/ui/controls';
@@ -29,6 +30,7 @@ export interface AdminAllVmsContentProps {
   resources: AdminResource[];
   nodes: InfraNode[];
   nodeVmStates: Record<string, NodeVmState>;
+  expiringGrns?: string[];
   onRefresh: () => void;
   refreshDisabled: boolean;
 }
@@ -283,7 +285,9 @@ function getIcon(name: OcticonName) {
   return <Octicon name={name} size={16} aria-hidden="true" />;
 }
 
-export function AdminAllVmsContent({ resources, nodes, nodeVmStates, onRefresh, refreshDisabled }: AdminAllVmsContentProps) {
+export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrns, onRefresh, refreshDisabled }: AdminAllVmsContentProps) {
+  const [searchParams] = useSearchParams();
+  const expiringOnly = searchParams.get('expires') === 'soon' && expiringGrns !== undefined;
   const [searchDraft, setSearchDraft] = useState('');
   const [nodeDraft, setNodeDraft] = useState('all');
   const [statusDraft, setStatusDraft] = useState('all');
@@ -308,13 +312,14 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, onRefresh, 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return allRows.filter(row => {
+      if (expiringOnly && !expiringGrns?.includes(row.grn ?? '')) return false;
       if (nodeFilter !== 'all' && row.node !== nodeFilter) return false;
       if (statusFilter !== 'all' && row.status !== statusFilter) return false;
       if (!query) return true;
       return [row.name, row.ownerEmail, row.grn ?? '', String(row.vmid ?? '')]
         .some(value => value.toLocaleLowerCase().includes(query));
     });
-  }, [allRows, nodeFilter, search, statusFilter]);
+  }, [allRows, expiringGrns, expiringOnly, nodeFilter, search, statusFilter]);
   const pageCount = Math.ceil(filteredRows.length / pageSize);
   const safePage = pageCount === 0 ? 1 : Math.min(page, pageCount);
   const visibleRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);

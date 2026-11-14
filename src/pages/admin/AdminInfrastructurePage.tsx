@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, type InfraNode, type NodeVm } from '../../entities/infra-node';
+import type { DemoInfraSnapshot } from '../../entities/infra-node/demo';
 import { listNotifications } from '../../entities/notification';
 import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
@@ -400,6 +401,43 @@ const PanelValue = styled.strong`
   font-weight: ${({ theme }) => theme.typography.bodySmall.weight};
 `;
 
+const FailureList = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const FailureItem = styled.article`
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  &:last-child { border-bottom: 0; }
+`;
+
+const FailureIcon = styled.span`
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.warning};
+`;
+
+const FailureCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const FailureName = styled.strong`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const FailureDetail = styled.span`
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
 const StateArea = styled.div`
   display: flex;
   width: 100%;
@@ -427,10 +465,6 @@ function formatUptime(seconds: number) {
   return days > 0 ? `가동 시간 ${days}일 ${hours}시간` : `가동 시간 ${hours}시간`;
 }
 
-function formatGb(value: number) {
-  return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value);
-}
-
 function icon(name: OcticonName) {
   return <Octicon name={name} size={16} aria-hidden="true" />;
 }
@@ -446,6 +480,7 @@ export default function AdminInfrastructurePage() {
   const location = useLocation();
   const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
+  const [demoSnapshot, setDemoSnapshot] = useState<DemoInfraSnapshot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [nodeVmStates, setNodeVmStates] = useState<Record<string, NodeVmState>>({});
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
@@ -459,6 +494,23 @@ export default function AdminInfrastructurePage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setState(current => ({ kind: 'loading', nodes: current.nodes, resources: current.resources, checkedAt: current.checkedAt }));
     try {
+      if (import.meta.env.DEV && isDemoMode()) {
+        const { getDemoInfraSnapshot } = await import('../../entities/infra-node/demo');
+        if (signal.aborted) return;
+        const snapshot = getDemoInfraSnapshot();
+        const checkedAt = new Date();
+        setDemoSnapshot(snapshot);
+        setNodeVmStates(Object.fromEntries(snapshot.nodes.map(node => [node.node, {
+          loading: false,
+          error: false,
+          unavailable: !node.online,
+          items: snapshot.nodeVms[node.node] ?? [],
+        }])));
+        setExpandedNode(null);
+        setState({ kind: 'ready', nodes: snapshot.nodes, resources: snapshot.resources, checkedAt });
+        return;
+      }
+      setDemoSnapshot(null);
       const [nodes, resources] = await Promise.all([listInfraNodes(signal), listAdminResources(signal)]);
       if (!signal.aborted) {
         const initialVmStates = Object.fromEntries(nodes.map(node => [node.node, node.online
@@ -490,6 +542,10 @@ export default function AdminInfrastructurePage() {
   }, []);
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      setUnreadCount(2);
+      return;
+    }
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
@@ -635,6 +691,7 @@ export default function AdminInfrastructurePage() {
                       resources={vmResources}
                       nodes={nodes}
                       nodeVmStates={nodeVmStates}
+                      expiringGrns={demoSnapshot?.expiringGrns}
                       onRefresh={refresh}
                       refreshDisabled={state.kind === 'loading'}
                     />
@@ -679,11 +736,11 @@ export default function AdminInfrastructurePage() {
                   <SummaryCard>
                     <SummaryLabel>{icon('clock')}생성 대기</SummaryLabel>
                     <SummaryValue>{cloneQueue}</SummaryValue>
-                    <SummaryCaption>Node별 clone queue 합계</SummaryCaption>
+                    <SummaryCaption>{demoSnapshot ? `현재 ${demoSnapshot.creationInProgress}건 생성 중` : 'Node별 clone queue 합계'}</SummaryCaption>
                   </SummaryCard>
                   <SummaryCard>
                     <SummaryLabel>{icon('calendar')}만료 임박</SummaryLabel>
-                    <SummaryValue title="만료 집계 API가 제공되지 않습니다">—</SummaryValue>
+                    <SummaryValue title={demoSnapshot ? undefined : '만료 집계 API가 제공되지 않습니다'}>{demoSnapshot?.expiringWithinThreeDays ?? '—'}</SummaryValue>
                     <SummaryCaption>3일 이내 만료 예정</SummaryCaption>
                   </SummaryCard>
                 </Summary>
@@ -692,8 +749,8 @@ export default function AdminInfrastructurePage() {
                   <Banner
                     tone="warning"
                     icon={icon('alert')}
-                    title={`${offlineNodes.length}개 Node의 상태를 확인할 수 없습니다`}
-                    description="오프라인 Node의 CPU·메모리·가동 시간은 API 값 그대로 비워 두었습니다. 온라인 Node 조회와 관리는 계속할 수 있습니다."
+                    title={demoSnapshot ? `${offlineNodes[0]?.node ?? '오프라인 Node'}의 상태를 확인할 수 없습니다` : `${offlineNodes.length}개 Node의 상태를 확인할 수 없습니다`}
+                    description={demoSnapshot ? '이 Node의 지표만 표시되지 않습니다. 다른 Node의 조회와 관리는 계속할 수 있습니다.' : '오프라인 Node의 CPU·메모리·가동 시간은 API 값 그대로 비워 두었습니다. 온라인 Node 조회와 관리는 계속할 수 있습니다.'}
                     action={<Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>다시 확인</Button>}
                   />
                 )}
@@ -706,30 +763,26 @@ export default function AdminInfrastructurePage() {
                         <NodeCard key={node.node}>
                           <NodeCardTop>
                             <IconBox>{icon('server')}</IconBox>
-                            <NodeState $online={node.online}>{node.online ? '온라인' : '오프라인 · 조회 실패'}</NodeState>
+                            <NodeState $online={node.online}>{node.online ? `온라인${demoSnapshot?.nodeKinds[node.node] ? ` · ${demoSnapshot.nodeKinds[node.node]}` : ''}` : '오프라인 · 조회 실패'}</NodeState>
                           </NodeCardTop>
                           <NodeName>{node.node}</NodeName>
-                          <NodeMeta>
-                            {nodeVmStates[node.node]?.unavailable ? 'VM 목록 확인 불가'
-                              : nodeVmStates[node.node]?.loading ? 'VM 목록을 확인하는 중입니다.'
-                                : nodeVmStates[node.node]?.error ? 'VM 수를 확인할 수 없습니다.'
-                                  : `VM ${nodeVmStates[node.node]?.items.length ?? 0}개`}
-                          </NodeMeta>
                           {node.online ? (
                             <>
                               <NodeMeta>CPU {formatPercent(node.usage.cpu_percent)} · 메모리 {summarizeMemory(node)}</NodeMeta>
                               <NodeMeta>{formatUptime(node.usage.uptime_sec)}</NodeMeta>
+                              <NodeMeta>VM {nodeVmStates[node.node]?.items.length ?? 0}개</NodeMeta>
                               <CardFooter>
-                                <span>vCPU {formatGb(node.allocation.vcpu.allocated)} / {formatGb(node.allocation.vcpu.allocatable)}</span>
-                                <Button variant="ghost" onClick={() => toggleNodeVms(node.node)} aria-expanded={expandedNode === node.node}>VM 목록 보기</Button>
+                                <span />
+                                <Button variant="ghost" onClick={() => toggleNodeVms(node.node)} aria-expanded={expandedNode === node.node}>{demoSnapshot ? `VM ${nodeVmStates[node.node]?.items.length ?? 0}개 보기` : 'VM 목록 보기'}</Button>
                               </CardFooter>
                             </>
                           ) : (
                             <>
                               <NodeMeta>CPU — · 메모리 —</NodeMeta>
                               <NodeMeta>가동 시간 확인 불가</NodeMeta>
+                              <NodeMeta>마지막 조회 실패</NodeMeta>
                               <CardFooter>
-                                <span>VM 목록은 노드가 복구된 뒤 확인할 수 있습니다.</span>
+                                <span />
                                 <Button variant="secondary" icon={icon('sync')} onClick={refresh} disabled={state.kind === 'loading'}>다시 확인</Button>
                               </CardFooter>
                             </>
@@ -743,7 +796,6 @@ export default function AdminInfrastructurePage() {
                                   )) : <NodeMeta>해당 노드의 VM이 없습니다.</NodeMeta>}
                             </NodeVmListArea>
                           )}
-                          <CardFooter><span>복제 대기 {node.clone_queue_length}건</span></CardFooter>
                         </NodeCard>
                       ))}
                     </NodeGrid>
@@ -753,16 +805,22 @@ export default function AdminInfrastructurePage() {
                 <TwoColumns>
                   <Panel>
                     <SectionTitle>최근 생성 실패</SectionTitle>
-                    <GapMessage>실패 이력 조회 API가 없어 최근 생성 실패 정보를 표시할 수 없습니다.</GapMessage>
+                    {demoSnapshot ? <FailureList>{demoSnapshot.recentFailures.map((failure, index) => (
+                      <FailureItem key={`${failure.name}-${failure.occurredAt}`}>
+                        <FailureIcon>{icon('alert')}</FailureIcon>
+                        <FailureCopy><FailureName>{failure.name}</FailureName><FailureDetail>{failure.reason}</FailureDetail><FailureDetail>{failure.occurredAt}</FailureDetail></FailureCopy>
+                        {index === 0 && <Button variant="ghost" icon={icon('arrow-right')} onClick={() => navigate('/admin/vms')}>전체 VM 보기</Button>}
+                      </FailureItem>
+                    ))}</FailureList> : <GapMessage>실패 이력 조회 API가 없어 최근 생성 실패 정보를 표시할 수 없습니다.</GapMessage>}
                   </Panel>
                   <Panel>
                     <SectionTitle>오늘의 만료 요약</SectionTitle>
                     <PanelRows>
-                      <PanelRow><span>오늘 만료</span><PanelValue>—</PanelValue></PanelRow>
-                      <PanelRow><span>3일 이내 만료</span><PanelValue>—</PanelValue></PanelRow>
-                      <PanelRow><span>삭제 유예 중</span><PanelValue>—</PanelValue></PanelRow>
+                      <PanelRow><span>오늘 만료</span><PanelValue>{demoSnapshot?.expiringToday ?? '—'}개</PanelValue></PanelRow>
+                      <PanelRow><span>3일 이내 만료</span><PanelValue>{demoSnapshot?.expiringWithinThreeDays ?? '—'}개</PanelValue></PanelRow>
+                      <PanelRow><span>삭제 유예 중</span><PanelValue>{demoSnapshot?.deletionGrace ?? '—'}개</PanelValue></PanelRow>
                     </PanelRows>
-                    <GapMessage>자원 만료 집계 API가 없어 수량을 표시할 수 없습니다.</GapMessage>
+                    {demoSnapshot ? <CardFooter><span /><Button variant="secondary" icon={icon('calendar')} onClick={() => navigate('/admin/vms?expires=soon')}>만료 임박 VM 보기</Button></CardFooter> : <GapMessage>자원 만료 집계 API가 없어 수량을 표시할 수 없습니다.</GapMessage>}
                   </Panel>
                 </TwoColumns>
                 <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>
