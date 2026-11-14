@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getMyQuota, type MyQuota } from '../../entities/quota';
-import type { ServerlessFunctionDraft } from './ServerlessCreatePage';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { ServerlessShell } from '../../widgets/serverless-shell';
+import { isDemoMode } from '../../shared/demo';
 
 const Page = styled.div`
   display: flex;
@@ -217,24 +217,15 @@ const InlineRetry = styled.button`
 
 interface FunctionCardContent {
   id: string;
+  name: string;
   description: string;
   method: string;
   expires: string;
   active: boolean;
   runtime: string;
   icon: 'file-code' | 'pulse';
-  draft?: ServerlessFunctionDraft;
 }
 
-const demoFunctions: FunctionCardContent[] = [
-  { id: 'welcome-api', description: '서비스 첫 방문자를 위한 환영 메시지를 반환합니다.', method: 'HTTP POST · Cron', expires: '2026. 10. 06.', active: true, runtime: 'JavaScript', icon: 'file-code' as const },
-  { id: 'health-check', description: '개발 중인 서비스의 응답 상태를 확인합니다.', method: 'HTTP GET', expires: '2026. 10. 02.', active: false, runtime: 'Python', icon: 'pulse' as const },
-];
-
-const previewQuota: MyQuota['fn'] = {
-  count: { used: 2, limit: 3 },
-  daily_executions: { used: 1284, limit: 10_000 },
-};
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -242,19 +233,43 @@ function formatNumber(value: number) {
 
 export default function ServerlessListPage() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const demoMode = isDemoMode();
+  const [functions, setFunctions] = useState<FunctionCardContent[]>([]);
   const [quota, setQuota] = useState<{ value: MyQuota['fn'] | null; loading: boolean; error: boolean }>({ value: null, loading: true, error: false });
   const [retryKey, setRetryKey] = useState(0);
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
+    if (import.meta.env.DEV && demoMode) {
+      try {
+        const demo = await import('../../entities/serverless');
+        if (signal.aborted) return;
+        setFunctions(demo.getDemoServerlessFunctions().map(fn => ({
+          id: fn.id,
+          name: fn.name,
+          description: fn.description,
+          method: fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'Cron' ? 'Cron' : `HTTP ${trigger.schedule}`).join(' · ') || '트리거 연결 전',
+          expires: fn.expiresAt,
+          active: fn.active,
+          runtime: fn.runtime === 'javascript' ? 'JavaScript' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
+          icon: fn.runtime === 'python' ? 'pulse' : 'file-code',
+        })));
+        setQuota({ value: demo.getDemoServerlessQuota(), loading: false, error: false });
+      } catch {
+        if (!signal.aborted) setQuota({ value: null, loading: false, error: true });
+      }
+      return;
+    }
     try {
       const value = await getMyQuota(signal);
-      if (!signal.aborted) setQuota({ value: value.fn, loading: false, error: false });
+      if (!signal.aborted) {
+        setFunctions([]);
+        setQuota({ value: value.fn, loading: false, error: false });
+      }
     } catch {
-      if (!signal.aborted) setQuota({ value: import.meta.env.DEV ? previewQuota : null, loading: false, error: !import.meta.env.DEV });
+      if (!signal.aborted) setQuota({ value: null, loading: false, error: true });
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -266,20 +281,6 @@ export default function ServerlessListPage() {
   const executions = quota.value?.daily_executions;
   const countPercent = count && count.limit > 0 ? Math.min(100, count.used / count.limit * 100) : 0;
   const executionPercent = executions && executions.limit > 0 ? Math.min(100, executions.used / executions.limit * 100) : 0;
-  const createdDraft = (location.state as { serverlessDraft?: ServerlessFunctionDraft } | null)?.serverlessDraft;
-  const functions: FunctionCardContent[] = [
-    ...(import.meta.env.DEV ? demoFunctions : []),
-    ...(createdDraft ? [{
-      id: createdDraft.name,
-      draft: createdDraft,
-      description: createdDraft.description,
-      method: '트리거 연결 전',
-      expires: '저장되지 않음',
-      active: false,
-      runtime: createdDraft.runtime === 'javascript' ? 'JavaScript' : createdDraft.runtime === 'typescript' ? 'TypeScript' : 'Python',
-      icon: 'file-code' as const,
-    }] : []),
-  ];
 
   return (
     <ServerlessShell>
@@ -293,8 +294,8 @@ export default function ServerlessListPage() {
           <Button
             variant="primary"
             icon={<Octicon name="plus" size={16} />}
-            disabled={!import.meta.env.DEV}
-            title={!import.meta.env.DEV ? 'Serverless 함수 생성 API가 아직 없습니다' : undefined}
+            disabled={!demoMode}
+            title={!demoMode ? 'Serverless 함수 생성 API가 아직 없습니다' : undefined}
             onClick={() => void navigate('/serverless/new')}
           >새 함수</Button>
         </Heading>
@@ -338,12 +339,12 @@ export default function ServerlessListPage() {
                   <Button
                     variant="secondary"
                     icon={<Octicon name="arrow-right" size={16} />}
-                    disabled={!import.meta.env.DEV}
-                    title={!import.meta.env.DEV ? 'Serverless 함수 상세 API가 아직 없습니다' : undefined}
-                    onClick={() => void navigate(`/serverless/${encodeURIComponent(fn.id)}`, fn.draft ? { state: { serverlessDraft: fn.draft } } : undefined)}
+                    disabled={!demoMode}
+                    title={!demoMode ? 'Serverless 함수 상세 API가 아직 없습니다' : undefined}
+                    onClick={() => void navigate(`/serverless/${encodeURIComponent(fn.id)}`)}
                   >함수 열기</Button>
                 </CardActions>
-                <FunctionName>{fn.id}</FunctionName>
+                <FunctionName>{fn.name}</FunctionName>
                 <CardDescription>{fn.description}</CardDescription>
                 <Metadata>{fn.method}</Metadata>
                 <CardFooter>
@@ -352,7 +353,7 @@ export default function ServerlessListPage() {
                 </CardFooter>
               </FunctionCard>
             ))}
-            {functions.length === 0 && <EmptyNotice>Serverless 함수 목록 API 계약이 공개되면 실제 함수를 표시합니다.</EmptyNotice>}
+            {functions.length === 0 && <EmptyNotice>{demoMode ? '아직 함수가 없습니다. 새 함수를 만들어 보세요.' : 'Serverless 함수 목록 API 계약이 공개되면 실제 함수를 표시합니다.'}</EmptyNotice>}
           </Cards>
         </Section>
 

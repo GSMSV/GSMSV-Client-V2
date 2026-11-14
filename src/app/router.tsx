@@ -28,22 +28,6 @@ const PublicDocsPage = lazy(() => import('../pages/docs/PublicDocsPage'));
 const AuthenticatedDocsPage = lazy(() => import('../pages/docs/AuthenticatedDocsPage'));
 const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
 const ServerlessListPage = lazy(() => import('../pages/serverless/ServerlessListPage'));
-const ServerlessCreateRoute = lazy(async () => {
-  const module = await import('../pages/serverless/routes');
-  return { default: module.ServerlessCreateRoute };
-});
-const ServerlessFunctionRoute = lazy(async () => {
-  const module = await import('../pages/serverless/routes');
-  return { default: module.ServerlessFunctionRoute };
-});
-const ServerlessTriggersRoute = lazy(async () => {
-  const module = await import('../pages/serverless/routes');
-  return { default: module.ServerlessTriggersRoute };
-});
-const ServerlessTabRoute = lazy(async () => {
-  const module = await import('../pages/serverless/routes');
-  return { default: module.ServerlessTabRoute };
-});
 
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -73,11 +57,12 @@ function VMNetworkRoute() {
 let demoRoutes: RouteObject[] = [];
 
 if (import.meta.env.DEV) {
-  const [entry, vms, databaseSupport, apps] = await Promise.all([
+  const [entry, vms, databaseSupport, apps, serverless] = await Promise.all([
     import('../pages/demo/DemoEntryPage'),
     import('../pages/vm/demoRoutes'),
     import('../pages/demo-workflows/routes'),
     import('../pages/apps/demoRoutes'),
+    import('../pages/serverless/routes'),
   ]);
   const DemoEntryPage = entry.default;
 
@@ -93,6 +78,7 @@ if (import.meta.env.DEV) {
     ...vms.demoVmRoutes,
     ...databaseSupport.demoDatabaseSupportRoutes,
     ...apps.demoAppRoutes,
+    ...serverless.serverlessDemoRoutes,
   ];
 }
 
@@ -127,42 +113,10 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/serverless/new',
-    element: (
-      <Suspense fallback={null}>
-        <ServerlessCreateRoute />
-      </Suspense>
-    ),
-  },
-  {
     path: '/serverless',
     element: (
       <Suspense fallback={null}>
         <ServerlessListPage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/serverless/:functionId/triggers',
-    element: (
-      <Suspense fallback={null}>
-        <ServerlessTriggersRoute />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/serverless/:functionId',
-    element: (
-      <Suspense fallback={null}>
-        <ServerlessFunctionRoute />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/serverless/:functionId/:tab',
-    element: (
-      <Suspense fallback={null}>
-        <ServerlessTabRoute />
       </Suspense>
     ),
   },
