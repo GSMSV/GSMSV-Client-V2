@@ -58,8 +58,9 @@ let demoRoutes: RouteObject[] = [];
 let demoSessionGate: RouteObject['Component'];
 
 if (import.meta.env.DEV) {
-  const [entry, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
+  const [entry, roleSelection, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
     import('../pages/demo/DemoEntryPage'),
+    import('../pages/auth/RoleSelectionDemoPage'),
     import('../pages/vm/demoRoutes'),
     import('../pages/demo-workflows/routes'),
     import('../pages/apps/demoRoutes'),
@@ -67,6 +68,7 @@ if (import.meta.env.DEV) {
     import('../pages/demo/DemoSessionGate'),
   ]);
   const DemoEntryPage = entry.default;
+  const RoleSelectionDemoPage = roleSelection.default;
   demoSessionGate = sessionGate.default;
 
   demoRoutes = [
@@ -75,6 +77,14 @@ if (import.meta.env.DEV) {
       element: (
         <Suspense fallback={null}>
           <DemoEntryPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: '/__demo/role-selection',
+      element: (
+        <Suspense fallback={null}>
+          <RoleSelectionDemoPage />
         </Suspense>
       ),
     },

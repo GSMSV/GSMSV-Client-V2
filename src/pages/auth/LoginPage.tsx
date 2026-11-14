@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { useNavigate, useSearchParams } from 'react-router';
 import { LoginErrorDialog, type LoginErrorKind } from '../../features/auth/login-error/ui/LoginErrorDialog';
 import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
-import { isDemoMode, startDemoSession } from '../../shared/demo';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
@@ -179,7 +179,7 @@ export function LoginPage() {
   async function login() {
     if (import.meta.env.DEV && isDemoMode()) {
       const { resumeDemoProfile } = await import('../../entities/profile');
-      if (resumeDemoProfile() && startDemoSession('user')) void navigate('/', { replace: true });
+      if (resumeDemoProfile()) void navigate('/__demo/role-selection', { replace: true });
       return;
     }
     startDataGsmLogin();
