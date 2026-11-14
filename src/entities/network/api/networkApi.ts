@@ -11,6 +11,7 @@ import {
   demoFirewallList,
   demoPortList,
   demoRestorePorts,
+  demoSetFirewallEnabled,
   demoUpdateDomain,
 } from '../model/demoNetworkStore';
 import type {
@@ -106,6 +107,11 @@ export async function listFirewallRules(vmGrn: string, signal?: AbortSignal) {
   } while (cursor);
 
   return { enabled, items, limits: { per_vm: perVmLimit } };
+}
+
+export async function setFirewallEnabled(vmGrn: string, enabled: boolean) {
+  if (!isDemoMode()) throw new Error('방화벽 켜기/끄기 API를 사용할 수 없습니다.');
+  if (!demoSetFirewallEnabled(vmGrn, enabled)) throw new Error('방화벽 상태를 저장하지 못했습니다.');
 }
 
 export function createFirewallRule(vmGrn: string, input: CreateFirewallRuleRequest, signal?: AbortSignal) {

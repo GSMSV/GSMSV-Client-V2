@@ -8,10 +8,13 @@ import {
   deleteDomain,
   deleteFirewallRule,
   deletePortForward,
+  getDemoDomainValidationError,
+  getDemoNetworkState,
   listDomains,
   listFirewallRules,
   listPortForwards,
   restoreDefaultPortForwards,
+  setFirewallEnabled,
   type Domain,
   type FirewallAction,
   type FirewallDirection,
@@ -190,14 +193,18 @@ const RuleAction = styled.span<{ $allowed: boolean }>`
   color: ${({ theme, $allowed }) => $allowed ? theme.colors.primary : theme.colors.muted};
 `;
 
-const FirewallControl = styled.div<{ $enabled: boolean }>`
+const FirewallControl = styled.button<{ $enabled: boolean }>`
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-
+  cursor: pointer;
+  &:disabled { cursor: not-allowed; opacity: 0.65; }
 `;
 
 const SwitchTrack = styled.span<{ $enabled: boolean }>`
@@ -268,6 +275,7 @@ const DialogCopy = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  white-space: pre-line;
 `;
 
 const FieldGroup = styled.label`
@@ -345,7 +353,12 @@ const InlineError = styled.p`
 `;
 
 type Loadable<T> = { value: T | null; loading: boolean; error: boolean };
-type ActionKind = 'port' | 'rule' | 'domain' | 'restore' | 'firewall-confirm' | 'firewall-loading' | 'firewall-error' | null;
+type ActionKind =
+  | 'port' | 'rule' | 'domain' | 'restore'
+  | 'firewall-confirm' | 'firewall-loading' | 'firewall-error'
+  | 'firewall-disable-confirm' | 'firewall-enable-loading' | 'firewall-enable-error'
+  | 'firewall-disable-loading' | 'firewall-disable-error'
+  | null;
 type ConfirmTarget = { kind: 'port'; value: PortForward } | { kind: 'rule'; value: FirewallRule } | { kind: 'domain'; value: Domain } | null;
 
 const initial = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
@@ -444,6 +457,7 @@ export default function VMNetworkPage() {
 
   const reload = () => setReloadKey(value => value + 1);
   const firewallEnabled = rules.value?.enabled ?? false;
+  const firewallAllowRuleCount = rules.value?.items.filter(rule => rule.action === 'accept').length ?? 0;
   const customPortCount = ports.value?.items.filter(port => port.kind === 'custom').length ?? 0;
   const portsRemaining = Math.max(0, (ports.value?.limits.custom ?? 0) - customPortCount);
   const domainRemaining = Math.max(0, (domains.value?.limits.per_vm ?? 0) - (domains.value?.items.length ?? 0));
@@ -527,17 +541,52 @@ export default function VMNetworkPage() {
     } catch (cause) { handleActionError(cause, '방화벽 켜기'); setSubmitting(false); setAction('firewall-error'); }
   }
 
+  async function setFirewallState(enabled: boolean) {
+    if (!vmGrn || !isDemoMode()) return;
+    setSubmitting(true);
+    setError('');
+    setAction(enabled ? 'firewall-enable-loading' : 'firewall-disable-loading');
+    try {
+      await new Promise(resolve => window.setTimeout(resolve, 300));
+      await setFirewallEnabled(vmGrn, enabled);
+      finishAction();
+      setNotice(enabled ? '방화벽을 켰습니다.' : '방화벽을 껐습니다. 모든 수신 접속이 허용됩니다.');
+      reload();
+    } catch (cause) {
+      handleActionError(cause, enabled ? '방화벽 켜기' : '방화벽 끄기');
+      setSubmitting(false);
+      setAction(enabled ? 'firewall-enable-error' : 'firewall-disable-error');
+    }
+  }
+
+  function toggleFirewall() {
+    if (!isDemoMode() || !rules.value || submitting) return;
+    if (firewallEnabled) setAction('firewall-disable-confirm');
+    else void setFirewallState(true);
+  }
+
   async function submitDomain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!vmGrn) return;
     const subdomain = domainForm.subdomain.trim();
     if (!/^[a-z0-9-]{1,63}$/.test(subdomain)) { setError('서브도메인은 영문 소문자, 숫자, 하이픈으로 1~63자 입력해 주세요.'); return; }
     if (!Number.isInteger(expectedInternalPort) || expectedInternalPort < 1 || expectedInternalPort > 65535) { setError('내부 포트는 1부터 65535 사이의 숫자여야 합니다.'); return; }
+    if (isDemoMode()) {
+      const otherSubdomains = getDemoVmState().vms
+        .filter(vm => vm.grn !== vmGrn)
+        .flatMap(vm => getDemoNetworkState(vm.grn).domains.map(domain => domain.subdomain));
+      const validationError = getDemoDomainValidationError(vmGrn, subdomain, expectedInternalPort, otherSubdomains);
+      if (validationError) { setError(validationError); return; }
+    }
     setSubmitting(true); setError('');
     try {
       await createDomain(vmGrn, { subdomain, internal_port: expectedInternalPort });
       setNotice('HTTPS Domain을 연결했습니다.'); finishAction(); reload();
-    } catch (cause) { handleActionError(cause, 'Domain 추가'); setSubmitting(false); }
+    } catch (cause) {
+      if (isDemoMode() && cause instanceof Error) setError(cause.message);
+      else handleActionError(cause, 'Domain 추가');
+      setSubmitting(false);
+    }
   }
 
   async function restoreDefaults() {
@@ -670,7 +719,16 @@ export default function VMNetworkPage() {
             </TableWrap>
             <FirewallFoot>
               <Muted>수신은 허용한 규칙만 통과하고 송신은 허용됩니다. 끄면 모든 수신 접속이 허용되므로 확인이 필요합니다.</Muted>
-              <FirewallControl $enabled={firewallEnabled} role="switch" aria-checked={firewallEnabled} aria-label="방화벽 사용 상태" aria-disabled="true" title="계약에 방화벽 켜기/끄기 API가 없습니다.">
+              <FirewallControl
+                type="button"
+                $enabled={firewallEnabled}
+                role="switch"
+                aria-checked={firewallEnabled}
+                aria-label="방화벽 사용 상태"
+                disabled={!isDemoMode() || !rules.value || busy}
+                title={!isDemoMode() ? '계약에 방화벽 켜기/끄기 API가 없습니다.' : undefined}
+                onClick={toggleFirewall}
+              >
                 <SwitchTrack $enabled={firewallEnabled} aria-hidden="true"><SwitchThumb $enabled={firewallEnabled} /></SwitchTrack>
                 {firewallEnabled ? '켜짐' : '꺼짐'}
               </FirewallControl>
@@ -757,6 +815,42 @@ export default function VMNetworkPage() {
         </DialogActions>
       </DialogFrame>}
 
+      {action === 'firewall-disable-confirm' && <DialogFrame title="방화벽을 끄시겠습니까?" onClose={finishAction}>
+        <DialogCopy>모든 수신 접속이 허용됩니다. 규칙은 지워지지 않고, 다시 켜면 그대로 적용됩니다.</DialogCopy>
+        <DialogActions>
+          <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={finishAction}>취소</Button>
+          <Button variant="danger" icon={<Octicon name="shield" size={16} />} onClick={() => void setFirewallState(false)}>방화벽 끄기</Button>
+        </DialogActions>
+      </DialogFrame>}
+
+      {action === 'firewall-enable-loading' && <DialogFrame title="방화벽을 켜는 중입니다" onClose={() => { if (!submitting) finishAction(); }}>
+        <DialogCopy>허용 규칙 {firewallAllowRuleCount}개를 적용하고 있습니다. 적용이 끝날 때까지 규칙을 추가하거나 삭제할 수 없습니다.</DialogCopy>
+        <LoadingCard height={72} />
+      </DialogFrame>}
+
+      {action === 'firewall-enable-error' && <DialogFrame title="방화벽을 켜지 못했습니다" onClose={finishAction}>
+        <DialogCopy>방화벽은 꺼진 상태 그대로입니다. 추가한 규칙 {firewallAllowRuleCount}개는 저장됐지만 아직 적용되지 않았습니다.</DialogCopy>
+        {error && <InlineError role="alert">{error}</InlineError>}
+        <DialogActions>
+          <Button variant="secondary" onClick={finishAction}>나중에</Button>
+          <Button variant="primary" icon={<Octicon name="sync" size={16} />} onClick={() => void setFirewallState(true)}>다시 켜기</Button>
+        </DialogActions>
+      </DialogFrame>}
+
+      {action === 'firewall-disable-loading' && <DialogFrame title="방화벽을 끄는 중입니다" onClose={() => { if (!submitting) finishAction(); }}>
+        <DialogCopy>방화벽을 끄고 있습니다. 규칙은 보관되며, 모든 수신 접속이 허용됩니다.</DialogCopy>
+        <LoadingCard height={72} />
+      </DialogFrame>}
+
+      {action === 'firewall-disable-error' && <DialogFrame title="방화벽을 끄지 못했습니다" onClose={finishAction}>
+        <DialogCopy>방화벽은 켜진 상태 그대로입니다. 허용 규칙 {firewallAllowRuleCount}개가 계속 적용됩니다.</DialogCopy>
+        {error && <InlineError role="alert">{error}</InlineError>}
+        <DialogActions>
+          <Button variant="secondary" onClick={finishAction}>닫기</Button>
+          <Button variant="primary" icon={<Octicon name="sync" size={16} />} onClick={() => void setFirewallState(false)}>다시 시도</Button>
+        </DialogActions>
+      </DialogFrame>}
+
       {action === 'domain' && <DialogFrame title="HTTPS Domain 추가" onClose={finishAction}>
         <Form onSubmit={event => void submitDomain(event)}>
           <FieldGroup>서브도메인<Input required maxLength={63} pattern="[a-z0-9-]+" value={domainForm.subdomain} onChange={event => setDomainForm(current => ({ ...current, subdomain: event.target.value }))} placeholder="예: portfolio-api" /></FieldGroup>
@@ -773,12 +867,33 @@ export default function VMNetworkPage() {
         <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={finishAction}>취소</Button><Button variant="primary" icon={<Octicon name="history" size={16} />} disabled={submitting} onClick={() => void restoreDefaults()}>{submitting ? '복원 중…' : '기본 포트 복원'}</Button></DialogActions>
       </DialogFrame>}
 
-      {confirmTarget && <DialogFrame title={confirmTarget.kind === 'port' && confirmTarget.value.kind === 'ssh' ? 'SSH 기본 포트를 삭제할까요?' : '삭제할까요?'} onClose={() => setConfirmTarget(null)}>
+      {confirmTarget && <DialogFrame title={
+        confirmTarget.kind === 'port' && confirmTarget.value.kind === 'ssh'
+          ? 'SSH 기본 포트를 삭제할까요?'
+          : confirmTarget.kind === 'domain' && confirmTarget.value.sync_status === 'failed'
+            ? '동기화에 실패한 Domain을 삭제하시겠습니까?'
+            : '삭제할까요?'
+      } onClose={() => setConfirmTarget(null)}>
         <DialogCopy>
-          {confirmTarget.kind === 'port' ? confirmTarget.value.kind === 'ssh' ? 'SSH 기본 포트를 삭제하면 이 포트포워딩을 통한 외부 SSH 접속이 중단됩니다.' : `${portLabel(confirmTarget.value)} 포트포워딩을 삭제합니다.` : confirmTarget.kind === 'rule' ? '이 방화벽 규칙을 삭제합니다. 방화벽은 켜진 상태로 유지됩니다.' : `${confirmTarget.value.url} Domain 연결을 삭제합니다.`}
+          {confirmTarget.kind === 'port'
+            ? confirmTarget.value.kind === 'ssh'
+              ? 'SSH 기본 포트를 삭제하면 이 포트포워딩을 통한 외부 SSH 접속이 중단됩니다.'
+              : `${portLabel(confirmTarget.value)} 포트포워딩을 삭제합니다.`
+            : confirmTarget.kind === 'rule'
+              ? '이 방화벽 규칙을 삭제합니다. 방화벽은 켜진 상태로 유지됩니다.'
+              : confirmTarget.value.sync_status === 'failed'
+                ? `Domain 정보는 저장됐지만 연결 설정을 완료하지 못했습니다. 삭제하면 이 Domain 연결 정보가 제거됩니다. 다시 사용하려면 Domain을 새로 추가해 주세요.\n· ${confirmTarget.value.url} → 내부 ${confirmTarget.value.internal_port}\n· Domain을 삭제하면 이 주소와 VM의 연결이 제거됩니다.`
+                : `${confirmTarget.value.url} Domain 연결을 삭제합니다.`}
         </DialogCopy>
         {error && <InlineError role="alert">{error}</InlineError>}
-        <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => setConfirmTarget(null)}>취소</Button><Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={submitting} onClick={() => void confirmDelete()}>{submitting ? '삭제 중…' : '삭제'}</Button></DialogActions>
+        <DialogActions>
+          <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => setConfirmTarget(null)}>
+            {confirmTarget.kind === 'domain' && confirmTarget.value.sync_status === 'failed' ? '닫기' : '취소'}
+          </Button>
+          <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={submitting} onClick={() => void confirmDelete()}>
+            {submitting ? '삭제 중…' : confirmTarget.kind === 'domain' && confirmTarget.value.sync_status === 'failed' ? 'Domain 삭제' : '삭제'}
+          </Button>
+        </DialogActions>
       </DialogFrame>}
     </StudentShell>
   );
