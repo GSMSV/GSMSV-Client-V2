@@ -157,6 +157,7 @@ export interface StudentTopbarProps {
   scopeLabel: string;
   teamScopeId?: string;
   userName: string;
+  profilePhotoUrl?: string | null;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
   scopeDisabled?: boolean;
@@ -173,6 +174,7 @@ export function StudentTopbar({
   scopeLabel,
   teamScopeId,
   userName,
+  profilePhotoUrl,
   notificationCount,
   scopeOptions,
   scopeDisabled = false,
@@ -344,6 +346,7 @@ export function StudentTopbar({
           </Button>
           <StudentProfile
             userName={userName}
+            profilePhotoUrl={profilePhotoUrl}
             activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
             hasUnsavedInput={hasUnsavedInput}
           onLogoutPendingChange={onLogoutPendingChange}

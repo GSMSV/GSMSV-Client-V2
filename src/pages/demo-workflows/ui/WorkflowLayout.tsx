@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import { Navigate } from 'react-router';
 import styled from 'styled-components';
 import { isDemoMode } from '../../../shared/demo';
 import type { StudentNavigationKey } from '../../../widgets/student-shell';
 import { StudentShell } from '../../../widgets/student-shell';
 import { Octicon } from '../../../shared/ui/icons';
+import { getSessionUser } from '../../../entities/session';
 
 const AdminLayout = styled.div`
   display: flex;
@@ -307,5 +309,6 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
 
 export function DemoOnlyGate({ children, admin = false }: { children: ReactNode; admin?: boolean }) {
   if (!isDemoMode()) return <WorkflowLayout admin={admin}><PageStack><Heading><TitleGroup><Title>로컬 미리보기 전용 화면</Title><Subtitle>?demo=1 모드에서만 목데이터를 확인할 수 있습니다.</Subtitle></TitleGroup></Heading></PageStack></WorkflowLayout>;
+  if (admin && getSessionUser()?.role !== 'admin') return <Navigate to="/" replace />;
   return children;
 }

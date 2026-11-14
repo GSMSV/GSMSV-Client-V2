@@ -14,8 +14,9 @@ export interface DemoProfile {
   photoDataUrl: string | null;
   github: string | null;
   discordConnected: boolean;
-  cliDevices: Array<{ id: string; name: string; lastUsed: string }>;
+  cliDevices: Array<{ id: string; name: string; platform?: string; lastUsed: string }>;
   accountDeleted: boolean;
+  signedOut?: boolean;
 };
 
 const seedProfile: DemoProfile = {
@@ -33,8 +34,8 @@ const seedProfile: DemoProfile = {
   github: '@gsm-jimin',
   discordConnected: false,
   cliDevices: [
-    { id: 'device-macbook', name: 'MacBook-Air', lastUsed: '마지막 사용 2시간 전' },
-    { id: 'device-lab', name: 'lab-pc-12', lastUsed: '마지막 사용 어제' },
+    { id: 'device-macbook', name: 'MacBook-Air', platform: 'macOS', lastUsed: '마지막 사용 2시간 전' },
+    { id: 'device-lab', name: 'lab-pc-12', platform: 'Ubuntu', lastUsed: '마지막 사용 3일 전' },
   ],
   accountDeleted: false,
 };
@@ -45,4 +46,25 @@ export function getDemoProfile(): DemoProfile | null {
 
 export function saveDemoProfile(profile: DemoProfile): boolean {
   return isDemoMode() && writeDemoState('profile', profile);
+}
+
+export function updateDemoProfile(changes: Partial<DemoProfile>): DemoProfile | null {
+  const current = getDemoProfile();
+  if (!current) return null;
+  const next = { ...current, ...changes };
+  return saveDemoProfile(next) ? next : null;
+}
+
+export function resumeDemoProfile(): boolean {
+  const profile = getDemoProfile();
+  if (!profile) return false;
+  if (!profile.accountDeleted) return !profile.signedOut || Boolean(updateDemoProfile({ signedOut: false }));
+
+  return saveDemoProfile({
+    ...profile,
+    userId: `user-${crypto.randomUUID().slice(0, 12)}`,
+    joinedAt: new Date().toISOString().slice(0, 10),
+    accountDeleted: false,
+    signedOut: false,
+  });
 }

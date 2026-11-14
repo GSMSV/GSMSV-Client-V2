@@ -8,6 +8,7 @@ export {
   getDemoDatabaseCredentials,
   getDemoDatabaseState,
   listDemoDatabases,
+  removeDemoDatabasesByOwner,
   saveDemoDatabaseState,
   setDemoDatabasePassword,
   updateDemoDatabase,

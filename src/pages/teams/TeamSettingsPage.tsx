@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
+import { getTeam, listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -9,7 +9,14 @@ import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { cancelTeamInvitation, inviteTeamMember, listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { ApiRequestError } from '../../shared/api';
+import type { DemoTeamDetail } from '../../entities/team/demo';
+import type { TeamMember } from '../../entities/team';
 import { isDemoMode } from '../../shared/demo';
+
+const TransferDemoTeamLeader = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader }))) : null;
+const DemoTeamDisbandRequest = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest }))) : null;
+const LeaveDemoTeam = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.LeaveDemoTeam }))) : null;
+const DemoTeamMemberAction = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamMemberAction }))) : null;
 
 const Page = styled.div`
   box-sizing: border-box;
@@ -151,7 +158,7 @@ export interface TeamSettingsPageProps { teamId?: string; }
 export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPageProps) {
   const navigate = useNavigate();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
-  const [team, setTeam] = useState<TeamDetail | null>(null);
+  const [team, setTeam] = useState<DemoTeamDetail | null>(null);
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [userName, setUserName] = useState('사용자');
   const [loading, setLoading] = useState(true);
@@ -162,6 +169,11 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const [inviteError, setInviteError] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [successor, setSuccessor] = useState<TeamMember | null>(null);
+  const [showDisband, setShowDisband] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
+  const [memberAction, setMemberAction] = useState<{ member: TeamMember; action: 'grant' | 'revoke' | 'remove' } | null>(null);
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const [confirmCancel, setConfirmCancel] = useState<TeamInvitation | null>(null);
 
   const selectedTeamId = routeTeamId ?? null;
@@ -332,13 +344,19 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
                 <RoleText $leader={member.role === 'leader'}>{roleLabels[member.role]}</RoleText>
                 <Muted>계약 정보 없음</Muted>
                 <RowActions>
-                  {member.role !== 'leader' && <Button variant="ghost" disabled title="팀원 역할 변경 API가 없습니다.">역할 변경</Button>}
+                  {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending && <>
+                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
+                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: 'remove' })}>팀에서 제외</Button>
+                  </>}
+                  {member.role !== 'leader' && !demoMode && <Button variant="ghost" disabled title="팀원 역할 변경·제외 API가 없습니다.">역할 변경</Button>}
                   {member.role === 'leader' && <Muted>팀장</Muted>}
+                  {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending &&
+                    <Button variant="ghost" onClick={() => setSuccessor(member)}>팀장 넘기기</Button>}
                 </RowActions>
               </MemberRow>
             ))}
           </MemberTable>
-          <Muted>팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.</Muted>
+          <Muted>{demoMode ? '팀장은 DevOps 권한을 부여·회수하거나 팀원을 제외할 수 있습니다.' : '팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.'}</Muted>
         </Panel>
 
         <TwoColumns>
@@ -387,7 +405,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
         <Panel aria-labelledby="role-descriptions-title">
           <PanelTitle id="role-descriptions-title">역할별 권한</PanelTitle>
           <RoleCards>
-            <RoleCard><RoleIcon><Octicon name="shield" size={16} /></RoleIcon><RoleCopy><RoleLabel>팀장</RoleLabel><RoleDescription>초대 관리 및 팀 구성의 책임자입니다. 역할 변경·팀장 이전은 관련 API 계약이 없어 사용할 수 없습니다.</RoleDescription></RoleCopy></RoleCard>
+            <RoleCard><RoleIcon><Octicon name="shield" size={16} /></RoleIcon><RoleCopy><RoleLabel>팀장</RoleLabel><RoleDescription>{demoMode ? '팀원 초대·제외, DevOps 부여, 팀장 넘기기, 해체 요청과 DevOps의 모든 권한' : '초대 관리 및 팀 구성의 책임자입니다. 역할 변경·팀장 이전은 관련 API 계약이 없어 사용할 수 없습니다.'}</RoleDescription></RoleCopy></RoleCard>
             <RoleCard><RoleIcon><Octicon name="terminal" size={16} /></RoleIcon><RoleCopy><RoleLabel>DevOps 엔지니어</RoleLabel><RoleDescription>팀 VM과 인프라 설정 권한은 API가 확인된 기능에서만 적용됩니다.</RoleDescription></RoleCopy></RoleCard>
             <RoleCard><RoleIcon><Octicon name="person" size={16} /></RoleIcon><RoleCopy><RoleLabel>일반 팀원</RoleLabel><RoleDescription>팀 리소스 조회 권한은 서버에서 확인합니다.</RoleDescription></RoleCopy></RoleCard>
           </RoleCards>
@@ -395,9 +413,30 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
 
         <DangerPanel>
           <DangerIcon aria-hidden="true"><Octicon name="alert" size={20} /></DangerIcon>
-          <DangerCopy><DangerTitle>위험 구역 · 팀 해체</DangerTitle><Muted>팀 탈퇴와 해체 요청 API가 아직 공개 계약에 없어 이 기능은 사용할 수 없습니다.</Muted></DangerCopy>
-          <DangerActions><Button variant="secondary" disabled title="팀 탈퇴 API가 없습니다.">팀 탈퇴</Button><Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button></DangerActions>
+          <DangerCopy><DangerTitle>위험 구역 · 팀 해체</DangerTitle><Muted>{demoMode
+            ? '관리자가 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다. 팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴할 수 있습니다.'
+            : '팀 탈퇴와 해체 요청 API가 아직 공개 계약에 없어 이 기능은 사용할 수 없습니다.'}</Muted></DangerCopy>
+          <DangerActions><Button variant="secondary" disabled={!demoMode || team.my_role === null || (team.my_role === 'leader' && team.members.length > 1)} title={team.my_role === 'leader' && team.members.length > 1 ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined} onClick={() => setShowLeave(true)}>팀 탈퇴</Button>{demoMode
+            ? <Button variant="danger" disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
+            : <Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button>}</DangerActions>
         </DangerPanel>
+        {demoMode && successor && TransferDemoTeamLeader && <Suspense fallback={null}>
+          <TransferDemoTeamLeader teamId={team.id} successor={successor} onDismiss={() => setSuccessor(null)}
+            onSave={() => { setSuccessor(null); refresh(); }} />
+        </Suspense>}
+        {demoMode && showDisband && DemoTeamDisbandRequest && <Suspense fallback={null}>
+          <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
+            onSave={() => { setShowDisband(false); refresh(); }} />
+        </Suspense>}
+        {demoMode && showLeave && LeaveDemoTeam && <Suspense fallback={null}>
+          <LeaveDemoTeam team={team} onDismiss={() => setShowLeave(false)}
+            onLeave={() => { setShowLeave(false); navigate('/teams'); }}
+            onRequestDisband={() => { setShowLeave(false); setShowDisband(true); }} />
+        </Suspense>}
+        {demoMode && memberAction && DemoTeamMemberAction && <Suspense fallback={null}>
+          <DemoTeamMemberAction teamId={team.id} member={memberAction.member} action={memberAction.action}
+            onDismiss={() => setMemberAction(null)} onSave={() => { setMemberAction(null); refresh(); }} />
+        </Suspense>}
       </Page>
     );
   }

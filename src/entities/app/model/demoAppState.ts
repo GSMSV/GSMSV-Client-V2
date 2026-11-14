@@ -243,7 +243,9 @@ export function getDemoApps(): DemoManagedApp[] {
         owner: app.owner ?? { type: "user", id: "demo-student", name: "김민수" },
       }))
     : structuredClone([...demoAppSeed, demoTeamAppSeed]);
-  if (!apps.some((app) => app.id === demoTeamAppSeed.id)) apps.push(structuredClone(demoTeamAppSeed));
+  if (!readDemoState("apps.teamFixtureRemoved", false) && !apps.some((app) => app.id === demoTeamAppSeed.id)) {
+    apps.push(structuredClone(demoTeamAppSeed));
+  }
   return apps;
 }
 
@@ -344,4 +346,10 @@ export function addDemoService(
 
 export function isDemoAppId(id: string): boolean {
   return id.startsWith("demo-");
+}
+
+export function removeDemoAppsByTeam(teamId: string): boolean {
+  const apps = getDemoApps();
+  return saveDemoApps(apps.filter(app => app.owner?.type !== "team" || app.owner.id !== teamId))
+    && (teamId !== demoTeamAppSeed.owner?.id || writeDemoState("apps.teamFixtureRemoved", true));
 }

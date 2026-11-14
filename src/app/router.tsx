@@ -55,16 +55,19 @@ function VMNetworkRoute() {
 }
 
 let demoRoutes: RouteObject[] = [];
+let demoSessionGate: RouteObject['Component'];
 
 if (import.meta.env.DEV) {
-  const [entry, vms, databaseSupport, apps, serverless] = await Promise.all([
+  const [entry, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
     import('../pages/demo/DemoEntryPage'),
     import('../pages/vm/demoRoutes'),
     import('../pages/demo-workflows/routes'),
     import('../pages/apps/demoRoutes'),
     import('../pages/serverless/routes'),
+    import('../pages/demo/DemoSessionGate'),
   ]);
   const DemoEntryPage = entry.default;
+  demoSessionGate = sessionGate.default;
 
   demoRoutes = [
     {
@@ -82,7 +85,7 @@ if (import.meta.env.DEV) {
   ];
 }
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
   ...demoRoutes,
   {
     path: '/',
@@ -328,7 +331,9 @@ export const router = createBrowserRouter([
       </Suspense>
     ),
   },
-]);
+];
+
+export const router = createBrowserRouter(demoSessionGate ? [{ Component: demoSessionGate, children: routes }] : routes);
 
 function AppSettingsRoute() {
   const { appGrn } = useParams<{ appGrn: string }>();

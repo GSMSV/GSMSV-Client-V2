@@ -1,1 +1,1 @@
-export { getDemoProfile, saveDemoProfile, type DemoProfile } from './model/demoProfile';
+export { getDemoProfile, saveDemoProfile, updateDemoProfile, resumeDemoProfile, type DemoProfile } from './model/demoProfile';

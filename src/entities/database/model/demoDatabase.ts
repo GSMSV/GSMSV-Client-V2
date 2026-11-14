@@ -305,3 +305,16 @@ export function deleteDemoDatabase(grn: string): boolean {
   setTimeout(() => { getDemoDatabaseState(); }, 4_000);
   return true;
 }
+
+export function removeDemoDatabasesByOwner(owner: DatabaseDetail['owner']['type'], ownerId: string, excludeIds: readonly string[] = []): boolean {
+  const state = getDemoDatabaseState();
+  const belongsToOwner = (item: DatabaseDetail['owner']) => item.type === owner && item.id === ownerId;
+  const removed = new Set(state.databases.filter(database => belongsToOwner(database.owner) && !excludeIds.includes(database.id)).map(database => database.grn));
+  return saveDemoDatabaseState({
+    ...state,
+    databases: state.databases.filter(database => !removed.has(database.grn)),
+    backups: Object.fromEntries(Object.entries(state.backups).filter(([grn]) => !removed.has(grn))),
+    passwords: Object.fromEntries(Object.entries(state.passwords).filter(([grn]) => !removed.has(grn))),
+    deletedBackups: Object.fromEntries(Object.entries(state.deletedBackups ?? {}).filter(([, backup]) => !belongsToOwner(backup.owner) || excludeIds.includes(backup.databaseId))),
+  });
+}

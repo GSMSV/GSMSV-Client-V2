@@ -16,6 +16,20 @@ export interface NotificationSettings {
   items: NotificationSettingItem[];
 }
 
+async function readDemoNotificationSettings(): Promise<NotificationSettings> {
+  const { getDemoProfile } = await import('../../../../entities/profile');
+  const profile = getDemoProfile();
+  const stored = readDemoState<NotificationSettings | NotificationSettingItem[] | null>('notifications', null);
+  const items = Array.isArray(stored) ? stored : stored?.items ?? demoNotificationSettings.items;
+  return {
+    items,
+    channels: {
+      email: profile?.email ?? demoNotificationSettings.channels.email,
+      discord: { connected: profile?.discordConnected ?? false },
+    },
+  };
+}
+
 const demoNotificationSettings: NotificationSettings = {
   channels: { email: 'jimin@example.com', discord: { connected: false } },
   items: [
@@ -29,22 +43,23 @@ const demoNotificationSettings: NotificationSettings = {
 };
 
 export function getNotificationSettings(signal?: AbortSignal): Promise<NotificationSettings> {
-  if (isDemoMode()) {
+  if (import.meta.env.DEV && isDemoMode()) {
     if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    return Promise.resolve(readDemoState('notifications', demoNotificationSettings));
+    return readDemoNotificationSettings();
   }
   return requestJson<NotificationSettings>('/api/v2/users/me/notification-settings', { signal });
 }
 
 export function updateNotificationSettings(items: Array<Pick<NotificationSettingItem, 'group' | 'email' | 'discord'>>): Promise<{ items: NotificationSettingItem[] }> {
-  if (isDemoMode()) {
-    const current = readDemoState('notifications', demoNotificationSettings);
-    const next = current.items.map(item => {
-      const draft = items.find(candidate => candidate.group === item.group);
-      return draft && !item.locked ? { ...item, email: draft.email, discord: draft.discord } : item;
+  if (import.meta.env.DEV && isDemoMode()) {
+    return readDemoNotificationSettings().then(current => {
+      const next = current.items.map(item => {
+        const draft = items.find(candidate => candidate.group === item.group);
+        return draft && !item.locked ? { ...item, email: draft.email, discord: draft.discord } : item;
+      });
+      if (!writeDemoState('notifications', next)) throw new Error('Notification settings could not be saved');
+      return { items: next };
     });
-    writeDemoState('notifications', { ...current, items: next });
-    return Promise.resolve({ items: next });
   }
   return requestJson<{ items: NotificationSettingItem[] }>('/api/v2/users/me/notification-settings', {
     method: 'PUT',

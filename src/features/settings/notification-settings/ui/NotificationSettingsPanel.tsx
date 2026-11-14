@@ -115,10 +115,11 @@ const GroupHint = styled.p`
 export interface NotificationSettingsPanelProps {
   onUnsavedInputChange?: (hasUnsavedInput: boolean) => void;
   showChannelBanner?: boolean;
+  demoDiscordConnected?: boolean;
   disabled?: boolean;
 }
 
-export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBanner = false, disabled = false }: NotificationSettingsPanelProps) {
+export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBanner = false, demoDiscordConnected, disabled = false }: NotificationSettingsPanelProps) {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [draft, setDraft] = useState<NotificationSettings['items']>([]);
   const [loading, setLoading] = useState(true);
@@ -156,6 +157,7 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
     const original = settings.items[index];
     return !original || original.email !== item.email || original.discord !== item.discord;
   }));
+  const discordConnected = demoDiscordConnected ?? settings?.channels.discord.connected ?? false;
 
   useEffect(() => {
     onUnsavedInputChange?.(hasChanges);
@@ -191,7 +193,7 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
     <>
       {showChannelBanner && <Banner
         title="이메일 수신 주소는 DataGSM에서 관리합니다"
-        description={settings ? `이메일 ${settings.channels.email}${settings.channels.discord.connected ? ' · Discord 연결됨' : ' · Discord 연결 안 됨'}` : '전체 계정 설정 중 알림 수신 설정만 제공됩니다.'}
+        description={settings ? `이메일 ${settings.channels.email}${(demoDiscordConnected ?? settings.channels.discord.connected) ? ' · Discord 연결됨' : ' · Discord 연결 안 됨'}` : '전체 계정 설정 중 알림 수신 설정만 제공됩니다.'}
         tone="neutral"
         icon={<Octicon name="info" size={20} />}
       />}
@@ -217,16 +219,16 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
               {draft.map(item => <Row key={item.group}>
                 <RowLabel>
                   <span>{item.group}</span>
-                  {item.locked && <LockedHint>필수 알림 · 해제할 수 없습니다</LockedHint>}
+                  {item.locked && <LockedHint>{demoDiscordConnected === undefined ? '필수 알림 · 해제할 수 없습니다' : '자원이 삭제되기 전에 알리기 위해 끌 수 없습니다.'}</LockedHint>}
                 </RowLabel>
                 <ToggleCell><ChannelSwitch label={`${item.group} 이메일 수신`} checked={item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
-                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={item.discord} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
+                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={discordConnected && (item.locked || item.discord)} disabled={disabled || item.locked || saving || !discordConnected} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
               </Row>)}
               {draft.length === 0 && <GroupHint>설정할 알림 그룹이 없습니다.</GroupHint>}
             </Rows>
             {saveError && <SaveError role="alert">{saveError}</SaveError>}
             {saved && <StatusMessage role="status" $success>알림 설정을 저장했습니다.</StatusMessage>}
-            <GroupHint>API에서 반환한 알림 그룹 이름을 그대로 표시합니다. 그룹과 알림 종류의 연결 정보는 공개 계약에 정의되어 있지 않습니다.</GroupHint>
+            {demoDiscordConnected === undefined && <GroupHint>API에서 반환한 알림 그룹 이름을 그대로 표시합니다. 그룹과 알림 종류의 연결 정보는 공개 계약에 정의되어 있지 않습니다.</GroupHint>}
           </>
         )}
       </Panel>

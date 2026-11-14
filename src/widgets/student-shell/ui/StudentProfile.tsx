@@ -104,15 +104,23 @@ type TeamsState =
   | { status: 'loading' | 'error' }
   | { status: 'ready'; teams: TeamSummary[] };
 
+const ProfilePhoto = styled.img`
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+`;
+
 interface StudentProfileProps {
   userName: string;
+  profilePhotoUrl?: string | null;
   activeTeamId?: string;
   hasUnsavedInput: boolean;
   onOpen: () => void;
   onLogoutPendingChange?: (pending: boolean) => void;
 }
 
-export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange }: StudentProfileProps) {
+export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange }: StudentProfileProps) {
   const navigate = useNavigate();
   const { key: locationKey, pathname } = useLocation();
   const panelId = useId();
@@ -226,7 +234,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
     <Profile ref={profileRef} onBlur={dismissOnBlur} onKeyDown={dismissOnEscape}>
       <Button
         variant="ghost"
-        icon={<Octicon name="person" size={16} />}
+        icon={profilePhotoUrl ? <ProfilePhoto alt="" src={profilePhotoUrl} /> : <Octicon name="person" size={16} />}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
