@@ -55,20 +55,83 @@ const ErrorText = styled.p`
   font: 400 14px/22px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-type QueryRow = { id: number; name: string; email: string; created_at: string; payload?: string };
+type QueryValue = string | number;
+type QueryRow = Record<string, QueryValue> & { payload?: string };
+type QueryColumn = { source: string; label: string };
 
 const seedRows: QueryRow[] = [
   { id: 1, name: '김지민', email: 'jimin@example.com', created_at: '2026-09-28 10:21' },
   { id: 2, name: '한도윤', email: 'doyun@example.com', created_at: '2026-09-28 11:02' },
   { id: 3, name: '윤채원', email: 'chaewon@example.com', created_at: '2026-09-29 09:40' },
 ];
+const userColumns = ['id', 'name', 'email', 'created_at'];
 const initialQuery = 'SELECT id, name, email, created_at\nFROM users\nORDER BY created_at DESC\nLIMIT 20;';
+
+function parseQuery(query: string, sourceRows: QueryRow[]): { columns: QueryColumn[]; rows: QueryRow[]; limit?: number; error?: string } {
+  const sql = query.replace(/--[^\n]*/g, '').trim().replace(/;+\s*$/, '');
+  const statement = sql.match(/^select\s+([\s\S]+?)\s+from\s+(users|databases)\b([\s\S]*)$/i);
+  if (!statement) return { columns: [], rows: [], error: 'users 또는 databases 테이블의 SELECT 쿼리를 입력해 주세요.' };
+
+  const availableColumns = Object.keys(sourceRows[0] ?? {});
+  const requestedColumns = statement[1].trim() === '*'
+    ? availableColumns.map(source => ({ source, label: source }))
+    : statement[1].split(',').map((expression): QueryColumn | null => {
+      const match = expression.trim().match(/^([a-z_][\w]*)(?:\s+as\s+([a-z_][\w]*))?$/i);
+      return match ? { source: match[1], label: match[2] ?? match[1] } : null;
+    });
+  if (!requestedColumns.length || requestedColumns.some(column => !column || !availableColumns.includes(column.source))) {
+    return { columns: [], rows: [], error: `사용할 수 있는 컬럼: ${availableColumns.join(', ') || '없음'}` };
+  }
+  const columns = requestedColumns as QueryColumn[];
+  let rows = sourceRows;
+  const tail = statement[3];
+  const whereClause = tail.match(/\bwhere\s+([\s\S]*?)(?=\border\s+by\b|\blimit\b|$)/i)?.[1]?.trim();
+  if (whereClause) {
+    const where = whereClause.match(/^([a-z_][\w]*)\s*(=|!=|<>|like)\s*(?:'((?:''|[^'])*)'|"((?:""|[^"])*)"|(-?\d+(?:\.\d+)?))$/i);
+    if (!where || !availableColumns.includes(where[1])) return { columns: [], rows: [], error: 'WHERE 절은 컬럼과 값의 비교 조건으로 입력해 주세요.' };
+    const [, field, operator] = where;
+    const value = (where[3] ?? where[4]?.replaceAll('""', '"') ?? where[5] ?? '').replaceAll("''", "'");
+    rows = rows.filter(row => {
+      const current = row[field];
+      if (operator.toLowerCase() === 'like') {
+        const needle = value.replaceAll('%', '').toLocaleLowerCase();
+        return String(current).toLocaleLowerCase().includes(needle);
+      }
+      const equal = String(current).toLocaleLowerCase() === value.toLocaleLowerCase();
+      return operator === '=' ? equal : !equal;
+    });
+  }
+
+  const orderClause = tail.match(/\border\s+by\s+([a-z_][\w]*)(?:\s+(asc|desc))?/i);
+  if (/\border\s+by\b/i.test(tail) && (!orderClause || !availableColumns.includes(orderClause[1]))) {
+    return { columns: [], rows: [], error: `정렬할 컬럼을 확인해 주세요: ${availableColumns.join(', ')}` };
+  }
+  if (orderClause) {
+    const [, field, direction = 'asc'] = orderClause;
+    const multiplier = direction.toLowerCase() === 'desc' ? -1 : 1;
+    rows = [...rows].sort((left, right) => {
+      const a = left[field];
+      const b = right[field];
+      const comparison = typeof a === 'number' && typeof b === 'number'
+        ? a - b
+        : String(a).localeCompare(String(b), 'ko-KR', { numeric: true });
+      return comparison * multiplier;
+    });
+  }
+
+  const limitClause = tail.match(/\blimit\s+(\d+)\b/i);
+  if (/\blimit\b/i.test(tail) && !limitClause) return { columns: [], rows: [], error: 'LIMIT에는 0 이상의 행 수를 입력해 주세요.' };
+  const limit = limitClause ? Number(limitClause[1]) : undefined;
+  return { columns, rows: limit === undefined ? rows : rows.slice(0, limit), limit };
+}
 
 export default function DatabaseQueryDemoPage() {
   const navigate = useNavigate();
   const { databaseId = 'welcome-db' } = useParams<{ databaseId: string }>();
   const [query, setQuery] = useState(initialQuery);
   const [rows, setRows] = useState(seedRows);
+  const [resultColumns, setResultColumns] = useState(userColumns);
+  const [databaseRows, setDatabaseRows] = useState<QueryRow[]>([]);
   const [resultCount, setResultCount] = useState(3);
   const [executing, setExecuting] = useState(false);
   const [outcome, setOutcome] = useState<'timeout' | 'row-cap' | 'byte-cap' | 'write-locked' | null>(null);
@@ -82,6 +145,7 @@ export default function DatabaseQueryDemoPage() {
     setDatabase(null);
     if (!(import.meta.env.DEV && isDemoMode())) {
       setDatabase(null);
+      setDatabaseRows([]);
       setDatabaseResolved(true);
       return;
     }
@@ -89,6 +153,13 @@ export default function DatabaseQueryDemoPage() {
     void import('../../entities/database/demo').then(demo => {
       if (cancelled) return;
       const value = demo.getDemoDatabase(databaseId);
+      setDatabaseRows(demo.getDemoDatabaseState().databases.map(item => ({
+        id: item.id,
+        name: item.name,
+        engine: item.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL',
+        status: item.status,
+        created_at: item.created_at.slice(0, 16).replace('T', ' '),
+      })));
       const databaseValue = value
         ? { name: value.name, engine: value.engine, isolation: value.isolation, status: value.status, write_locked: value.write_locked, owner: value.owner }
         : databaseId === 'welcome-db'
@@ -142,18 +213,21 @@ export default function DatabaseQueryDemoPage() {
       }, 45_000);
       return;
     }
-    const success = /\bselect\b/i.test(query) && /\bfrom\s+(users|databases)\b/i.test(query);
+    const rowCapDemo = /--\s*demo:row-cap\b/i.test(query);
+    const byteCapDemo = /--\s*demo:byte-cap\b/i.test(query);
+    const sourceRows = /\bfrom\s+databases\b/i.test(query) ? databaseRows : seedRows;
+    const parsed = parseQuery(query, sourceRows);
+    const success = !parsed.error;
     audit(success);
     if (!success) {
-      setError('users 또는 databases 테이블의 SELECT 쿼리를 입력해 주세요.');
+      setError(parsed.error ?? '쿼리를 실행하지 못했습니다.');
       setRows([]);
       setResultCount(0);
+      setResultColumns([]);
       setRan(true);
       return;
     }
-    const rowCapDemo = /--\s*demo:row-cap\b/i.test(query);
-    const byteCapDemo = /--\s*demo:byte-cap\b/i.test(query);
-    const filteredRows: QueryRow[] = rowCapDemo
+    const specialRows: QueryRow[] = rowCapDemo
       ? Array.from({ length: 1_005 }, (_, index) => ({
         id: index + 1,
         name: `데모 사용자 ${index + 1}`,
@@ -168,7 +242,10 @@ export default function DatabaseQueryDemoPage() {
           created_at: '2026-09-28 10:21',
           payload: 'x'.repeat(140_000),
         }))
-        : /doyun/i.test(query) ? seedRows.filter((row) => row.name === '한도윤') : /jimin/i.test(query) ? seedRows.filter((row) => row.name === '김지민') : seedRows;
+        : parsed.rows;
+    const filteredRows = parsed.limit === undefined || rowCapDemo || byteCapDemo
+      ? specialRows
+      : specialRows.slice(0, parsed.limit);
     const visibleRows: QueryRow[] = [];
     const encoder = new TextEncoder();
     let totalBytes = 0;
@@ -184,10 +261,11 @@ export default function DatabaseQueryDemoPage() {
         truncatedByBytes = true;
         break;
       }
-      visibleRows.push(row);
+      visibleRows.push(Object.fromEntries(parsed.columns.map(column => [column.label, row[column.source]])) as QueryRow);
       totalBytes += rowBytes;
     }
     setRows(visibleRows);
+    setResultColumns(parsed.columns.map(column => column.label));
     setResultCount(visibleRows.length);
     setOutcome(truncatedByRows ? 'row-cap' : truncatedByBytes ? 'byte-cap' : null);
     setRan(true);
@@ -217,7 +295,7 @@ export default function DatabaseQueryDemoPage() {
     </Card>
     <Card>
       <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행 · 0.04초</ResultHeading></CardHeader>
-      <TableWrap><Table><thead><tr><th>id</th><th>name</th><th>email</th><th>created_at</th></tr></thead><tbody>{(database ? rows : []).map((row) => <tr key={row.id}><td>{row.id}</td><td>{row.name}</td><td>{row.email}</td><td>{row.created_at}</td></tr>)}</tbody></Table></TableWrap>
+      <TableWrap><Table><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></Table></TableWrap>
     </Card>
     <FooterNote><span>SQL과 결과는 저장하지 않습니다</span><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
   </PageStack></WorkflowLayout></DemoOnlyGate>;
