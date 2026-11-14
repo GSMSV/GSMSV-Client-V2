@@ -8,6 +8,7 @@ import {
   deleteDemoServerlessRuns,
   deleteDemoServerlessTrigger,
   deleteDemoServerlessVariable,
+  describeCronExpression,
   executeDemoServerlessTest,
   extendDemoServerlessFunction,
   getDemoServerlessFunction,
@@ -101,7 +102,9 @@ export function ServerlessFunctionRoute() {
         active={fn.active}
         expiresAtLabel={fn.expiresAt}
         savedVersionLabel={fn.versions[0] ? `${fn.versions[0].label} · ${fn.versions[0].savedAt} 저장` : '저장된 버전 없음'}
-        triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP' ? `${trigger.type} ${trigger.schedule}` : trigger.schedule).join(' · ') || '연결된 Trigger 없음'}
+        triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP'
+          ? `${trigger.type} ${trigger.schedule === 'ALL' ? '전체' : trigger.schedule}`
+          : `${describeCronExpression(trigger.schedule)} 예약 실행`).join(' · ') || '연결된 Trigger 없음'}
         enabledTabs={enabledTabs}
         onNavigateTab={tab => void navigate(tabPath(fn.id, tab))}
         onManageTriggers={() => void navigate(tabPath(fn.id, 'Trigger'))}
@@ -132,7 +135,7 @@ export function ServerlessTriggersRoute() {
       <TriggersPage
         functionName={fn.name}
         publicUrl={fn.publicUrl ?? getDemoServerlessUrl(fn.id)}
-        httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule.split(' ')[0]}
+        httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule === 'ALL' ? '전체' : fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule}
         concurrentLimit={2}
         dailyExecutions={quota.daily_executions}
         triggers={fn.triggers}
@@ -140,9 +143,10 @@ export function ServerlessTriggersRoute() {
         domain={fn.domain}
         enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTriggerTab[]}
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
-        onAddTrigger={() => {
-          const schedule = window.prompt('예약 실행 표현식을 입력하세요', '매일 오전 9:00');
-          if (schedule?.trim()) { addDemoServerlessTrigger(fn.id, { type: 'Cron', schedule: schedule.trim(), enabled: true }); changed(); }
+        onAddTrigger={trigger => {
+          const added = addDemoServerlessTrigger(fn.id, trigger);
+          if (added) changed();
+          return added;
         }}
         onRegenerateUrl={() => { regenerateDemoServerlessUrl(fn.id); changed(); }}
         onTest={() => void navigate(tabPath(fn.id, 'test'))}

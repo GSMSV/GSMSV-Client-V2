@@ -1,4 +1,5 @@
 import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { validateCronExpression } from './cron';
 export type DemoServerlessRuntime = 'javascript' | 'typescript' | 'python';
 export interface DemoServerlessDraft { name: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256; description: string; code: string; }
 
@@ -26,7 +27,7 @@ const seed: DemoServerlessState = {
       id: 'welcome-api', name: 'welcome-api', description: '서비스 첫 방문자를 위한 환영 메시지를 반환합니다.', runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128,
       code: jsCode, active: true, expiresAt: '2026. 10. 06.', publicUrl: 'https://q8w2n5r7t1vz.example.com', databaseId: 'student-db',
       variables: [{ name: 'GREETING', secret: false, value: '안녕하세요' }, { name: 'API_KEY', secret: true }],
-      triggers: [{ id: 'http', type: 'HTTP', schedule: 'POST 요청 시', enabled: true }, { id: 'cron', type: 'Cron', schedule: '매일 오전 9:00', enabled: true }],
+      triggers: [{ id: 'http', type: 'HTTP', schedule: 'POST', enabled: true }, { id: 'cron', type: 'Cron', schedule: '0 9 * * *', enabled: true }],
       versions: [
         { id: '7', label: '버전 7', savedAt: '2026. 09. 29. 14:32', author: '김지민', changeSummary: '코드', current: true, code: jsCode, runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128 },
         { id: '6', label: '버전 6', savedAt: '2026. 09. 29. 11:05', author: '김지민', changeSummary: '실행 제한', current: false, code: jsCode, runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128 },
@@ -43,7 +44,7 @@ const seed: DemoServerlessState = {
     {
       id: 'health-check', name: 'health-check', description: '개발 중인 서비스의 응답 상태를 확인합니다.', runtime: 'python', timeoutSeconds: 30, memoryMb: 128,
       code: pyCode, active: false, expiresAt: '2026. 10. 02.', variables: [],
-      triggers: [{ id: 'health-http', type: 'HTTP', schedule: 'GET 요청 시', enabled: false }], versions: [], runs: [], testResult: null,
+      triggers: [{ id: 'health-http', type: 'HTTP', schedule: 'GET', enabled: false }], versions: [], runs: [], testResult: null,
     },
   ],
 };
@@ -51,18 +52,39 @@ const seed: DemoServerlessState = {
 function isState(value: unknown): value is DemoServerlessState {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<DemoServerlessState>;
-  return Array.isArray(candidate.functions) && typeof candidate.dailyLimit === 'number' && typeof candidate.executionsToday === 'number' && candidate.functions.every(fn => Boolean(fn && typeof fn.id === 'string' && typeof fn.name === 'string' && typeof fn.code === 'string' && Array.isArray(fn.variables) && Array.isArray(fn.triggers) && Array.isArray(fn.versions) && Array.isArray(fn.runs)));
+  return Array.isArray(candidate.functions) && typeof candidate.dailyLimit === 'number' && typeof candidate.executionsToday === 'number' && candidate.functions.every(fn => Boolean(fn && typeof fn.id === 'string' && typeof fn.name === 'string' && typeof fn.code === 'string' && Array.isArray(fn.variables) && Array.isArray(fn.triggers) && fn.triggers.every(trigger => Boolean(trigger && (trigger.type === 'HTTP' || trigger.type === 'Cron') && typeof trigger.schedule === 'string')) && Array.isArray(fn.versions) && Array.isArray(fn.runs)));
 }
 
 export function getDemoServerlessState(): DemoServerlessState {
   const stored = readDemoState<unknown>(key, structuredClone(seed));
-  return isState(stored) ? stored : structuredClone(seed);
+  if (!isState(stored)) return structuredClone(seed);
+  const migrated = structuredClone(stored);
+  let changed = false;
+  for (const fn of migrated.functions) {
+    for (const trigger of fn.triggers) {
+      if (trigger.type === 'HTTP' && trigger.schedule.endsWith(' 요청 시')) {
+        trigger.schedule = trigger.schedule.slice(0, -' 요청 시'.length).toUpperCase();
+        changed = true;
+      } else if (trigger.type === 'Cron' && trigger.schedule === '매일 오전 9:00') {
+        trigger.schedule = '0 9 * * *';
+        changed = true;
+      }
+    }
+  }
+  if (changed) writeDemoState(key, migrated);
+  return migrated;
 }
 
 export function saveDemoServerlessState(state: DemoServerlessState): void { writeDemoState(key, state); }
 export function getDemoServerlessFunctions(): DemoServerlessFunction[] { return getDemoServerlessState().functions; }
 export function getDemoServerlessFunction(id: string): DemoServerlessFunction | undefined { return getDemoServerlessFunctions().find(fn => fn.id === id); }
 export function getDemoServerlessQuota() { const state = getDemoServerlessState(); return { count: { used: state.functions.length, limit: 3 }, daily_executions: { used: state.executionsToday, limit: state.dailyLimit } }; }
+
+export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger[]): DemoServerlessTrigger['type'] | undefined {
+  if (!triggers.some(trigger => trigger.type === 'HTTP')) return 'HTTP';
+  if (triggers.filter(trigger => trigger.type === 'Cron').length < 3) return 'Cron';
+  return undefined;
+}
 
 function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void): DemoServerlessFunction | undefined {
   const state = getDemoServerlessState();
@@ -101,7 +123,21 @@ export function deleteDemoServerlessVariable(id: string, name: string) { return 
 export function updateDemoServerlessVariable(id: string, name: string, variable: DemoServerlessVariable) { return mutate(id, fn => { fn.variables = fn.variables.map(item => item.name === name ? variable : item); }); }
 export function setDemoServerlessDatabase(id: string, databaseId: string) { return mutate(id, fn => { fn.databaseId = databaseId; fn.variables = [...fn.variables.filter(item => item.name !== 'DATABASE_URL'), ...(databaseId ? [{ name: 'DATABASE_URL', secret: true }] : [])]; }); }
 export function setDemoServerlessDomain(id: string, domain: string | null) { return mutate(id, fn => { fn.domain = domain; }); }
-export function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>) { return mutate(id, fn => { fn.triggers.push({ ...trigger, id: crypto.randomUUID() }); }); }
+export function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): boolean {
+  const state = getDemoServerlessState();
+  const fn = state.functions.find(item => item.id === id);
+  if (!fn) return false;
+  if (trigger.type === 'HTTP') {
+    if (fn.triggers.some(item => item.type === 'HTTP')) return false;
+    if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
+  } else {
+    if (fn.triggers.filter(item => item.type === 'Cron').length >= 3) return false;
+    if (!validateCronExpression(trigger.schedule).valid) return false;
+  }
+  fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
+  saveDemoServerlessState(state);
+  return true;
+}
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
 export function regenerateDemoServerlessUrl(id: string) { return mutate(id, fn => { fn.publicUrl = `https://${crypto.randomUUID().slice(0, 12)}.example.com`; }); }
