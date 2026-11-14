@@ -38,11 +38,17 @@ export default function AdminDatabaseApprovalsDemoPage() {
       .map((item) => getDemoDatabase(item.grn))
       .find((item) => item?.name === databaseName) ?? null;
 
+    if (database && (database.owner.type !== 'team' || database.owner.id !== teamId || database.isolation !== 'dedicated')) {
+      setNotice('신청에 연결된 Database가 해당 팀의 전용형이 아니어서 승인할 수 없습니다.');
+      return;
+    }
+
+    if (getDemoTeamDedicatedDatabaseQuota(teamId, database?.grn).available === 0) {
+      setNotice(`${teamName} 팀은 전용 Database 1개 한도를 사용 중이라 승인할 수 없습니다.`);
+      return;
+    }
+
     if (!database) {
-      if (getDemoTeamDedicatedDatabaseQuota(teamId).available === 0) {
-        setNotice(`${teamName} 팀은 전용 Database 1개 한도를 사용 중이라 승인할 수 없습니다.`);
-        return;
-      }
       if (existingDatabases.length >= 4) {
         setNotice(`${teamName} 팀의 Database 한도 4개를 모두 사용 중이라 승인할 수 없습니다.`);
         return;
