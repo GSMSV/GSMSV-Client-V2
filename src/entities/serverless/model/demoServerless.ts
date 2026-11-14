@@ -26,7 +26,7 @@ const seed: DemoServerlessState = {
   functions: [
     {
       id: 'welcome-api', name: 'welcome-api', description: '서비스 첫 방문자를 위한 환영 메시지를 반환합니다.', runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128,
-      code: jsCode, active: true, expiresAt: '2026. 10. 06.', publicUrl: 'https://q8w2n5r7t1vz.example.com', databaseId: 'student-db',
+      code: jsCode, active: true, expiresAt: '2026. 10. 06.', publicUrl: 'https://q8w2n5r7t1vz.example.com', databaseId: 'welcome-db',
       variables: [{ name: 'GREETING', secret: false, value: '안녕하세요' }, { name: 'API_KEY', secret: true }],
       triggers: [{ id: 'http', type: 'HTTP', schedule: 'POST', enabled: true }, { id: 'cron', type: 'Cron', schedule: '0 9 * * *', enabled: true }],
       versions: [
@@ -66,6 +66,10 @@ function normalizeState(value: unknown): { value: DemoServerlessState; changed: 
   const migrated = structuredClone(value);
   let changed = false;
   for (const fn of migrated.functions) {
+    if (fn.id === 'welcome-api' && fn.databaseId === 'student-db') {
+      fn.databaseId = 'welcome-db';
+      changed = true;
+    }
     for (const trigger of fn.triggers) {
       if (trigger.type === 'HTTP' && trigger.schedule.endsWith(' 요청 시')) {
         trigger.schedule = trigger.schedule.slice(0, -' 요청 시'.length).toUpperCase();
