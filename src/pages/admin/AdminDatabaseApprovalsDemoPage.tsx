@@ -20,8 +20,9 @@ export default function AdminDatabaseApprovalsDemoPage() {
 
   function update(next: DedicatedDatabaseRequest) {
     const updated = requests.map((item) => item.id === next.id ? next : item);
+    if (!saveDemoDbRequests(updated)) return false;
     setRequests(updated);
-    return saveDemoDbRequests(updated);
+    return true;
   }
 
   function approve() {
