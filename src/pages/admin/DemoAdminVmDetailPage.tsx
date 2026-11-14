@@ -92,7 +92,7 @@ const SshButtons = styled(Actions)`
   flex: 0 0 auto;
 `;
 
-type DetailPanel = 'purpose' | 'snapshot' | 'network' | null;
+type DetailPanel = 'purpose' | 'snapshot' | null;
 
 export default function DemoAdminVmDetailPage() {
   const navigate = useNavigate();
@@ -195,7 +195,7 @@ export default function DemoAdminVmDetailPage() {
         <CardHeader><SectionTitle>운영 정보</SectionTitle></CardHeader>
         <ValueRow><ValueLabel><Hint>사용 목적</Hint><Muted>{details.purpose}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('file-code')} onClick={() => { setPurposeDraft(details.purpose); setPanel('purpose'); }}>수정</Button></ValueRow>
         <ValueRow><ValueLabel><Hint>자동 Snapshot</Hint><Muted>{details.autoSnapshot ? `켜짐 · 최신 ${details.retainedSnapshots}개 보관` : '꺼짐'}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('history')} onClick={() => setPanel('snapshot')}>관리</Button></ValueRow>
-        <ValueRow><ValueLabel><Hint>Network</Hint><Muted>외부 포트 {details.externalPorts}/{details.externalPortLimit} · HTTPS Domain {details.httpsDomains}/{details.httpsDomainLimit}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('globe')} onClick={() => setPanel('network')}>관리</Button></ValueRow>
+        <ValueRow><ValueLabel><Hint>Network</Hint><Muted>외부 포트 {details.externalPorts}/{details.externalPortLimit} · HTTPS Domain {details.httpsDomains}/{details.httpsDomainLimit}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('globe')} onClick={() => navigate(`/vms/${encodeURIComponent(vm.grn)}/network`)}>관리</Button></ValueRow>
       </Card>
       <Card>
         <CardHeader><SectionTitle>사용 기간</SectionTitle></CardHeader>
@@ -238,21 +238,16 @@ export default function DemoAdminVmDetailPage() {
     </Overlay>}
     {panel && <Overlay onMouseDown={event => { if (event.target === event.currentTarget) setPanel(null); }}>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="vm-management-title">
-        <DialogTitle id="vm-management-title">{panel === 'purpose' ? '사용 목적 수정' : panel === 'snapshot' ? '자동 Snapshot 관리' : 'Network 관리'}</DialogTitle>
+        <DialogTitle id="vm-management-title">{panel === 'purpose' ? '사용 목적 수정' : '자동 Snapshot 관리'}</DialogTitle>
         {panel === 'purpose' ? <>
           <Field htmlFor="vm-purpose">사용 목적
           <Input id="vm-purpose" value={purposeDraft} onChange={event => setPurposeDraft(event.currentTarget.value)} />
           </Field>
           <DialogActions><Button variant="secondary" onClick={() => setPanel(null)}>취소</Button><Button disabled={!purposeDraft.trim()} onClick={() => { updateDetails({ purpose: purposeDraft.trim() }); setPanel(null); setNotice('사용 목적을 저장했습니다.'); }}>저장</Button></DialogActions>
-        </> : panel === 'snapshot' ? <>
+        </> : <>
           <ValueRow><ValueLabel><Hint>자동 Snapshot</Hint><Muted>{details.autoSnapshot ? '켜짐' : '꺼짐'}</Muted></ValueLabel><Button variant="secondary" onClick={() => updateDetails({ autoSnapshot: !details.autoSnapshot })}>{details.autoSnapshot ? '끄기' : '켜기'}</Button></ValueRow>
           <ValueRow><ValueLabel><Hint>보관 개수</Hint><Muted>최신 Snapshot 보관</Muted></ValueLabel><Actions><Button variant="secondary" disabled={details.retainedSnapshots <= 1} onClick={() => updateDetails({ retainedSnapshots: Math.max(1, details.retainedSnapshots - 1) })}>−</Button><Muted>{details.retainedSnapshots}개</Muted><Button variant="secondary" onClick={() => updateDetails({ retainedSnapshots: details.retainedSnapshots + 1 })}>+</Button></Actions></ValueRow>
           <DialogActions><Button onClick={() => { setPanel(null); setNotice('Snapshot 설정을 저장했습니다.'); }}>완료</Button></DialogActions>
-        </> : <>
-          <ValueRow><ValueLabel><Hint>외부 포트</Hint><Muted>{details.externalPorts}/{details.externalPortLimit}개 사용 중</Muted></ValueLabel></ValueRow>
-          <ValueRow><ValueLabel><Hint>HTTPS Domain</Hint><Muted>{details.httpsDomains}/{details.httpsDomainLimit}개 연결됨</Muted></ValueLabel></ValueRow>
-          <Hint>Network API가 연결되면 실제 규칙을 관리할 수 있습니다. 지금 변경한 수치는 이 미리보기에 저장됩니다.</Hint>
-          <DialogActions><Button variant="secondary" onClick={() => setPanel(null)}>닫기</Button></DialogActions>
         </>}
       </Dialog>
     </Overlay>}
