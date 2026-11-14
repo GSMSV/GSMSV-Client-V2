@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoVmState, saveDemoVmState, type DemoSnapshot } from '../../entities/vm';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button, Switch } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -52,6 +53,8 @@ export function VmSnapshotsPage() {
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
     return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
   }
+  const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
+  const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
 
   const manualCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'manual').length;
@@ -100,9 +103,9 @@ export function VmSnapshotsPage() {
     setNotice(enabled ? '자동 Snapshot을 켰습니다. 다음 자정부터 최신 1개를 보관합니다.' : '자동 Snapshot을 껐습니다.');
   }
 
-  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? 'GSM Connect · 일반 팀원' : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
+  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
-      <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
+      <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={totalCount >= 3 || manualCount >= 2} onClick={createSnapshot}>Snapshot 만들기</Button></Heading>
       <DetailTabs vmId={vm.id} active="Snapshot" teamId={vm.teamId} networkVmGrn={vm.grn} />
       <Facts>

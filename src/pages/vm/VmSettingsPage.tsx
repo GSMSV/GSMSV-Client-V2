@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button, SliderField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -53,6 +54,8 @@ export function VmSettingsPage() {
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
     return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
   }
+  const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
+  const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
   const displayedPurpose = purpose || vmRecord.purpose;
@@ -98,9 +101,9 @@ export function VmSettingsPage() {
     navigate(vmRecord.owner === 'team' ? `/teams/${vmRecord.teamId}/vms` : '/');
   }
 
-  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? 'GSM Connect · 일반 팀원' : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'} hasUnsavedInput={Boolean(purpose)}>
+  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'} hasUnsavedInput={Boolean(purpose)}>
     <DemoPage>
-      <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
+      <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.owner === 'team' ? '팀 VM' : '개인 VM'} · VM 설정</StatusLine></div></Heading>
       <DetailTabs vmId={vm.id} active="설정" teamId={vm.teamId} networkVmGrn={vm.grn} />
       <Surface>

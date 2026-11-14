@@ -223,15 +223,30 @@ export function getDemoVmState(): DemoVmState {
   if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
   if ((stored.schemaVersion ?? 0) >= 2) return stored;
 
+  const legacySeedVms = initialVmState.vms
+    .filter(vm => vm.id === 'portfolio-api' || vm.id === 'connect-api')
+    .map(vm => vm.owner === 'team' ? { ...vm, teamId: 'gsm-connect' } : vm);
+  const hasUnchangedLegacySeed = stored.schemaVersion === undefined
+    && stored.vms.length === legacySeedVms.length
+    && legacySeedVms.every(seed => {
+      const existing = stored.vms.find(vm => vm.id === seed.id);
+      return Boolean(existing && JSON.stringify(existing) === JSON.stringify(seed));
+    })
+    && stored.personalQuota.cpu === 2 && stored.personalQuota.memory === 4 && stored.personalQuota.disk === 20
+    && stored.personalQuota.cpuLimit === 4 && stored.personalQuota.memoryLimit === 8 && stored.personalQuota.diskLimit === 30
+    && stored.teamQuota.cpu === 0 && stored.teamQuota.memory === 0 && stored.teamQuota.disk === 0
+    && stored.teamQuota.cpuLimit === 4 && stored.teamQuota.memoryLimit === 8 && stored.teamQuota.diskLimit === 60;
+
   let vms = stored.vms.map(vm => vm.owner === 'team' && vm.teamId === 'gsm-connect'
     ? { ...vm, teamId: 'demo-team', teamName: vm.teamName || 'GSM Connect' }
     : vm);
-  // First-visit previews intentionally clear all personal VMs and quotas. Preserve
-  // that state while upgrading older previews that already contain personal data.
-  const hasExistingPersonalVm = vms.some(vm => vm.owner === 'personal');
-  if (hasExistingPersonalVm && !vms.some(vm => vm.owner === 'personal' && vm.id === 'portfolio-worker')) {
-    const seededWorker = initialVmState.vms.find(vm => vm.id === 'portfolio-worker');
-    if (seededWorker) vms = [...vms, seededWorker];
+  // Add the newer Figma rows only when the complete persisted state still matches
+  // the original seed. An absent row in any user-modified state may be a deletion.
+  if (hasUnchangedLegacySeed) {
+    for (const seedId of ['portfolio-worker', 'connect-db']) {
+      const seed = initialVmState.vms.find(vm => vm.id === seedId);
+      if (seed && !vms.some(vm => vm.id === seed.id)) vms = [...vms, seed];
+    }
   }
   const existingTeamQuotas = stored.teamQuotas && typeof stored.teamQuotas === 'object' ? stored.teamQuotas : {};
   const teamIds = new Set(vms.filter(vm => vm.owner === 'team').map(vm => vm.teamId || 'demo-team'));
@@ -249,17 +264,6 @@ export function getDemoVmState(): DemoVmState {
       memoryLimit: previous?.memoryLimit ?? 8,
       diskLimit: previous?.diskLimit ?? 60,
     };
-  }
-
-  // Older local previews only seeded connect-api. Add the second Figma row without
-  // replacing or discarding any VM records a user already created.
-  if (!vms.some(vm => vm.owner === 'team' && vm.teamId === 'demo-team' && vm.id === 'connect-db')) {
-    const seededDatabaseVm = initialVmState.vms.find(vm => vm.id === 'connect-db');
-    if (seededDatabaseVm) {
-      vms = [...vms, seededDatabaseVm];
-      const quota = teamQuotas['demo-team'];
-      teamQuotas['demo-team'] = { ...quota, cpu: quota.cpu + seededDatabaseVm.cpu, memory: quota.memory + seededDatabaseVm.memory, disk: quota.disk + seededDatabaseVm.disk };
-    }
   }
 
   const personalVms = vms.filter(vm => vm.owner === 'personal');
