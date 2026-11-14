@@ -5,6 +5,7 @@ import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, ty
 import { listNotifications } from '../../entities/notification';
 import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon, type OcticonName } from '../../shared/ui/icons';
@@ -568,7 +569,12 @@ export default function AdminInfrastructurePage() {
         <WorkspaceLabel>관리자 워크스페이스</WorkspaceLabel>
         <Navigation aria-label="관리자 메뉴">
           {navItems.map((item, index) => {
-            const href = index === 0 ? '/admin/infra' : index === 2 ? '/admin/vms' : undefined;
+            const href = index === 0 ? '/admin/infra'
+              : index === 1 ? (isDemoMode() ? '/admin/team-approvals' : undefined)
+                : index === 2 ? (isDemoMode() ? '/admin/vms/demo-vm-1' : '/admin/vms')
+                  : index === 3 ? (isDemoMode() ? '/admin/inquiries' : undefined)
+                    : index === 4 ? (isDemoMode() ? '/admin/accounts' : undefined)
+                      : undefined;
             const active = href ? Boolean(matchPath(href, location.pathname)) : false;
             return (
               <NavigationItem
