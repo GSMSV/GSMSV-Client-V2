@@ -1,13 +1,30 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import styled from "styled-components";
 import {
+  canManageDemoApp,
   getDemoApp,
-  getDemoService,
+  getDemoAppQuota,
+  demoPersonalAppOwner,
+  isDemoAppExpired,
+  isDemoAppSubdomainAvailable,
+  formatDemoAppDate,
   updateDemoService,
   type DemoManagedService,
   type DemoAppVariable,
+  type DemoDeployment,
 } from "../../entities/app/demo";
+import { listDemoDatabases } from "../../entities/database/demo";
+import {
+  activateDemoDeployment,
+  databasePasswordVersion,
+  deploymentFailureCopy,
+  deploymentLog,
+  reconcileDemoDatabaseRestarts,
+  restartService,
+  shellDuration,
+} from "../../features/apps/demoServiceOperations";
+import { DemoAppDialog } from "./DemoAppDialog";
 import { getSessionUser } from "../../entities/session";
 import { isDemoMode } from "../../shared/demo";
 import { Button, SliderField } from "../../shared/ui/controls";
@@ -381,22 +398,21 @@ function MiniPlot({ restart = false }: { restart?: boolean }) {
   );
 }
 
-function useDemoService() {
-  const { appId = "demo-portfolio-web", serviceId = "demo-web" } = useParams<{
-    appId: string;
-    serviceId: string;
-  }>();
-  const app = useMemo(() => getDemoApp(appId), [appId]);
-  const service = useMemo(
-    () => getDemoService(appId, serviceId),
-    [appId, serviceId],
-  );
-  return { app, service, appId, serviceId };
+export default function DemoServicePage() {
+  const { appId = "", serviceId = "" } = useParams<{ appId: string; serviceId: string }>();
+  return <ServiceDetail key={`${appId}/${serviceId}`} appId={appId} serviceId={serviceId} />;
 }
 
-export default function DemoServicePage() {
+type VariableChanges = { variables?: DemoAppVariable[]; databaseId?: string };
+type ServiceDialog =
+  | { kind: "deploy" | "rollback"; deployment: DemoDeployment }
+  | { kind: "variables" | "port" | "read-only" | "domain" };
+
+function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string }) {
   const navigate = useNavigate();
-  const { app, service, appId, serviceId } = useDemoService();
+  const [, setRevision] = useState(0);
+  const app = getDemoApp(appId);
+  const service = app?.services.find(item => item.id === serviceId);
   const { tab: rawTab = "deployments" } = useParams<{ tab: string }>();
   const tab = tabLabel(rawTab);
   const user = getSessionUser();
@@ -405,27 +421,50 @@ export default function DemoServicePage() {
   const [variableValue, setVariableValue] = useState("jimin@example.com");
   const [variableSecret, setVariableSecret] = useState(false);
   const [variablesEditing, setVariablesEditing] = useState(false);
-  const [selectedDeployment, setSelectedDeployment] = useState("a1b2c3d");
+  const [selectedDeployment, setSelectedDeployment] = useState<string>();
+  const [dialog, setDialog] = useState<ServiceDialog>();
+  const [variableChanges, setVariableChanges] = useState<VariableChanges>({});
+  const [logsPaused, setLogsPaused] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<
     Partial<DemoManagedService>
   >({});
-  const [domainDraft, setDomainDraft] = useState("");
+  const [domainDraft, setDomainDraft] = useState<string>();
   const [shellInput, setShellInput] = useState("");
 
+  const expiresAt = service?.shellExpiresAt;
+  const [clock, setClock] = useState(Date.now);
+  useEffect(() => {
+    if (!expiresAt || !service?.shellOpen || expiresAt <= Date.now()) return;
+    const tick = window.setInterval(() => setClock(Date.now()), 60_000);
+    const expiry = window.setTimeout(() => setClock(Date.now()), expiresAt - Date.now());
+    return () => { window.clearInterval(tick); window.clearTimeout(expiry); };
+  }, [expiresAt, service?.shellOpen]);
+  useEffect(() => {
+    const refresh = () => {
+      const current = getDemoApp(appId);
+      if (current && reconcileDemoDatabaseRestarts(current)) setRevision(value => value + 1);
+    };
+    refresh();
+    window.addEventListener("gsmsv:demo-database-state-change", refresh);
+    return () => window.removeEventListener("gsmsv:demo-database-state-change", refresh);
+  }, [appId]);
+
+  const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
+  const listPath = `${teamPath}/apps`;
   const move = (next: string) =>
     navigate(
       `/apps/${encodeURIComponent(appId)}/services/${encodeURIComponent(serviceId)}/${next}`,
     );
   const navigateFromShell = (item: Exclude<StudentNavigationKey, "none">) => {
-    if (item === "home") navigate("/");
-    if (item === "apps") navigate("/apps");
-    if (item === "team") navigate("/teams");
-    if (item === "database") navigate("/databases");
+    if (item === "home") navigate(teamPath || "/");
+    if (item === "apps") navigate(listPath);
+    if (item === "team") navigate(teamPath || "/teams");
+    if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
   };
   const shell = (children: React.ReactNode) => (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       userName={user?.name ?? "김민수"}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate("/teams/new")}
@@ -443,128 +482,123 @@ export default function DemoServicePage() {
       <Page>
         <Breadcrumb>Apps</Breadcrumb>
         <Card>
-          <CardTitle>데모 앱을 찾을 수 없습니다</CardTitle>
-          <Button onClick={() => navigate("/apps")}>Apps로 이동</Button>
+          <CardTitle>앱을 찾을 수 없습니다</CardTitle>
+          <Help>주소가 바뀌었거나 지워진 앱입니다. 볼 수 있는 권한이 없는 앱도 이렇게 보입니다.</Help>
+          <Button onClick={() => navigate(listPath)}>Apps 목록</Button>
         </Card>
       </Page>,
     );
 
+  const canManage = canManageDemoApp(app);
+  const expired = isDemoAppExpired(app);
+  const shellExpired = Boolean(service.shellOpen && (!expiresAt || Math.max(clock, Date.now()) >= expiresAt));
+  const shellActive = service.shellOpen && !shellExpired && !expired && service.status !== "정지";
+  const quota = tab === "metrics" || tab === "settings" ? getDemoAppQuota(app.owner ?? demoPersonalAppOwner) : null;
+  const variables = variableChanges.variables ?? service.variables;
+  const variableSize = new TextEncoder().encode(JSON.stringify(variables)).length;
+  const databases = tab === "variables" ? listDemoDatabases(app.owner?.type === "team" ? app.owner.id : "me") : [];
+  const databaseId = variableChanges.databaseId ?? service.databaseId ?? "";
+  const selected = service.deployments.find(item => item.id === selectedDeployment) ??
+    service.deployments.find(item => item.status === "running") ?? service.deployments[0];
+  const failure = selected && deploymentFailureCopy(selected);
+  const skipped = service.deployments.find(item => item.status === "skipped");
   const update = (patch: Partial<DemoManagedService>) => {
-    updateDemoService(appId, serviceId, patch);
-    setNotice("변경사항을 로컬 미리보기에 저장했습니다.");
+    const updated = updateDemoService(appId, serviceId, patch);
+    if (updated) setRevision(value => value + 1);
+    setNotice(updated ? "" : "변경사항을 저장하지 못했습니다. 다시 시도해 주세요.");
+    return updated;
+  };
+  const requestVariables = () => {
+    if (!canManage) { setDialog({ kind: "read-only" }); return; }
+    if (variableKey.trim() === "PORT") { setDialog({ kind: "port" }); return; }
+    if (variableSize > 32 * 1024) { setNotice("변수는 32 KB까지 저장할 수 있습니다."); return; }
+    if (Object.keys(variableChanges).length) setDialog({ kind: "variables" });
   };
   const addVariable = (event: FormEvent) => {
     event.preventDefault();
+    if (!canManage || expired) return;
     const key = variableKey.trim();
-    if (!key || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key === "PORT") return;
-    const variables = [
-      ...service.variables.filter((item) => item.key !== key),
-      { key, value: variableValue, secret: variableSecret },
-    ];
-    update({ variables });
+    if (key === "PORT") { setDialog({ kind: "port" }); return; }
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return;
+    setVariableChanges(current => ({
+      ...current,
+      variables: [...variables.filter(item => item.key !== key), { key, value: variableValue, secret: variableSecret }],
+    }));
     setVariableKey("");
     setVariableValue("");
     setVariableSecret(false);
   };
-  const updateVariable = (key: string, patch: Partial<DemoAppVariable>) =>
-    update({
-      variables: service.variables.map((item) =>
-        item.key === key ? { ...item, ...patch } : item,
-      ),
+  const openShell = () => {
+    if (!canManage || expired) return;
+    if (!shellActive && service.status === "정지") return;
+    const time = Date.now();
+    setClock(time);
+    setShellInput("");
+    update(shellActive ? { shellOpen: false, shellExpiresAt: undefined } : {
+      shellOpen: true,
+      shellExpiresAt: time + shellDuration,
+      shellLines: ["$"],
+      status: "실행 중",
     });
+  };
+  const saveSettings = () => {
+    const required = (settingsDraft.memoryMb ?? service.memoryMb) - service.memoryMb;
+    if (!quota) return;
+    if (required > quota.freeMemory || (settingsDraft.alwaysOn && !service.alwaysOn && quota.alwaysOn >= 1)) {
+      setNotice("메모리 또는 상시 실행 할당량을 확인해 주세요.");
+      return;
+    }
+    if (update(settingsDraft)) { setSettingsDraft({}); setNotice(""); }
+  };
   const actionButton =
     tab === "deployments" ? (
-      <Button
-        variant="secondary"
-        onClick={() => {
-          const deployment = {
-            id: Math.random().toString(16).slice(2, 9),
-            status: "running" as const,
-            commit: "로컬 미리보기 재배포",
-            author: user?.name ?? "김민수",
-            at: new Date().toLocaleString("ko-KR", {
-              month: "numeric",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            message: "빌드 로그 보기",
-          };
-          update({ deployments: [deployment, ...service.deployments] });
-        }}
-      >
-        재배포
-      </Button>
+      <Button variant="secondary" disabled={!canManage || expired} onClick={() => {
+        const current = service.deployments.find(item => item.status === "running");
+        const deployment: DemoDeployment = current ?? {
+          id: crypto.randomUUID().slice(0, 7), status: "previous", commit: "재배포",
+          author: user?.name ?? "김민수", at: formatDemoAppDate(Date.now()), message: "빌드 로그 보기",
+        };
+        setDialog({ kind: "deploy", deployment });
+      }}>재배포</Button>
     ) : tab === "logs" ? (
-      <Button
-        variant="secondary"
-        onClick={() => {
-          update({ paused: !service.paused });
-          setNotice(
-            service.paused
-              ? "로그 스트리밍을 다시 시작했습니다."
-              : "로그 스트리밍을 일시 정지했습니다.",
-          );
-        }}
-      >
-        {service.paused ? "다시 시작" : "일시 정지"}
+      <Button variant="secondary" onClick={() => setLogsPaused(value => !value)}>
+        {logsPaused ? "다시 시작" : "일시 정지"}
       </Button>
     ) : tab === "variables" ? (
       <>
-        <Button
-          variant="secondary"
-          onClick={() =>
-            document.getElementById("demo-new-variable-key")?.focus()
-          }
-        >
-          변수 추가
-        </Button>
-        <Button
-          onClick={() => setNotice("변경사항을 로컬 미리보기에 저장했습니다.")}
-        >
-          변경사항 저장
-        </Button>
+        <Button variant="secondary" disabled={expired} onClick={() => canManage
+          ? document.getElementById("demo-new-variable-key")?.focus()
+          : setDialog({ kind: "read-only" })}>변수 추가</Button>
+        <Button disabled={expired} onClick={requestVariables}>변경사항 저장</Button>
       </>
     ) : tab === "shell" ? (
-      <Button
-        variant="secondary"
-        onClick={() => {
-          update({ shellOpen: !service.shellOpen });
-          setNotice(
-            service.shellOpen
-              ? "셸 세션을 종료했습니다."
-              : "로컬 셸 세션을 열었습니다.",
-          );
-        }}
-      >
-        {service.shellOpen ? "세션 끝내기" : "셸 열기"}
+      <Button variant="secondary" disabled={!canManage || expired || service.status === "정지"} onClick={openShell}>
+        {shellExpired ? "다시 열기" : shellActive ? "세션 끝내기" : "셸 열기"}
       </Button>
     ) : tab === "settings" ? (
-      <Button onClick={() => update(settingsDraft)}>설정 저장</Button>
+      <Button disabled={expired} onClick={() => canManage ? saveSettings() : setDialog({ kind: "read-only" })}>설정 저장</Button>
     ) : tab === "domains" ? (
-      <Button
-        onClick={() =>
-          update({ subdomain: domainDraft.trim() || service.subdomain })
-        }
-      >
-        저장
-      </Button>
+      <Button disabled={!canManage || expired || service.type !== "웹"} onClick={() => {
+        const subdomain = (domainDraft ?? service.subdomain).trim();
+        if (!isDemoAppSubdomainAvailable(subdomain, service.id)) { setDialog({ kind: "domain" }); return; }
+        if (update({ subdomain })) setDomainDraft(undefined);
+      }}>저장</Button>
     ) : null;
 
   let content: React.ReactNode;
   if (tab === "deployments") {
     content = (
       <>
-        <Banner $warning>
-          <Octicon name="shield" size={18} />
+        {(failure || skipped) && <Banner $warning role="status">
+          <Octicon name={failure ? "alert" : "shield"} size={18} />
           <BannerCopy>
-            건너뛴 push가 있어요
-            <small>
-              배포 권한이 없는 사람의 push라 배포하지 않았습니다. 기록에서
-              확인한 뒤 이 커밋 배포로 내보낼 수 있습니다.
-            </small>
+            {failure?.[0] ?? (canManage ? "push를 건너뛰었습니다" : "팀장·DevOps가 배포해야 나갑니다")}
+            <small>{failure?.[1] ?? (canManage
+              ? `${skipped?.author} · ${skipped?.id}은 배포 권한이 없는 사람의 push라 배포하지 않았습니다.`
+              : "내가 push한 커밋은 배포 권한이 있는 팀원이 「이 커밋 배포」를 눌러야 나갑니다.")}</small>
           </BannerCopy>
-        </Banner>
+          {failure && <Button variant="secondary" onClick={() => document.getElementById("demo-build-log")?.focus()}>빌드 로그</Button>}
+        </Banner>}
         <Card>
           <CardTitle>배포 기록 · 최근 10개</CardTitle>
           <Table>
@@ -575,10 +609,10 @@ export default function DemoServicePage() {
               <span>시각</span>
               <span>작업</span>
             </TableHeader>
-            {service.deployments.map((item) => (
+            {service.deployments.slice(0, 10).map((item) => (
               <TableRow
                 key={item.id}
-                $selected={item.id === selectedDeployment}
+                $selected={item.id === selected?.id}
                 onClick={() => setSelectedDeployment(item.id)}
               >
                 <span>
@@ -593,38 +627,19 @@ export default function DemoServicePage() {
                   </Status>
                 </span>
                 <span>
-                  <code>{item.id}</code> {item.commit}
+                  <code>{item.commitId ?? item.id}</code> {item.commit}
                 </span>
                 <span>{item.author}</span>
                 <span>{item.at}</span>
                 <span>
                   <Button
                     variant="ghost"
+                    disabled={(item.status === "skipped" || item.status === "previous") && (!canManage || expired)}
                     onClick={() => {
-                      if (item.status === "skipped") {
-                        update({
-                          deployments: service.deployments.map((deployment) =>
-                            deployment.id === item.id
-                              ? {
-                                  ...deployment,
-                                  status: "running",
-                                  message: "빌드 로그 보기",
-                                }
-                              : deployment,
-                          ),
-                        });
-                        setSelectedDeployment(item.id);
-                        setNotice(
-                          `${item.id} 커밋을 로컬 미리보기에서 배포했습니다.`,
-                        );
-                      } else if (item.status === "previous") {
-                        setSelectedDeployment(item.id);
-                        setNotice(
-                          `${item.id} 이전 배포를 로컬 미리보기에서 복구했습니다.`,
-                        );
+                      if (item.status === "skipped" || item.status === "previous") {
+                        setDialog({ kind: item.status === "skipped" ? "deploy" : "rollback", deployment: item });
                       } else {
                         setSelectedDeployment(item.id);
-                        setNotice(`${item.id} 빌드 로그를 열었습니다.`);
                       }
                     }}
                   >
@@ -635,21 +650,14 @@ export default function DemoServicePage() {
             ))}
           </Table>
         </Card>
-        {service.deployments.find((item) => item.id === selectedDeployment) && (
-          <Card>
+        <Help>되돌리기는 다시 빌드하지 않고 그 배포를 그대로 씁니다. 변수는 지금 값을 씁니다.</Help>
+        {selected && (
+          <Card id="demo-build-log" tabIndex={-1}>
             <CardTitle>
               <Octicon name="terminal" size={16} />
-              　선택한 배포 · {selectedDeployment} 빌드 로그
+              　선택한 배포 · {selected.commitId ?? selected.id} 빌드 로그
             </CardTitle>
-            <Code>
-              {[
-                "14:18:02  저장소 가져오기 gsm-jimin/portfolio-web@a1b2c3d",
-                "14:18:09  npm ci",
-                "14:19:41  npm run build",
-                "14:20:05  상태 확인 GET /healthz 200 OK",
-                "14:20:06  새 배포로 바뀜",
-              ].join("\n")}
-            </Code>
+            <Code>{deploymentLog(app, service, selected)}</Code>
             <Help>
               상태 확인에 실패하면 새 배포로 바꾸지 않고 지금 배포를 계속
               씁니다.
@@ -674,8 +682,8 @@ export default function DemoServicePage() {
         <Card>
           <CardTitle>
             <Octicon name="terminal" size={16} />
-            　production · {service.name} ·{" "}
-            {service.paused ? "일시 정지됨" : "실시간"}
+            　{service.environment} · {service.name} ·{" "}
+            {logsPaused ? "일시 정지됨" : "실시간"}
           </CardTitle>
           <Code>
             {[
@@ -687,6 +695,9 @@ export default function DemoServicePage() {
               "11:22:03  GSMSV 요청이 없어 잠들었어요",
               "11:31:40  GSMSV 요청이 와서 깨어났어요",
               "11:31:41  Server listening on port 3000",
+              ...(service.restartReason === "limit" ? [`GSMSV ${service.name}이 10번 넘게 다시 시작해서 멈췄습니다`] : []),
+              ...(service.restartReason === "variables" ? [`GSMSV 변수를 저장해 ${service.name}이 다시 시작했습니다`] : []),
+              ...(service.restartReason === "database" ? [`GSMSV ${service.databaseId} 비밀번호가 바뀌어 다시 시작했습니다`] : []),
             ]
               .map((line, index) => `${index + 1}  ${line}`)
               .join("\n")}
@@ -701,19 +712,14 @@ export default function DemoServicePage() {
   } else if (tab === "metrics") {
     content = (
       <>
-        <Banner $warning>
+        {quota?.freeMemory === 0 && <Banner $warning role="status">
           <Octicon name="alert" size={18} />
           <BannerCopy>
-            메모리 상한에 닿아 다시 시작했습니다
-            <small>
-              11월 2일 09:40에 512 MB를 넘어 강제로 종료한 뒤 다시 시작했습니다.
-              메모리를 늘리거나 코드를 확인해 주세요.
-            </small>
+            메모리 할당량을 모두 썼습니다
+            <small>PR 미리보기 환경도 할당량에 들어갑니다. 쓰지 않는 환경을 정리하거나 메모리를 줄여 주세요.</small>
           </BannerCopy>
-          <Button variant="secondary" onClick={() => move("settings")}>
-            설정 열기
-          </Button>
-        </Banner>
+          <Button variant="secondary" onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/demo-settings`)}>앱 설정</Button>
+        </Banner>}
         <Grid>
           <Metric>
             <CardTitle>메모리</CardTitle>
@@ -753,16 +759,16 @@ export default function DemoServicePage() {
         <Card>
           <NavRow>
             <CardTitle>
-              등록된 변수 · {service.variables.length}개 · 1.2 / 32 KB
+              등록된 변수 · {variables.length}개 · {(variableSize / 1024).toFixed(1)} / 32 KB
             </CardTitle>
             <Button
               variant="ghost"
-              onClick={() => setVariablesEditing((value) => !value)}
+              onClick={() => canManage && !expired ? setVariablesEditing(value => !value) : setDialog({ kind: "read-only" })}
             >
               {variablesEditing ? "편집 완료" : "변수 편집"}
             </Button>
           </NavRow>
-          {service.variables.map((variable) => (
+          {variables.map((variable) => (
             <VariableRow key={variable.key}>
               <VariableText>
                 <strong>{variable.key}</strong>
@@ -772,7 +778,7 @@ export default function DemoServicePage() {
                     : variable.value}
                 </span>
               </VariableText>
-              {(variablesEditing || variable.secret) && (
+              {canManage && !expired && (variablesEditing || variable.secret) && (
                 <div>
                   <Button
                     variant="ghost"
@@ -781,11 +787,10 @@ export default function DemoServicePage() {
                         `${variable.key} 값 바꾸기`,
                         variable.secret ? "" : variable.value,
                       );
-                      if (next !== null)
-                        updateVariable(variable.key, {
-                          value: next,
-                          secret: variable.secret,
-                        });
+                      if (next !== null) setVariableChanges(current => ({
+                        ...current,
+                        variables: variables.map(item => item.key === variable.key ? { ...item, value: next } : item),
+                      }));
                     }}
                   >
                     값 바꾸기
@@ -793,11 +798,7 @@ export default function DemoServicePage() {
                   <Button
                     variant="ghost"
                     onClick={() =>
-                      update({
-                        variables: service.variables.filter(
-                          (item) => item.key !== variable.key,
-                        ),
-                      })
+                      setVariableChanges(current => ({ ...current, variables: variables.filter(item => item.key !== variable.key) }))
                     }
                   >
                     지우기
@@ -812,6 +813,7 @@ export default function DemoServicePage() {
             <CardTitle>새 변수</CardTitle>
             <Button
               variant="ghost"
+              disabled={!canManage || expired}
               onClick={() => {
                 setVariableKey("");
                 setVariableValue("");
@@ -825,6 +827,7 @@ export default function DemoServicePage() {
             키
             <input
               id="demo-new-variable-key"
+              disabled={!canManage || expired}
               value={variableKey}
               onChange={(event) => setVariableKey(event.currentTarget.value)}
             />
@@ -833,6 +836,7 @@ export default function DemoServicePage() {
             값
             <input
               value={variableValue}
+              disabled={!canManage || expired}
               type={variableSecret ? "password" : "text"}
               onChange={(event) => setVariableValue(event.currentTarget.value)}
             />
@@ -848,12 +852,13 @@ export default function DemoServicePage() {
             <input
               type="checkbox"
               checked={variableSecret}
+              disabled={!canManage || expired}
               onChange={(event) =>
                 setVariableSecret(event.currentTarget.checked)
               }
             />
           </ToggleRow>
-          <Button type="submit" disabled={!variableKey.trim()}>
+          <Button type="submit" disabled={!canManage || expired || !variableKey.trim()}>
             변수 추가
           </Button>
         </Card>
@@ -862,14 +867,15 @@ export default function DemoServicePage() {
           <Field>
             연결할 Database
             <select
-              value={service.databaseId ?? ""}
-              onChange={(event) =>
-                update({ databaseId: event.currentTarget.value })
-              }
+              value={databases.find(database => database.grn === databaseId || database.grn.endsWith(`:${databaseId}`))?.grn ?? ""}
+              disabled={!canManage || expired}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setVariableChanges(current => ({ ...current, databaseId: value }));
+              }}
             >
               <option value="">연결하지 않음</option>
-              <option value="welcome-db">welcome-db · MySQL</option>
-              <option value="study-db">study-db · PostgreSQL</option>
+              {databases.map(database => <option key={database.grn} value={database.grn}>{database.name} · {database.engine === "mysql" ? "MySQL" : "PostgreSQL"}</option>)}
             </select>
           </Field>
           <Help>
@@ -893,28 +899,38 @@ export default function DemoServicePage() {
   } else if (tab === "settings") {
     content = (
       <>
+        {service.configFile && <Banner $warning role="status">
+          <Octicon name="alert" size={18} />
+          <BannerCopy>
+            설정 파일에서 무시한 칸이 있습니다
+            <small>메모리·변수는 설정 파일로 바꿀 수 없어서 무시했습니다. 이 화면에서 바꿔 주세요.</small>
+          </BannerCopy>
+        </Banner>}
         <Card>
           <CardTitle>실행</CardTitle>
           <Field>
             시작 명령
             <input
-              disabled
+              disabled={!canManage || expired || service.configFile}
               value={settingsDraft.startCommand ?? service.startCommand}
+              onChange={event => {
+                const startCommand = event.currentTarget.value;
+                setSettingsDraft(current => ({ ...current, startCommand }));
+              }}
             />
           </Field>
-          <Help>
-            설정 파일이 덮어씀 · 바꾸려면 저장소의 설정 파일을 고쳐 주세요.
-          </Help>
+          {service.configFile && <Help>
+            설정 파일이 덮어씀 · 바꾸려면 저장소의 {"{설정 파일}"}을 고쳐 주세요.
+          </Help>}
           <Field>
             상태 확인 경로
             <input
+              disabled={!canManage || expired}
               value={settingsDraft.path ?? service.path}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  path: event.currentTarget.value,
-                }))
-              }
+              onChange={event => {
+                const path = event.currentTarget.value;
+                setSettingsDraft(current => ({ ...current, path }));
+              }}
             />
           </Field>
           <Help>
@@ -924,13 +940,12 @@ export default function DemoServicePage() {
           <Field>
             배포 전 명령
             <input
+              disabled={!canManage || expired}
               value={settingsDraft.preDeployCommand ?? service.preDeployCommand}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  preDeployCommand: event.currentTarget.value,
-                }))
-              }
+              onChange={event => {
+                const preDeployCommand = event.currentTarget.value;
+                setSettingsDraft(current => ({ ...current, preDeployCommand }));
+              }}
             />
           </Field>
           <Help>
@@ -940,13 +955,12 @@ export default function DemoServicePage() {
           <Field>
             감시 경로
             <input
+              disabled={!canManage || expired}
               value={settingsDraft.watchPaths ?? service.watchPaths}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  watchPaths: event.currentTarget.value,
-                }))
-              }
+              onChange={event => {
+                const watchPaths = event.currentTarget.value;
+                setSettingsDraft(current => ({ ...current, watchPaths }));
+              }}
             />
           </Field>
           <Help>
@@ -956,9 +970,10 @@ export default function DemoServicePage() {
         </Card>
         <Card>
           <CardTitle>자원</CardTitle>
-          <Help>메모리 할당량 1/2 GB 사용 중 · 남은 할당량 1 GB</Help>
+          <Help>메모리 할당량 {quota?.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 {quota?.freeMemory} MB</Help>
           <SliderField
             label="메모리"
+            disabled={!canManage || expired}
             value={settingsDraft.memoryMb ?? service.memoryMb}
             min={256}
             max={1024}
@@ -976,6 +991,7 @@ export default function DemoServicePage() {
           />
           <SliderField
             label="CPU"
+            disabled={!canManage || expired}
             value={settingsDraft.cpu ?? service.cpu}
             min={0.25}
             max={1}
@@ -999,21 +1015,34 @@ export default function DemoServicePage() {
               요청이 없어도 깨어 있기
               <small>
                 켜면 잠들지 않고 계속 실행됩니다. 상시 실행은 1개까지 켤 수 있고
-                지금 0개 씁니다.
+                지금 {quota?.alwaysOn}개 씁니다.
               </small>
             </span>
             <input
               type="checkbox"
+              disabled={!canManage || expired}
               checked={settingsDraft.alwaysOn ?? service.alwaysOn}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({
-                  ...current,
-                  alwaysOn: event.currentTarget.checked,
-                }))
-              }
+              onChange={event => {
+                const alwaysOn = event.currentTarget.checked;
+                setSettingsDraft(current => ({ ...current, alwaysOn }));
+              }}
             />
           </ToggleRow>
         </Card>
+        {service.type === "크론" && <Card>
+          <CardTitle>{service.name} 크론 설정</CardTitle>
+          <Code>{service.cronSchedule}</Code>
+          <Help>· 매일 03:00에 실행합니다. 서울 시간으로 계산합니다.<br />· 5분보다 자주 실행할 수 없고, 30분이 넘으면 강제로 끝냅니다.<br />· staging·PR 환경에서는 따로 켜야 실행됩니다.</Help>
+          <ToggleRow>
+            <span>{service.environment}</span>
+            <input aria-label="크론 실행" type="checkbox" disabled={!canManage || expired}
+              checked={settingsDraft.cronEnabled ?? service.cronEnabled ?? false}
+              onChange={event => {
+                const cronEnabled = event.currentTarget.checked;
+                setSettingsDraft(current => ({ ...current, cronEnabled }));
+              }} />
+          </ToggleRow>
+        </Card>}
       </>
     );
   } else if (tab === "domains") {
@@ -1024,12 +1053,14 @@ export default function DemoServicePage() {
           <Field>
             서브도메인
             <input
-              value={domainDraft || service.subdomain}
+              id="demo-service-domain"
+              value={domainDraft ?? service.subdomain}
+              disabled={!canManage || expired || service.type !== "웹"}
               onChange={(event) => setDomainDraft(event.currentTarget.value)}
             />
           </Field>
           <Help>
-            주소는 https://{domainDraft || service.subdomain}.gsmsv.app입니다.
+            주소는 https://{domainDraft ?? service.subdomain}.{"{앱 도메인}"}입니다.
             production만 직접 정할 수 있습니다.
           </Help>
         </Card>
@@ -1038,7 +1069,7 @@ export default function DemoServicePage() {
           <VariableRow>
             <VariableText>
               <strong>staging</strong>
-              <span>{app.name}-staging.gsmsv.app</span>
+              <span>{app.name}-staging.{"{앱 도메인}"}</span>
               <small>자동으로 붙는 이름이라 바꿀 수 없습니다.</small>
             </VariableText>
             <Octicon name="globe" size={16} />
@@ -1046,7 +1077,7 @@ export default function DemoServicePage() {
           <VariableRow>
             <VariableText>
               <strong>PR 미리보기</strong>
-              <span>{app.name}-pr-&#123;번호&#125;.gsmsv.app</span>
+              <span>{app.name}-pr-&#123;번호&#125;.{"{앱 도메인}"}</span>
               <small>
                 PR 미리보기를 켜면 PR마다 생기고, 7일 뒤 정리됩니다.
               </small>
@@ -1061,28 +1092,30 @@ export default function DemoServicePage() {
         <Banner $warning>
           <Octicon name="eye" size={18} />
           <BannerCopy>
-            셸 안에서는 비밀 변수 값이 보입니다
-            <small>
-              화면을 공유할 때 조심하세요. 세션은 1시간 뒤 끝납니다.
-            </small>
+            {shellExpired ? "셸 세션이 끝났습니다" : "셸 안에서는 비밀 변수 값이 보입니다"}
+            <small>{shellExpired
+              ? "1시간이 지나 연결을 닫았습니다. 셸에서 바꾼 파일은 다시 시작하면 사라집니다."
+              : "화면을 공유할 때 조심하세요. 세션은 1시간 뒤 끝납니다."}</small>
           </BannerCopy>
         </Banner>
         <Card>
           <CardTitle>
             <Octicon name="terminal" size={16} />
-            　production · {service.name} ·{" "}
-            {service.shellOpen ? "남은 시간 52분" : "셸이 닫혀 있습니다"}
+            　{service.environment} · {service.name} ·{" "}
+            {shellActive ? `남은 시간 ${Math.ceil(((expiresAt ?? clock) - Math.max(clock, Date.now())) / 60_000)}분` : "셸이 닫혀 있습니다"}
           </CardTitle>
           <Code>
-            {service.shellLines.join("\n")}
-            {service.shellOpen && shellInput ? `${shellInput}` : ""}
+            {shellActive && service.shellLines.join("\n")}
+            {shellActive && shellInput}
           </Code>
-          {service.shellOpen && (
+          {shellActive && canManage && (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
+                if (!shellInput.trim()) return;
                 const lines = [
-                  ...service.shellLines,
+                  ...service.shellLines.slice(0, -1),
+                  `$ ${shellInput}`,
                   shellInput === "node -v"
                     ? "v20.11.1"
                     : shellInput === "ls"
@@ -1092,6 +1125,7 @@ export default function DemoServicePage() {
                         : shellInput
                           ? `명령을 실행했습니다: ${shellInput}`
                           : "",
+                  "$",
                 ];
                 update({ shellLines: lines });
                 setShellInput("");
@@ -1128,7 +1162,7 @@ export default function DemoServicePage() {
       </Heading>
       <NavRow>
         <Tabs aria-label="서비스 메뉴">
-          {tabs.map(([key, label]) => (
+          {tabs.filter(([key]) => key !== "domains" || service.type === "웹").map(([key, label]) => (
             <Tab
               key={key}
               $active={tab === key}
@@ -1142,6 +1176,44 @@ export default function DemoServicePage() {
         {actionButton}
       </NavRow>
       {content}
+      {dialog && (dialog.kind === "deploy" || dialog.kind === "rollback") && <DemoAppDialog
+        title={dialog.kind === "rollback" ? `${dialog.deployment.commitId ?? dialog.deployment.id}으로 되돌리시겠습니까?` : "이 커밋을 배포하시겠습니까?"}
+        confirmLabel={dialog.kind === "rollback" ? "되돌리기" : "배포"}
+        onClose={() => setDialog(undefined)}
+        onConfirm={() => {
+          const updated = activateDemoDeployment(appId, serviceId, dialog.deployment, dialog.kind === "rollback");
+          if (updated) {
+            setRevision(value => value + 1);
+            setSelectedDeployment(updated.deployments[0]?.id);
+            setNotice("");
+          } else {
+            setNotice("배포 기록을 저장하지 못했습니다. 다시 시도해 주세요.");
+          }
+          setDialog(undefined);
+        }}>
+        {dialog.kind === "rollback"
+          ? "· 다시 빌드하지 않고 그 배포를 그대로 씁니다.\n· 변수는 지금 값을 씁니다."
+          : `· ${dialog.deployment.commitId ?? dialog.deployment.id} ${dialog.deployment.commit} · ${dialog.deployment.author}
+· 빌드한 뒤 상태 확인을 통과하면 새 배포로 바꿉니다.`}
+      </DemoAppDialog>}
+      {dialog?.kind === "variables" && <DemoAppDialog title="변수를 저장하시겠습니까?"
+        confirmLabel="저장하고 다시 시작" onClose={() => setDialog(undefined)} onConfirm={() => {
+          if (update({ ...variableChanges, ...restartService(service, "variables"), databasePasswordVersion: databasePasswordVersion(databaseId) })) setVariableChanges({});
+          setDialog(undefined);
+        }}>
+        {`· 저장하면 빌드 없이 ${service.name}이 다시 시작됩니다.
+· 다시 시작하는 동안 잠깐 응답하지 않을 수 있습니다.`}
+      </DemoAppDialog>}
+      {dialog?.kind === "port" && <DemoAppDialog title="PORT는 쓸 수 없는 이름입니다" onClose={() => setDialog(undefined)}>
+        {"· PORT는 GSMSV가 넣어 주는 변수입니다.\n· 다른 이름으로 저장해 주세요."}
+      </DemoAppDialog>}
+      {dialog?.kind === "read-only" && <DemoAppDialog title="팀장·DevOps만 바꿀 수 있습니다" onClose={() => setDialog(undefined)}>
+        {"· 일반 팀원은 변수와 설정을 볼 수만 있습니다.\n· 바꿔야 하면 팀장(김지민)이나 DevOps(한도윤)에게 알려 주세요."}
+      </DemoAppDialog>}
+      {dialog?.kind === "domain" && <DemoAppDialog title="서브도메인을 쓸 수 없습니다" onClose={() => setDialog(undefined)}
+        confirmLabel="다른 이름 쓰기" onConfirm={() => { setDialog(undefined); document.getElementById("demo-service-domain")?.focus(); }}>
+        {"· 이미 다른 앱이 쓰는 이름은 쓸 수 없습니다.\n· GSMSV가 쓰려고 남겨 둔 이름도 쓸 수 없습니다."}
+      </DemoAppDialog>}
       {notice && <Alert role="status">{notice}</Alert>}
     </Page>,
   );
@@ -1151,7 +1223,7 @@ export function DemoStoppedPublicAppPage() {
   const navigate = useNavigate();
   const { appId = "demo-portfolio-web" } = useParams<{ appId: string }>();
   const app = getDemoApp(appId);
-  if (!isDemoMode())
+  if (!isDemoMode() || !app || !isDemoAppExpired(app))
     return (
       <PublicPage>
         <PublicHeader>
@@ -1177,10 +1249,11 @@ export function DemoStoppedPublicAppPage() {
         <VariableRow>
           <VariableText>
             <strong>주소</strong>
-            <span>{app?.name ?? "portfolio-web"}.gsmsv.app</span>
+            <span>{app.services.find(service => service.type === "웹")?.subdomain ?? app.name}.{"{앱 도메인}"}</span>
           </VariableText>
           <Octicon name="globe" size={16} />
         </VariableRow>
+        <Button variant="secondary" onClick={() => navigate("/")}>GSM SV 열기</Button>
       </StoppedCard>
     </PublicPage>
   );
