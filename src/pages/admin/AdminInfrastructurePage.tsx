@@ -631,7 +631,9 @@ export default function AdminInfrastructurePage() {
                   : index === 3 ? (import.meta.env.DEV && isDemoMode() ? '/admin/inquiries' : undefined)
                     : index === 4 ? (import.meta.env.DEV && isDemoMode() ? '/admin/accounts' : undefined)
                       : undefined;
-            const active = href ? Boolean(matchPath(href, location.pathname)) : false;
+            const active = index === 2
+              ? Boolean(matchPath('/admin/vms', location.pathname) || matchPath('/admin/vms/:vmId', location.pathname))
+              : href ? Boolean(matchPath(href, location.pathname)) : false;
             return (
               <NavigationItem
                 key={item.label}
