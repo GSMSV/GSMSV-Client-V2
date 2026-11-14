@@ -123,6 +123,7 @@ const IconButton = styled.button`
   color: ${({ theme }) => theme.colors.text};
   cursor: pointer;
   &:hover { background: ${({ theme }) => theme.colors.overlayHover}; }
+  &:disabled { color: ${({ theme }) => theme.colors.faint}; cursor: not-allowed; }
 `;
 
 export function VmSnapshotsPage() {
@@ -147,6 +148,7 @@ export function VmSnapshotsPage() {
   const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
+  const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
 
   const manualCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'manual').length;
   const automaticCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'automatic').length;
@@ -161,6 +163,7 @@ export function VmSnapshotsPage() {
   }
 
   function openCreateSnapshot() {
+    if (memberReadOnly) return;
     setSnapshotName('');
     setDialogError('');
     setDialog({ kind: 'create' });
@@ -168,6 +171,7 @@ export function VmSnapshotsPage() {
 
   async function createSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (memberReadOnly) return;
     const name = snapshotName.trim();
     if (totalCount >= 3 || manualCount >= 2) {
       setDialogError('저장 가능한 Snapshot 개수를 모두 사용했습니다.');
@@ -196,11 +200,13 @@ export function VmSnapshotsPage() {
   }
 
   function openDeleteSnapshot(snapshot: DemoSnapshot) {
+    if (memberReadOnly) return;
     setDialogError('');
     setDialog({ kind: 'delete', snapshot });
   }
 
   async function deleteSnapshot(snapshot: DemoSnapshot) {
+    if (memberReadOnly) return;
     setDialog(null);
     setDeletingSnapshotId(snapshot.id);
     setOperation('delete');
@@ -216,11 +222,13 @@ export function VmSnapshotsPage() {
   }
 
   function openRestoreSnapshot(snapshot: DemoSnapshot) {
+    if (memberReadOnly) return;
     setDialogError('');
     setDialog({ kind: 'restore', snapshot });
   }
 
   async function restoreSnapshot(snapshot: DemoSnapshot) {
+    if (memberReadOnly) return;
     setDialogError('');
     setOperation('restore');
     await waitForDemoOperation();
@@ -235,6 +243,7 @@ export function VmSnapshotsPage() {
   }
 
   function startVmAfterRestore() {
+    if (memberReadOnly) return;
     const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: 'running' } : item) }));
     if (!saved) {
       setDialogError('VM을 시작하지 못했습니다. 다시 시도해 주세요.');
@@ -246,6 +255,7 @@ export function VmSnapshotsPage() {
   }
 
   function setAutomatic(enabled: boolean) {
+    if (memberReadOnly) return;
     const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, autoSnapshots: enabled } : item) }));
     setNotice(saved
       ? enabled ? '자동 Snapshot을 켰습니다. 다음 자정부터 최신 1개를 보관합니다.' : '자동 Snapshot을 껐습니다.'
@@ -255,7 +265,7 @@ export function VmSnapshotsPage() {
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
-      <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={totalCount >= 3 || manualCount >= 2 || operation !== null} onClick={openCreateSnapshot}>Snapshot 만들기</Button></Heading>
+      <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={memberReadOnly || totalCount >= 3 || manualCount >= 2 || operation !== null} onClick={openCreateSnapshot}>Snapshot 만들기</Button></Heading>
       <DetailTabs vmId={vm.id} active="Snapshot" teamId={vm.teamId} networkVmGrn={vm.grn} />
       <Facts>
         <MetricCard><MetricLabel><Octicon name="database" />　전체 Snapshot</MetricLabel><MetricValue>{totalCount} / 3</MetricValue><Hint>현재 수동 {manualCount}개 + 자동 {automaticCount}개 · 최대 3개</Hint></MetricCard>
@@ -265,7 +275,7 @@ export function VmSnapshotsPage() {
       <Surface>
         <SurfaceTitle>매일 자동으로 백업하기</SurfaceTitle>
         <FactValue>매일 00:00(KST)에 이전 자동 Snapshot을 삭제하고, 00:01에 새 Snapshot을 만듭니다. 교체 중 약 1분간 자동 Snapshot이 없을 수 있습니다.</FactValue>
-        <Row><div><FactValue>자동 Snapshot</FactValue><Hint>켜도 바로 만들지 않습니다. 다음 자정부터 최신 1개만 보관합니다.</Hint></div><Switch label="" checked={vm.autoSnapshots} onChange={setAutomatic} /></Row>
+        <Row><div><FactValue>자동 Snapshot</FactValue><Hint>켜도 바로 만들지 않습니다. 다음 자정부터 최신 1개만 보관합니다.</Hint></div><Switch label="" checked={vm.autoSnapshots} disabled={memberReadOnly} onChange={setAutomatic} /></Row>
       </Surface>
       <Surface>
         <SurfaceTitle>저장된 Snapshot</SurfaceTitle>
@@ -276,8 +286,8 @@ export function VmSnapshotsPage() {
             <td>{deletingSnapshotId === snapshot.id
               ? <ProgressText role="status" aria-live="polite">삭제 중</ProgressText>
               : <RowActions>
-                <IconButton type="button" aria-label={`${snapshot.name} 복원`} title="복원" disabled={operation !== null} onClick={() => openRestoreSnapshot(snapshot)}><Octicon name="history" /></IconButton>
-                <IconButton type="button" aria-label={`${snapshot.name} 삭제`} title="삭제" disabled={operation !== null} onClick={() => openDeleteSnapshot(snapshot)}><Octicon name="trashcan" /></IconButton>
+                <IconButton type="button" aria-label={`${snapshot.name} 복원`} title="복원" disabled={memberReadOnly || operation !== null} onClick={() => openRestoreSnapshot(snapshot)}><Octicon name="history" /></IconButton>
+                <IconButton type="button" aria-label={`${snapshot.name} 삭제`} title="삭제" disabled={memberReadOnly || operation !== null} onClick={() => openDeleteSnapshot(snapshot)}><Octicon name="trashcan" /></IconButton>
               </RowActions>}
             </td>
           </tr>)}</tbody>
@@ -312,12 +322,13 @@ export function VmSnapshotsPage() {
                 placeholder="before-update"
                 hint="영문으로 시작 · 1–40자 · 영문, 숫자, 밑줄, 하이픈"
                 error={dialogError}
+                disabled={memberReadOnly}
                 onChange={event => { setSnapshotName(event.currentTarget.value); setDialogError(''); }}
                 autoFocus
               />
               <DialogActions>
                 <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>취소</Button>
-                <Button variant="primary" type="submit" disabled={operation !== null}>저장</Button>
+                <Button variant="primary" type="submit" disabled={memberReadOnly || operation !== null}>저장</Button>
               </DialogActions>
             </DialogForm>
           </>}
@@ -333,7 +344,7 @@ export function VmSnapshotsPage() {
             {dialogError && <DialogCopy role="alert">{dialogError}</DialogCopy>}
             <DialogActions>
               <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>취소</Button>
-              <Button variant="primary" type="button" disabled={operation !== null} onClick={() => void restoreSnapshot(dialog.snapshot)}>정지하고 복원</Button>
+              <Button variant="primary" type="button" disabled={memberReadOnly || operation !== null} onClick={() => void restoreSnapshot(dialog.snapshot)}>정지하고 복원</Button>
             </DialogActions>
           </>}
         </>}
@@ -345,7 +356,7 @@ export function VmSnapshotsPage() {
           {dialogError && <DialogCopy role="alert">{dialogError}</DialogCopy>}
           <DialogActions>
             <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>취소</Button>
-            <Button variant="danger" type="button" disabled={operation !== null} onClick={() => void deleteSnapshot(dialog.snapshot)}>Snapshot 삭제</Button>
+            <Button variant="danger" type="button" disabled={memberReadOnly || operation !== null} onClick={() => void deleteSnapshot(dialog.snapshot)}>Snapshot 삭제</Button>
           </DialogActions>
         </>}
         {dialog.kind === 'restore-complete' && <>
@@ -355,7 +366,7 @@ export function VmSnapshotsPage() {
           {dialogError && <DialogCopy role="alert">{dialogError}</DialogCopy>}
           <DialogActions>
             <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>닫기</Button>
-            <Button variant="primary" type="button" onClick={startVmAfterRestore}>VM 시작</Button>
+            <Button variant="primary" type="button" disabled={memberReadOnly} onClick={startVmAfterRestore}>VM 시작</Button>
           </DialogActions>
         </>}
       </Dialog>
