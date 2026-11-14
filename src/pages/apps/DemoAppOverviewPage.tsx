@@ -648,14 +648,14 @@ export function DemoAppSettingsPage() {
     }
     current.environments = structuredClone(settingsDraft.environments);
     const draftService = settingsDraft.services[0];
-    current.services = current.services.map((service, index) => index === 0 && draftService
-      ? {
-          ...service,
-          prPreviews: draftService.prPreviews,
-          previewEnvironment: draftService.previewEnvironment,
-          previewBots: draftService.previewBots,
-        }
-      : service);
+    if (draftService) {
+      current.services = current.services.map(service => ({
+        ...service,
+        prPreviews: draftService.prPreviews,
+        previewEnvironment: draftService.previewEnvironment,
+        previewBots: draftService.previewBots,
+      }));
+    }
     if (!saveDemoApps(apps)) {
       setNotice("설정 변경사항을 저장하지 못했습니다. 다시 시도해 주세요.");
       return;
@@ -829,9 +829,7 @@ export function DemoAppSettingsPage() {
               onChange={(checked) => {
                 setDraft(current => current ? {
                   ...current,
-                  services: current.services.map((service, index) => index === 0
-                    ? { ...service, prPreviews: checked }
-                    : service),
+                  services: current.services.map(service => ({ ...service, prPreviews: checked })),
                 } : current);
                 setNotice("");
               }}
@@ -847,9 +845,7 @@ export function DemoAppSettingsPage() {
                 const value = event.currentTarget.value;
                 setDraft(current => current ? {
                   ...current,
-                  services: current.services.map((service, index) => index === 0
-                    ? { ...service, previewEnvironment: value }
-                    : service),
+                  services: current.services.map(service => ({ ...service, previewEnvironment: value })),
                 } : current);
                 setNotice("");
               }}
@@ -872,9 +868,7 @@ export function DemoAppSettingsPage() {
               onChange={(checked) => {
                 setDraft(current => current ? {
                   ...current,
-                  services: current.services.map((service, index) => index === 0
-                    ? { ...service, previewBots: checked }
-                    : service),
+                  services: current.services.map(service => ({ ...service, previewBots: checked })),
                 } : current);
                 setNotice("");
               }}
