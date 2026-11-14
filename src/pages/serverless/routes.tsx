@@ -195,10 +195,7 @@ export function ServerlessTriggersRoute() {
         onOpenDocsExample={() => void navigate('/help')}
         onToggleTrigger={(id, enabled) => { updateDemoServerlessTrigger(fn.id, id, enabled); changed(); }}
         onDeleteTrigger={id => { deleteDemoServerlessTrigger(fn.id, id); changed(); }}
-        onConnectDomain={() => {
-          const domain = window.prompt('연결할 도메인을 입력하세요', fn.domain ?? '');
-          if (domain?.trim()) { setDemoServerlessDomain(fn.id, domain.trim()); changed(); }
-        }}
+        onConnectDomain={domain => { setDemoServerlessDomain(fn.id, domain); changed(); }}
       />
     </ServerlessShell>
   );
@@ -233,9 +230,9 @@ export function ServerlessTabRoute() {
       selectedDatabaseId={fn.databaseId}
       onSelectTab={tab => selectTab(tab)}
       onAddVariable={variable => { addDemoServerlessVariable(fn.id, variable); changed(); }}
-      onUpdateVariable={(name, variable) => {
-        const value = window.prompt(`새 값을 입력하세요 · ${name}`, '');
-        if (value !== null) { updateDemoServerlessVariable(fn.id, name, { ...variable, value }); changed(); }
+      onUpdateVariable={(name, value) => {
+        updateDemoServerlessVariable(fn.id, name, { name, secret: true, value });
+        changed();
       }}
       onDeleteVariable={name => { deleteDemoServerlessVariable(fn.id, name); changed(); }}
       onSaveChanges={changed}

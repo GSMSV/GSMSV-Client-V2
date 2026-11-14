@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { formatCronSchedule, getNextDemoServerlessTriggerType, type DemoServerlessTrigger } from '../../entities/serverless';
 import { TriggerDialog } from '../../features/serverless/manage-triggers';
@@ -34,7 +34,7 @@ export interface ServerlessTriggersPageProps {
   onOpenDocsExample?: () => void;
   onToggleTrigger?: (id: string, enabled: boolean) => void;
   onDeleteTrigger?: (id: string) => void;
-  onConnectDomain?: () => void;
+  onConnectDomain?: (domain: string) => void;
 }
 
 const Page = styled.div`
@@ -272,6 +272,75 @@ const TriggerTabs: Array<{ id: ServerlessTriggerTab; label: string }> = [
 
 const formatNumber = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 
+const DomainOverlay = styled.div`
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(14, 12, 16, 0.66);
+`;
+
+const DomainDialog = styled.div`
+  box-sizing: border-box;
+  display: flex;
+  width: min(480px, 100%);
+  max-height: calc(100vh - 48px);
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 12px 16px rgba(0, 0, 0, 0.45);
+`;
+
+const DomainDialogTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const DomainDialogCopy = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const DomainField = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+`;
+
+const DomainInput = styled.input`
+  box-sizing: border-box;
+  width: 100%;
+  height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  outline: 2px solid transparent;
+  color: ${({ theme }) => theme.colors.text};
+  background: ${({ theme }) => theme.colors.field};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  &:focus-visible { outline-color: ${({ theme }) => theme.colors.primary}; }
+`;
+
+const DomainDialogActions = styled.footer`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 export function ServerlessTriggersPage({
   functionName,
   activeTab = 'triggers',
@@ -294,8 +363,29 @@ export function ServerlessTriggersPage({
   onConnectDomain,
 }: ServerlessTriggersPageProps) {
   const [dialogType, setDialogType] = useState<DemoServerlessTrigger['type'] | null>(null);
+  const [domainDialog, setDomainDialog] = useState<'input' | 'verification-error' | null>(null);
+  const [domainDraft, setDomainDraft] = useState('');
   const nextTriggerType = getNextDemoServerlessTriggerType(triggers);
   const closeTriggerDialog = () => setDialogType(null);
+  const openDomainDialog = () => {
+    setDomainDraft(domain ?? '');
+    setDomainDialog('input');
+  };
+  const submitDomain = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!domainDraft.trim()) return;
+    setDomainDraft(domainDraft.trim());
+    setDomainDialog('verification-error');
+  };
+  const closeDomainDialog = () => {
+    setDomainDialog(null);
+    setDomainDraft('');
+  };
+  const retryDomainVerification = () => {
+    if (!domainDraft.trim() || !onConnectDomain) return;
+    onConnectDomain(domainDraft.trim());
+    closeDomainDialog();
+  };
 
   return (
     <Page data-node-id="52:3715">
@@ -418,7 +508,7 @@ export function ServerlessTriggersPage({
       <Surface data-node-id="589:6130">
         <SurfaceHeading>
           <SurfaceTitle>사용자 지정 도메인</SurfaceTitle>
-          <Button variant="secondary" icon={<Octicon name="link" size={16} />} disabled={!onConnectDomain} onClick={onConnectDomain}>도메인 연결</Button>
+          <Button variant="secondary" icon={<Octicon name="link" size={16} />} disabled={!onConnectDomain} onClick={openDomainDialog}>도메인 연결</Button>
         </SurfaceHeading>
         <AddressRow>
           <IconSlot aria-hidden="true"><Octicon name="globe" size={16} /></IconSlot>
@@ -430,6 +520,35 @@ export function ServerlessTriggersPage({
         </AddressRow>
       </Surface>
       {dialogType && onAddTrigger && <TriggerDialog type={dialogType} onAdd={onAddTrigger} onClose={closeTriggerDialog} />}
+      {domainDialog === 'input' && <DomainOverlay onMouseDown={event => { if (event.currentTarget === event.target) closeDomainDialog(); }}>
+        <DomainDialog as="form" role="dialog" aria-modal="true" aria-labelledby="domain-connect-title" onSubmit={submitDomain}>
+          <DomainDialogTitle id="domain-connect-title">도메인 연결</DomainDialogTitle>
+          <DomainDialogCopy>
+            <span>연결할 도메인을 입력하세요.</span>
+            <span>DNS TXT 레코드로 소유를 확인한 뒤 연결하고, 인증서는 자동으로 발급합니다.</span>
+          </DomainDialogCopy>
+          <DomainField htmlFor="serverless-domain-input">도메인
+            <DomainInput id="serverless-domain-input" autoFocus required value={domainDraft} placeholder="api.example.com" onChange={event => setDomainDraft(event.currentTarget.value)} />
+          </DomainField>
+          <DomainDialogActions>
+            <Button type="button" variant="secondary" onClick={closeDomainDialog}>취소</Button>
+            <Button type="submit" variant="primary" disabled={!domainDraft.trim()}>TXT 확인</Button>
+          </DomainDialogActions>
+        </DomainDialog>
+      </DomainOverlay>}
+      {domainDialog === 'verification-error' && <DomainOverlay onMouseDown={event => { if (event.currentTarget === event.target) closeDomainDialog(); }}>
+        <DomainDialog role="alertdialog" aria-modal="true" aria-labelledby="domain-verification-title">
+          <DomainDialogTitle id="domain-verification-title">Domain을 확인하지 못했습니다</DomainDialogTitle>
+          <DomainDialogCopy>
+            <span>· {domainDraft}의 TXT 레코드를 찾지 못했습니다.</span>
+            <span>· 레코드를 추가한 뒤 반영되기까지 시간이 걸릴 수 있습니다.</span>
+          </DomainDialogCopy>
+          <DomainDialogActions>
+            <Button type="button" variant="secondary" onClick={closeDomainDialog}>닫기</Button>
+            <Button type="button" variant="primary" onClick={retryDomainVerification}>다시 확인</Button>
+          </DomainDialogActions>
+        </DomainDialog>
+      </DomainOverlay>}
     </Page>
   );
 }

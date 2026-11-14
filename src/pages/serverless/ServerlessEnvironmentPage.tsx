@@ -25,7 +25,7 @@ export interface ServerlessEnvironmentPageProps {
   selectedDatabaseId?: string;
   onSelectTab?: (tab: ServerlessFunctionTab) => void;
   onAddVariable?: (variable: ServerlessEnvironmentVariable) => void;
-  onUpdateVariable?: (name: string, variable: ServerlessEnvironmentVariable) => void;
+  onUpdateVariable?: (name: string, value: string) => void;
   onDeleteVariable?: (name: string) => void;
   onSaveChanges?: () => void;
   onEditVariables?: () => void;
@@ -299,6 +299,52 @@ const LineNumber = styled.span`
   color: ${({ theme }) => theme.colors.faint};
 `;
 
+const UpdateOverlay = styled.div`
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(14, 12, 16, 0.66);
+`;
+
+const UpdateDialog = styled.form`
+  box-sizing: border-box;
+  display: flex;
+  width: min(480px, 100%);
+  max-height: calc(100vh - 48px);
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 12px 16px rgba(0, 0, 0, 0.45);
+`;
+
+const UpdateTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const UpdateNotes = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const UpdateActions = styled.footer`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 export function ServerlessEnvironmentPage({
   functionName,
   variables = [],
@@ -317,6 +363,7 @@ export function ServerlessEnvironmentPage({
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [secret, setSecret] = useState(false);
+  const [secretUpdate, setSecretUpdate] = useState<{ name: string; value: string } | null>(null);
   const canEdit = Boolean(onAddVariable);
 
   const addVariable = (event: FormEvent<HTMLFormElement>) => {
@@ -326,6 +373,13 @@ export function ServerlessEnvironmentPage({
     setName('');
     setValue('');
     setSecret(false);
+  };
+
+  const updateSecretVariable = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!secretUpdate?.value || !onUpdateVariable) return;
+    onUpdateVariable(secretUpdate.name, secretUpdate.value);
+    setSecretUpdate(null);
   };
 
   return (
@@ -384,7 +438,7 @@ export function ServerlessEnvironmentPage({
             </VariableCopy>
             {variable.secret && (
               <RowActions>
-                <Button variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled={!onUpdateVariable} onClick={() => onUpdateVariable?.(variable.name, variable)}>값 바꾸기</Button>
+                <Button variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled={!onUpdateVariable} onClick={() => setSecretUpdate({ name: variable.name, value: '' })}>값 바꾸기</Button>
                 <Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} disabled={!onDeleteVariable} onClick={() => onDeleteVariable?.(variable.name)}>지우기</Button>
               </RowActions>
             )}
@@ -433,6 +487,22 @@ export function ServerlessEnvironmentPage({
         </Code>
         <BodyText>바꾼 값은 다음 실행부터 반영됩니다.</BodyText>
       </Panel>
+      {secretUpdate && <UpdateOverlay onMouseDown={event => { if (event.currentTarget === event.target) setSecretUpdate(null); }}>
+        <UpdateDialog role="dialog" aria-modal="true" aria-labelledby="secret-variable-update-title" onSubmit={updateSecretVariable}>
+          <UpdateTitle id="secret-variable-update-title">{secretUpdate.name} 값을 바꾸시겠습니까?</UpdateTitle>
+          <UpdateNotes>
+            <span>· 저장하면 지금 값은 다시 볼 수 없습니다.</span>
+            <span>· 다음 실행부터 새 값을 씁니다.</span>
+          </UpdateNotes>
+          <FieldGroup htmlFor="serverless-secret-variable-value">새 값
+            <Input id="serverless-secret-variable-value" type="password" autoComplete="new-password" autoFocus value={secretUpdate.value} placeholder="새 값을 입력하세요" onChange={event => setSecretUpdate(current => current ? { ...current, value: event.currentTarget.value } : current)} />
+          </FieldGroup>
+          <UpdateActions>
+            <Button type="button" variant="secondary" onClick={() => setSecretUpdate(null)}>취소</Button>
+            <Button type="submit" variant="primary" disabled={!secretUpdate.value.trim()}>저장</Button>
+          </UpdateActions>
+        </UpdateDialog>
+      </UpdateOverlay>}
     </Page>
   );
 }
