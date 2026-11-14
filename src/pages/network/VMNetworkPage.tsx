@@ -460,8 +460,8 @@ export default function VMNetworkPage() {
   const expectedInternalPort = useMemo(() => Number.parseInt(domainForm.internalPort, 10), [domainForm.internalPort]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'home') navigate('/');
-    if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/vms` : '/teams');
+    if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
+    if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
     if (item === 'apps') navigate('/apps');
     if (item === 'database') navigate('/databases');
   };
@@ -590,7 +590,7 @@ export default function VMNetworkPage() {
       hasUnsavedInput={hasUnsavedInput}
     >
       <Page>
-        <Breadcrumb to={teamId ? `/teams/${encodeURIComponent(teamId)}/vms` : '/'}>{teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
+        <Breadcrumb to={teamId ? `/teams/${encodeURIComponent(teamId)}` : '/'}>{teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
         <Heading>
           <Title>VM Network</Title>
           <Subtitle>외부 접속과 트래픽 규칙 관리</Subtitle>

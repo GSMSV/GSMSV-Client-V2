@@ -67,9 +67,9 @@ export interface VmDraft {
 const stateKey = 'vm-resources';
 const personalDraftKey = 'vm-personal-create-draft';
 const teamDraftKey = 'vm-team-create-draft';
-// The team VM Figma states use 2026-10-26 14:00 KST as their reference time.
+// The team VM Figma states use 2026-10-26 00:00 KST as their reference time.
 // Keep the demo gate deterministic instead of tying the Figma interaction to the visitor's clock.
-export const demoTeamReferenceTime = Date.UTC(2026, 9, 26, 5);
+export const demoTeamReferenceTime = Date.UTC(2026, 9, 25, 15);
 
 export function getDemoVmExpiryTime(expiresAt: string): number | undefined {
   const match = expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);

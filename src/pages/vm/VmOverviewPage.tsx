@@ -74,6 +74,12 @@ export function VmOverviewPage() {
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (!vm) return <Navigate to={window.location.pathname.startsWith('/teams/') ? `/teams/${encodeURIComponent(routeTeamId ?? 'demo-team')}/vms` : '/'} replace />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
+  }
+  if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
+  }
   const vmRecord = vm;
 
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
