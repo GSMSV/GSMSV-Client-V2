@@ -24,8 +24,9 @@ export default function AdminTeamApprovalsDemoPage() {
 
   function update(request: TeamRequest) {
     const next = requests.map((item) => item.id === request.id ? request : item);
+    if (!saveDemoTeamRequests(next)) return false;
     setRequests(next);
-    saveDemoTeamRequests(next);
+    return true;
   }
 
   function approve() {
@@ -35,7 +36,10 @@ export default function AdminTeamApprovalsDemoPage() {
       setNotice('팀 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    update({ ...selected, status: '승인 완료' });
+    if (!update({ ...selected, status: '승인 완료' })) {
+      setNotice('신청 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(`${selected.name} 팀 신청을 승인했습니다. 로컬 미리보기에서만 적용됩니다.`);
   }
 
@@ -47,7 +51,10 @@ export default function AdminTeamApprovalsDemoPage() {
       setNotice('팀 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    update({ ...selected, status: '거절', rejectReason: reason });
+    if (!update({ ...selected, status: '거절', rejectReason: reason })) {
+      setNotice('신청 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(`${selected.name} 팀 신청을 거절했습니다.`);
   }
 
