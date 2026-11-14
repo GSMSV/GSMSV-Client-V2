@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmDraft, saveDemoVmState, type VmDraft, type VmOwner } from '../../entities/vm';
+import { getDemoVmCreateState, getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmCreateRequest, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { SliderField, StepConnector, StepIndicator } from '../../shared/ui/controls';
@@ -119,10 +119,10 @@ export type VmCreateStep = 'spec' | 'details' | 'review';
 export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateStep }) {
   const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
-  const [draft, setDraft] = useState<VmDraft>(() => getDemoVmDraft(owner));
-  const [state, setState] = useState(() => getDemoVmState());
-  const [error, setError] = useState('');
   const isTeam = owner === 'team';
+  const [draft, setDraft] = useState<VmDraft>(() => getDemoVmDraft(owner));
+  const [state, setState] = useState(() => isTeam ? getDemoVmState() : getDemoVmCreateState(owner));
+  const [error, setError] = useState('');
   const teamId = routeTeamId || 'demo-team';
   const prefix = isTeam ? `/teams/${encodeURIComponent(teamId)}/vms/new` : '/vms/new';
   const team = isTeam ? getDemoTeam(teamId) : undefined;
@@ -183,7 +183,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   function createRequest() {
     if (!validDraft()) return;
     const { state: nextState, vm } = makeDemoVm(state, draft, owner, teamId, teamName, creatorName);
-    if (!saveDemoVmState(nextState)) {
+    if (!saveDemoVmCreateRequest(owner, nextState, vm)) {
       setError('VM 생성 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
