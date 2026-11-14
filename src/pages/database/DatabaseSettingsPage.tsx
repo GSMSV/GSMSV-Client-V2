@@ -243,7 +243,7 @@ export default function DatabaseSettingsPage(){
         <TabsRow>
           <Tabs aria-label="Database 상세 메뉴">
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}`)}>접속 정보</Tab>
-            <Tab type="button" title="쿼리 실행 API가 계약에 없어 제공되지 않습니다" disabled>쿼리 콘솔</Tab>
+            <Tab type="button" title={import.meta.env.DEV && isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 제공되지 않습니다'} disabled={!(import.meta.env.DEV && isDemoMode())} onClick={()=>{if(import.meta.env.DEV&&isDemoMode())navigate(`/databases/${encodeURIComponent(value.grn)}/query`);}}>쿼리 콘솔</Tab>
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}/backups`)}>백업</Tab>
             <Tab type="button" $active aria-current="page">설정</Tab>
           </Tabs>
