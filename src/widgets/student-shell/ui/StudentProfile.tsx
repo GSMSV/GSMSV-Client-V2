@@ -115,15 +115,15 @@ interface StudentProfileProps {
   userName: string;
   profilePhotoUrl?: string | null;
   activeTeamId?: string;
-  hasUnsavedInput: boolean;
+  onRequestNavigation: (action: () => void) => void;
   onOpen: () => void;
   onLogoutPendingChange?: (pending: boolean) => void;
   onLogoutRequest?: () => void;
 }
 
-export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange, onLogoutRequest }: StudentProfileProps) {
+export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequestNavigation, onOpen, onLogoutPendingChange, onLogoutRequest }: StudentProfileProps) {
   const navigate = useNavigate();
-  const { key: locationKey, pathname } = useLocation();
+  const { key: locationKey } = useLocation();
   const panelId = useId();
   const profileRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -202,24 +202,22 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUns
   };
 
   const openAdmin = () => {
-    if (!confirmNavigation('/admin/infra', '관리자 콘솔')) return;
     setOpen(false);
-    void navigate('/admin/infra');
+    onRequestNavigation(() => { void navigate('/admin/infra'); });
   };
 
-  const confirmNavigation = (path: string, destination: string) => {
-    if (hasUnsavedInput && pathname !== path && !window.confirm(`저장하지 않은 입력이 있습니다. ${destination}(으)로 이동할까요?`)) return false;
-    return true;
-  };
-
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (loggingOut) return;
     if (onLogoutRequest) {
       setOpen(false);
       onLogoutRequest();
       return;
     }
-    if (!confirmNavigation('/login', '로그인 화면')) return;
+    setOpen(false);
+    onRequestNavigation(() => { void completeLogout(); });
+  };
+
+  const completeLogout = async () => {
     setLoggingOut(true);
     onLogoutPendingChange?.(true);
     setLogoutError(false);
@@ -282,9 +280,8 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUns
               disabled={!teamSettingsPath || loggingOut}
               onClick={() => {
                 if (!teamSettingsPath) return;
-                if (!confirmNavigation(teamSettingsPath, '팀 설정')) return;
                 setOpen(false);
-                void navigate(teamSettingsPath);
+                onRequestNavigation(() => { void navigate(teamSettingsPath); });
               }}
             >
               팀 설정
@@ -304,9 +301,8 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUns
               icon={<Octicon name="gear" size={16} />}
               disabled={loggingOut}
               onClick={() => {
-                if (!confirmNavigation('/settings', '계정 설정')) return;
                 setOpen(false);
-                void navigate('/settings');
+                onRequestNavigation(() => { void navigate('/settings'); });
               }}
             >
               계정 설정

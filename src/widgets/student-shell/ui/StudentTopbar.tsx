@@ -165,7 +165,7 @@ export interface StudentTopbarProps {
   onSelectScope: () => void;
   onSearch: () => void;
   onOpenNotifications: () => void;
-  hasUnsavedInput: boolean;
+  onRequestNavigation: (action: () => void) => void;
   onLogoutPendingChange?: (pending: boolean) => void;
   onLogoutRequest?: () => void;
   showBottomBorder?: boolean;
@@ -183,7 +183,7 @@ export function StudentTopbar({
   onSelectScope,
   onSearch,
   onOpenNotifications,
-  hasUnsavedInput,
+  onRequestNavigation,
   onLogoutPendingChange,
   onLogoutRequest,
   showBottomBorder = false,
@@ -196,10 +196,8 @@ export function StudentTopbar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(notificationCount ?? 0);
   const [activeScopeIndex, setActiveScopeIndex] = useState(0);
-  const hasUnsavedInputRef = useRef(hasUnsavedInput);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  hasUnsavedInputRef.current = hasUnsavedInput;
 
   useEffect(() => {
     if (!scopeOpen || !scopeOptions?.length) return;
@@ -228,10 +226,11 @@ export function StudentTopbar({
   }, []);
 
   const openSearchResource = useCallback((path: string) => {
-    if (hasUnsavedInputRef.current && !window.confirm('저장하지 않은 입력이 있습니다. 검색 결과 화면으로 이동할까요?')) return;
-    setSearchOpen(false);
-    void navigate(path);
-  }, [navigate]);
+    onRequestNavigation(() => {
+      setSearchOpen(false);
+      void navigate(path);
+    });
+  }, [navigate, onRequestNavigation]);
 
   const onScopeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const optionCount = scopeOptions?.length ?? 0;
@@ -305,7 +304,10 @@ export function StudentTopbar({
                     aria-selected={option.selected}
                     tabIndex={index === activeScopeIndex ? 0 : -1}
                     $selected={option.selected}
-                    onClick={() => { setScopeOpen(false); option.onSelect(); }}
+                    onClick={() => onRequestNavigation(() => {
+                      setScopeOpen(false);
+                      option.onSelect();
+                    })}
                   >
                     <OptionLabel>{option.label}</OptionLabel>
                     {option.selected && <Octicon name="check" size={16} aria-hidden="true" />}
@@ -350,7 +352,7 @@ export function StudentTopbar({
             userName={userName}
             profilePhotoUrl={profilePhotoUrl}
             activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
-            hasUnsavedInput={hasUnsavedInput}
+            onRequestNavigation={onRequestNavigation}
             onLogoutPendingChange={onLogoutPendingChange}
             onLogoutRequest={onLogoutRequest}
             onOpen={() => {
@@ -365,8 +367,7 @@ export function StudentTopbar({
         onClose={closeNotifications}
         onUnreadCountChange={setUnreadCount}
         onOpenResource={path => {
-          if (hasUnsavedInputRef.current && !window.confirm('저장하지 않은 입력이 있습니다. 알림에서 선택한 화면으로 이동할까요?')) return;
-          void navigate(path);
+          onRequestNavigation(() => { void navigate(path); });
         }}
       />
       <ResourceSearchPanel open={searchOpen} onClose={closeSearch} onOpenResource={openSearchResource} />
