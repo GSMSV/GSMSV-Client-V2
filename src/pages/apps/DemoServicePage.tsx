@@ -26,6 +26,7 @@ import {
 } from "../../features/apps/demoServiceOperations";
 import { DemoAppDialog } from "./DemoAppDialog";
 import { getSessionUser } from "../../entities/session";
+import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
 import { Button, SliderField } from "../../shared/ui/controls";
 import { Octicon } from "../../shared/ui/icons";
@@ -453,6 +454,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
 
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
+  const scopeOptions = demoAppScopeOptions(app?.owner, navigate);
   const move = (next: string) =>
     navigate(
       `/apps/${encodeURIComponent(appId)}/services/${encodeURIComponent(serviceId)}/${next}`,
@@ -467,6 +469,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
     <StudentShell
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? "김민수"}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate("/teams/new")}

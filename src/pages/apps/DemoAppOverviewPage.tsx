@@ -21,6 +21,7 @@ import { reconcileDemoDatabaseRestarts } from "../../features/apps/demoServiceOp
 import { Modal } from "./DemoAppDialog";
 import { DeleteConfirmDialog } from "../../shared/ui/feedback";
 import { getSessionUser } from "../../entities/session";
+import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
 import { Button, SegmentedControl } from "../../shared/ui/controls";
 import { Octicon } from "../../shared/ui/icons";
@@ -365,6 +366,7 @@ export function DemoAppOverviewPage() {
   }, [appId]);
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
+  const scopeOptions = demoAppScopeOptions(app?.owner, navigate);
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
     if (item === "home") navigate(teamPath || "/");
     if (item === "apps") navigate(listPath);
@@ -376,6 +378,7 @@ export function DemoAppOverviewPage() {
       <StudentShell
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+        scopeOptions={scopeOptions}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -412,6 +415,7 @@ export function DemoAppOverviewPage() {
     <StudentShell
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
@@ -574,6 +578,7 @@ export function DemoAppSettingsPage() {
   const [branchDraft, setBranchDraft] = useState("");
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
+  const scopeOptions = demoAppScopeOptions(app?.owner, navigate);
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
     if (item === "home") navigate(teamPath || "/");
     if (item === "apps") navigate(listPath);
@@ -585,6 +590,7 @@ export function DemoAppSettingsPage() {
       <StudentShell
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+        scopeOptions={scopeOptions}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -647,6 +653,7 @@ export function DemoAppSettingsPage() {
     <StudentShell
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
@@ -901,6 +908,7 @@ export function DemoAddServicePage() {
   const [notice, setNotice] = useState("");
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
+  const scopeOptions = demoAppScopeOptions(app?.owner, navigate);
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
     if (item === "home") navigate(teamPath || "/");
     if (item === "apps") navigate(listPath);
@@ -912,6 +920,7 @@ export function DemoAddServicePage() {
       <StudentShell
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+        scopeOptions={scopeOptions}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -932,6 +941,7 @@ export function DemoAddServicePage() {
     <StudentShell
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
+      scopeOptions={scopeOptions}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}

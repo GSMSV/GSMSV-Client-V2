@@ -196,7 +196,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       ? (isTeam ? '팀 VM의 이름과 목적을 알려주세요' : 'VM에 이름과 목적을 알려주세요')
       : (isTeam ? '이 설정으로 팀 VM을 만드시겠습니까?' : '이 설정으로 VM을 만드시겠습니까?');
 
-  return <DemoShell activeItem="vm-create" scopeLabel={isTeam ? `${teamName} · ${team?.my_role === 'devops' ? 'DevOps 엔지니어' : '팀장'}` : '내 Resources'} userName={isTeam ? creatorName : '김지민'} hasUnsavedInput={step === 'details'}>
+  return <DemoShell activeItem="vm-create" scopeLabel={isTeam ? `${teamName} · ${team?.my_role === 'devops' ? 'DevOps 엔지니어' : '팀장'}` : '내 Resources'} teamScopeId={isTeam ? teamId : undefined} userName={isTeam ? creatorName : '김지민'} hasUnsavedInput={step === 'details'}>
     <DemoPage>
       <Breadcrumb>{isTeam ? `${teamName} / 팀 VM 만들기` : 'VM 생성'}</Breadcrumb>
       <StepHead>

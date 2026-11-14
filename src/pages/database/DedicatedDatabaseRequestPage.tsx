@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -28,11 +30,15 @@ const InfoText = styled.div`
 `;
 
 export default function DedicatedDatabaseRequestPage() {
+  const { teamId: routeTeamId } = useParams<{ teamId: string }>();
+  const teamScopeId = routeTeamId ?? 'demo-team';
+  const team = getDemoTeam(teamScopeId);
+  const teamName = team?.name ?? 'GSM Connect';
   const [engine, setEngine] = useState<'MySQL' | 'PostgreSQL'>('MySQL');
   const [reason, setReason] = useState('다른 학생의 부하와 성능을 떼어 놓아야 합니다');
   const [description, setDescription] = useState('실시간 매칭 기능 때문에 쿼리가 많습니다. 공유 서버의 다른 학생 Database에 영향을 주지 않도록 따로 쓰고 싶습니다.');
   const [notice, setNotice] = useState('');
-  const pending = getDemoDbRequests().find((request) => request.status === '대기 중' || request.status === '검토 중');
+  const pending = getDemoDbRequests().find((request) => request.team === teamName && (request.status === '대기 중' || request.status === '검토 중'));
 
   function submitRequest() {
     if (!isDemoMode()) return;
@@ -44,15 +50,15 @@ export default function DedicatedDatabaseRequestPage() {
       return;
     }
     const request: DedicatedDatabaseRequest = {
-      id: `db-request-${crypto.randomUUID()}`, team: 'GSM Connect', applicant: '김지민 · 팀장', members: 3,
+      id: `db-request-${crypto.randomUUID()}`, team: teamName, applicant: '김지민 · 팀장', members: team?.members.length ?? 3,
       engine, reason, description: description.trim(), requestedAt: '2026.11.14', status: '대기 중', rejectReason: '',
     };
     saveDemoDbRequests([...getDemoDbRequests(), request]);
     setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
   }
 
-  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel="GSM Connect · 팀"><PageStack>
-    <Breadcrumb>GSM Connect / Database / 전용형 신청</Breadcrumb>
+  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
+    <Breadcrumb>{teamName} / Database / 전용형 신청</Breadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
     {notice && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
     <Card>

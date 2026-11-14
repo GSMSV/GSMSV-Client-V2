@@ -47,7 +47,7 @@ export function TeamVmListPage() {
         : undefined;
   if (!isDemoMode()) return <Navigate to="/" replace />;
 
-  return <DemoShell activeItem="home" scopeLabel={`${team?.name ?? '팀'} · 팀장`} userName="김지민">
+  return <DemoShell activeItem="home" scopeLabel={`${team?.name ?? '팀'} · 팀장`} teamScopeId={teamId} userName="김지민">
     <DemoPage>
       <Breadcrumb>{team?.name ?? '팀'} / 팀 Resources</Breadcrumb>
       <Heading><div><Title>팀 VM</Title><StatusLine>팀에서 사용하는 가상 머신을 확인하고 관리합니다.</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={!canCreateInTeam || Boolean(createQuotaReason)} title={createQuotaReason ?? (!canCreateInTeam ? '승인된 팀의 팀장 또는 DevOps만 만들 수 있습니다.' : undefined)} onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/vms/new`)}>팀 VM 만들기</Button></Heading>
