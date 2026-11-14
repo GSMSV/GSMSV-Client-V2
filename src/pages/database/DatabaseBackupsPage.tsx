@@ -217,7 +217,11 @@ export default function DatabaseBackupsPage() {
     setFailedDownloadBackup(null);
     try {
       const blob = import.meta.env.DEV && isDemoMode()
-        ? new Blob([`-- Local demo backup: ${backup.id}\n-- Database: ${detail.value?.name ?? databaseGrn}\nSELECT 1;\n`], { type: 'application/gzip' })
+        ? await new Response(
+          new Blob([`-- Local demo backup: ${backup.id}\n-- Database: ${detail.value?.name ?? databaseGrn}\nSELECT 1;\n`])
+            .stream()
+            .pipeThrough(new CompressionStream('gzip')),
+        ).arrayBuffer().then(bytes => new Blob([bytes], { type: 'application/gzip' }))
         : await downloadDatabaseBackup(databaseGrn, backup.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');

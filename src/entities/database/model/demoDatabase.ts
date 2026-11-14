@@ -46,13 +46,34 @@ const demoDatabaseSeed: DemoDatabaseState = {
 
 const clone = <T,>(value: T): T => structuredClone(value);
 
+function settleDemoDatabaseTransitions(state: DemoDatabaseState, now: number): boolean {
+  let changed = false;
+  for (const database of state.databases) {
+    const elapsed = now - new Date(database.updated_at).getTime();
+    if (database.status === 'creating' && elapsed >= 2_000) {
+      database.status = 'active';
+      database.updated_at = new Date(now).toISOString();
+      changed = true;
+    } else if (database.status === 'deleting' && elapsed >= 4_000) {
+      state.databases = state.databases.filter(item => item.grn !== database.grn);
+      delete state.backups[database.grn];
+      delete state.passwords[database.grn];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function getDemoDatabaseState(): DemoDatabaseState {
   const value = readDemoState<unknown>('database.resources', clone(demoDatabaseSeed));
   if (!value || typeof value !== 'object') return clone(demoDatabaseSeed);
   const state = value as Partial<DemoDatabaseState>;
-  return Array.isArray(state.databases) && state.backups && typeof state.backups === 'object' && state.passwords && typeof state.passwords === 'object'
-    ? state as DemoDatabaseState
-    : clone(demoDatabaseSeed);
+  if (!Array.isArray(state.databases) || !state.backups || typeof state.backups !== 'object' || !state.passwords || typeof state.passwords !== 'object') {
+    return clone(demoDatabaseSeed);
+  }
+  const validState = state as DemoDatabaseState;
+  if (settleDemoDatabaseTransitions(validState, Date.now())) saveDemoDatabaseState(validState);
+  return validState;
 }
 
 export function saveDemoDatabaseState(state: DemoDatabaseState): boolean {
@@ -108,6 +129,7 @@ export function createDemoDatabase(name: string, engine: DatabaseEngine, owner?:
   state.backups[database.grn] = [];
   state.passwords[database.grn] = `demo-${crypto.randomUUID().slice(0, 18)}`;
   saveDemoDatabaseState(state);
+  setTimeout(() => { getDemoDatabaseState(); }, 2_000);
   return database;
 }
 
@@ -152,9 +174,11 @@ export function addDemoPreRestoreBackup(grn: string, backup: DatabaseBackup): vo
 
 export function deleteDemoDatabase(grn: string): boolean {
   const state = getDemoDatabaseState();
-  const remaining = state.databases.filter(database => database.grn !== grn && database.id !== grn);
-  if (remaining.length === state.databases.length) return false;
-  state.databases = remaining;
+  const database = state.databases.find(item => item.grn === grn || item.id === grn);
+  if (!database) return false;
+  database.status = 'deleting';
+  database.updated_at = new Date().toISOString();
   saveDemoDatabaseState(state);
+  setTimeout(() => { getDemoDatabaseState(); }, 4_000);
   return true;
 }
