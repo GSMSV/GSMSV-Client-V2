@@ -411,7 +411,9 @@ export default function AppsListPage() {
               <Octicon name="upload" size={24} aria-hidden="true" />
               <DialogTitle id="app-quota-title">앱을 더 만들 수 없습니다</DialogTitle>
             </DialogTitleRow>
-            <DialogCopy>{demoMode ? '· 내 앱 2개를 모두 쓰고 있습니다.' : `· 개인 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`}</DialogCopy>
+            <DialogCopy>{demoMode
+              ? `· 내 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`
+              : `· 개인 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`}</DialogCopy>
             <DialogCopy>· 쓰지 않는 앱을 지우면 다시 만들 수 있습니다.</DialogCopy>
             <DialogCopy>· 더 필요하면 팀을 만들어 팀 앱을 쓰세요.</DialogCopy>
             <DialogActions>
