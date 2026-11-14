@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
-import { createDemoDatabase, getDemoDatabase, listDemoDatabases } from '../../entities/database/demo';
+import { createDemoDatabase, getDemoDatabase, getDemoTeamDedicatedDatabaseQuota, listDemoDatabases } from '../../entities/database/demo';
 import type { DatabaseEngine } from '../../entities/database';
 import { listDemoTeams } from '../../entities/team/demo';
 import { Button } from '../../shared/ui/controls';
@@ -37,6 +37,16 @@ export default function AdminDatabaseApprovalsDemoPage() {
     if (!database) database = existingDatabases
       .map((item) => getDemoDatabase(item.grn))
       .find((item) => item?.name === databaseName) ?? null;
+
+    if (database && (database.owner.type !== 'team' || database.owner.id !== teamId || database.isolation !== 'dedicated')) {
+      setNotice('신청에 연결된 Database가 해당 팀의 전용형이 아니어서 승인할 수 없습니다.');
+      return;
+    }
+
+    if (getDemoTeamDedicatedDatabaseQuota(teamId, database?.grn).available === 0) {
+      setNotice(`${teamName} 팀은 전용 Database 1개 한도를 사용 중이라 승인할 수 없습니다.`);
+      return;
+    }
 
     if (!database) {
       if (existingDatabases.length >= 4) {
