@@ -692,6 +692,19 @@ export default function AdminInfrastructurePage() {
                       nodes={nodes}
                       nodeVmStates={nodeVmStates}
                       expiringGrns={demoSnapshot?.expiringGrns}
+                      demoVmDetails={demoSnapshot?.vmDetails}
+                      onDemoPowerAction={demoSnapshot ? (grn, powerState) => {
+                        const nextSnapshot = {
+                          ...demoSnapshot,
+                          resources: demoSnapshot.resources.map(resource => resource.grn === grn
+                            ? { ...resource, power_state: powerState, status: powerState === 'running' ? '실행 중' : '정지됨' }
+                            : resource),
+                        };
+                        setDemoSnapshot(nextSnapshot);
+                        setState(current => current.kind === 'ready' ? { ...current, resources: nextSnapshot.resources } : current);
+                        void import('../../entities/infra-node/demo').then(({ saveDemoInfraSnapshot }) => saveDemoInfraSnapshot(nextSnapshot));
+                      } : undefined}
+                      onOpenDetails={demoSnapshot ? name => navigate(`/admin/vms/${encodeURIComponent(name)}`) : undefined}
                       onRefresh={refresh}
                       refreshDisabled={state.kind === 'loading'}
                     />

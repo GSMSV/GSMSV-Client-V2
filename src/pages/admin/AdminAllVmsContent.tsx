@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import type { AdminResource, InfraNode, NodeVm } from '../../entities/infra-node';
+import type { DemoVmDetails } from '../../entities/infra-node/demo';
 import { Button, SelectField, TextField } from '../../shared/ui/controls';
 import { Pagination } from '../../shared/ui/data-display/Pagination';
 import { StatusBadge } from '../../shared/ui/feedback/StatusBadge';
@@ -31,6 +32,9 @@ export interface AdminAllVmsContentProps {
   nodes: InfraNode[];
   nodeVmStates: Record<string, NodeVmState>;
   expiringGrns?: string[];
+  demoVmDetails?: Record<string, DemoVmDetails>;
+  onDemoPowerAction?: (grn: string, powerState: 'running' | 'stopped') => void;
+  onOpenDetails?: (name: string) => void;
   onRefresh: () => void;
   refreshDisabled: boolean;
 }
@@ -285,8 +289,8 @@ function getIcon(name: OcticonName) {
   return <Octicon name={name} size={16} aria-hidden="true" />;
 }
 
-export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrns, onRefresh, refreshDisabled }: AdminAllVmsContentProps) {
-  const [searchParams] = useSearchParams();
+export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrns, demoVmDetails, onDemoPowerAction, onOpenDetails, onRefresh, refreshDisabled }: AdminAllVmsContentProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const expiringOnly = searchParams.get('expires') === 'soon' && expiringGrns !== undefined;
   const [searchDraft, setSearchDraft] = useState('');
   const [nodeDraft, setNodeDraft] = useState('all');
@@ -324,6 +328,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
   const safePage = pageCount === 0 ? 1 : Math.min(page, pageCount);
   const visibleRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedRow = visibleRows.find(row => row.key === selectedKey) ?? visibleRows[0] ?? null;
+  const selectedDetails = selectedRow?.grn ? demoVmDetails?.[selectedRow.grn] : undefined;
   const selectedNodeState = selectedRow?.node ? nodeVmStates[selectedRow.node] : undefined;
   const selectedNodeVm = selectedRow?.nodeVm ?? selectedNodeState?.items.find(item => selectedRow.grn && item.grn === selectedRow.grn)
     ?? selectedNodeState?.items.find(item => selectedRow.vmid != null && item.vmid === selectedRow.vmid && !item.grn);
@@ -369,16 +374,41 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
     setSelectedKey(null);
   };
 
+  const clearExpiringFilter = () => {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      next.delete('expires');
+      return next;
+    });
+  };
+
   return (
     <Page>
       <Tabs aria-label="VM 보기 방식">
-        <Tab type="button" $active={!nodeMode} aria-current={!nodeMode ? 'page' : undefined} onClick={() => changeViewMode(false)}>
+        <Tab type="button" $active={!nodeMode && !expiringOnly} aria-current={!nodeMode && !expiringOnly ? 'page' : undefined} onClick={() => { changeViewMode(false); clearExpiringFilter(); }}>
           전체 <span>{resources.length}</span>
         </Tab>
-        <Tab type="button" disabled title="VM 만료일 조회 API가 없어 만료 임박 항목을 계산할 수 없습니다.">
-          만료 임박 <span>—</span>
+        <Tab
+          type="button"
+          $active={expiringOnly}
+          aria-current={expiringOnly ? 'page' : undefined}
+          disabled={expiringGrns === undefined}
+          title={expiringGrns === undefined ? 'VM 만료일 API가 없어 만료 임박 항목을 계산할 수 없습니다.' : undefined}
+          onClick={() => {
+            changeViewMode(false);
+            setSearchParams(current => {
+              const next = new URLSearchParams(current);
+              if (expiringOnly) next.delete('expires');
+              else next.set('expires', 'soon');
+              return next;
+            });
+            setPage(1);
+            setSelectedKey(null);
+          }}
+        >
+          만료 임박 <span>{expiringGrns?.length ?? '—'}</span>
         </Tab>
-        <Tab type="button" $active={nodeMode} aria-current={nodeMode ? 'page' : undefined} onClick={() => changeViewMode(true)}>
+        <Tab type="button" $active={nodeMode} aria-current={nodeMode ? 'page' : undefined} onClick={() => { changeViewMode(true); clearExpiringFilter(); }}>
           Node별 보기
         </Tab>
         <FilterActions><Button variant="secondary" icon={getIcon('sync')} onClick={onRefresh} disabled={refreshDisabled}>새로고침</Button></FilterActions>
@@ -422,12 +452,15 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
             </TableRow>
             {visibleRows.map(row => (
               <TableRow role="row" key={row.key} $selected={selectedRow?.key === row.key}>
-                <Cell role="cell"><RowSelect type="button" aria-label={`${row.name}, ${row.ownerEmail} 선택`} aria-pressed={selectedRow?.key === row.key} onClick={() => setSelectedKey(row.key)}>{row.name} · {row.ownerEmail}</RowSelect></Cell>
+                <Cell role="cell"><RowSelect type="button" aria-label={`${row.name}, ${row.ownerEmail} 선택`} aria-pressed={selectedRow?.key === row.key} onClick={() => setSelectedKey(row.key)}>{row.name} · {row.resource?.owner_email === 'GSM Connect' ? '팀 GSM Connect' : row.ownerEmail}</RowSelect></Cell>
                 <Cell role="cell" $muted>{row.node ?? '—'}</Cell>
                 <Cell role="cell" title={row.status}><StatusBadge tone={getStatusTone(row.status)}>{row.status}</StatusBadge></Cell>
-                <Cell role="cell" $muted><MissingValue title="현재 VM API 응답에 만료일이 없습니다">—</MissingValue></Cell>
-                <Cell role="cell" $muted><MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue></Cell>
-                <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => setSelectedKey(row.key)}>상세</Button></Cell>
+                <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.expiresAt?.slice(0, 10) ?? <MissingValue title="현재 VM API 응답에 만료일이 없습니다">—</MissingValue>}</Cell>
+                <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.purpose ?? <MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue>}</Cell>
+                <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => {
+                  setSelectedKey(row.key);
+                  if (row.resource && onOpenDetails) onOpenDetails(row.name);
+                }}>상세 열기</Button></Cell>
               </TableRow>
             ))}
           </Table>
@@ -455,15 +488,14 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
           {selectedRow ? (
             <>
               <DetailRows>
-                <DetailRow><span>소유자</span><DetailValue>{selectedRow.ownerEmail}</DetailValue></DetailRow>
-                <DetailRow><span>전원 상태</span><DetailValue>{selectedRow.resource?.power_state ?? '—'}{selectedRow.node ? ` · ${selectedRow.node}` : ''}</DetailValue></DetailRow>
-                <DetailRow><span>VMID</span><DetailValue>{selectedRow.vmid ?? '—'}</DetailValue></DetailRow>
-                <DetailRow><span>Resources</span><DetailValue><Unsupported title="현재 관리자 VM API에서 리소스 사양을 제공하지 않습니다">API에서 제공하지 않음</Unsupported></DetailValue></DetailRow>
+                <DetailRow><span>소유자</span><DetailValue>{selectedDetails ? selectedRow.ownerEmail.includes('@') ? `${selectedDetails.ownerName} · ${selectedRow.ownerEmail}` : selectedDetails.ownerName : selectedRow.ownerEmail}</DetailValue></DetailRow>
+                <DetailRow><span>전원 상태</span><DetailValue>{selectedRow.resource?.power_state === 'running' ? '실행 중' : selectedRow.resource?.power_state === 'stopped' ? '정지' : selectedRow.resource?.power_state ?? '—'}{selectedRow.node ? ` · ${selectedRow.node}` : ''}</DetailValue></DetailRow>
+                <DetailRow><span>Resources</span><DetailValue>{selectedDetails ? `${selectedDetails.tier} · ${selectedDetails.vcpu} vCPU / ${selectedDetails.ramGb}GB / ${selectedDetails.diskGb}GB` : <Unsupported title="현재 관리자 VM API에서 리소스 사양을 제공하지 않습니다">API에서 제공하지 않음</Unsupported>}</DetailValue></DetailRow>
               </DetailRows>
               <DetailActions>
-                <Button variant="secondary" icon={getIcon('server')} disabled title="VM 상세 관리 API가 없습니다.">상세 관리</Button>
-                <Button variant="secondary" icon={getIcon('stop')} disabled title="VM 종료 API가 없습니다.">종료</Button>
-                <Button variant="secondary" icon={getIcon('sync')} disabled title="VM 재시작 API가 없습니다.">재시작</Button>
+                <Button variant="secondary" icon={getIcon('server')} disabled={!selectedRow.resource || !onOpenDetails} title={!onOpenDetails ? 'VM 상세 관리 API가 없습니다.' : undefined} onClick={() => onOpenDetails?.(selectedRow.name)}>상세 관리</Button>
+                <Button variant="secondary" icon={getIcon('stop')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'stopped'} title={!onDemoPowerAction ? 'VM 종료 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'stopped')}>종료</Button>
+                <Button variant="secondary" icon={getIcon('sync')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'running'} title={!onDemoPowerAction ? 'VM 재시작 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'running')}>재시작</Button>
               </DetailActions>
             </>
           ) : <Helper>검색 조건에 맞는 VM을 선택하면 계약된 정보를 표시합니다.</Helper>}
@@ -481,12 +513,12 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
                         <DetailRow><span>{selectedNodeVm.proxmox_name} · {selectedNodeVm.grn ? selectedNodeVm.grn : `VMID ${selectedNodeVm.vmid}`}</span><DetailValue>{getClassificationLabel(selectedNodeVm.classification)}</DetailValue></DetailRow>
                         <DetailRow><span>{selectedRow.node ?? 'Node'}</span><DetailValue>{selectedNode?.online ? '온라인' : selectedNode ? '오프라인' : '—'}</DetailValue></DetailRow>
                       </DetailRows>
-                      <FilterActions><Button variant="secondary" icon={getIcon('server')} onClick={() => changeViewMode(true, selectedRow.node, selectedNodeVm ? `${selectedRow.node}:${selectedNodeVm.vmid}` : undefined)}>Node별 보기</Button></FilterActions>
+                      <FilterActions><Button variant="secondary" icon={getIcon('server')} onClick={() => { changeViewMode(true, selectedRow.node, selectedNodeVm ? `${selectedRow.node}:${selectedNodeVm.vmid}` : undefined); clearExpiringFilter(); }}>Node별 보기</Button></FilterActions>
                     </>
                   ) : <Helper>이 VM의 Node 분류 정보를 찾을 수 없습니다.</Helper>}
         </DetailCard>
       </DetailGrid>
-      <Helper>만료일·사용 목적·사양과 VM 조작은 현재 관리자 API 응답에 포함되지 않습니다.</Helper>
+      {demoVmDetails ? <Helper>현재 화면은 저장소에 반영되는 로컬 미리보기 데이터입니다.</Helper> : <Helper>만료일·사용 목적·사양과 VM 조작은 현재 관리자 API 응답에 포함되지 않습니다.</Helper>}
     </Page>
   );
 }
