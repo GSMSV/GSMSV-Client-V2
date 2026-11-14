@@ -5,9 +5,9 @@ import { getDemoProfile, updateDemoProfile, type DemoProfile } from '../../entit
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listDemoTeams } from '../../entities/team/demo';
 import type { TeamRole } from '../../entities/team';
-import { AccountDialog, DemoAccountConnections, DemoAccountPhoto, DemoAccountWithdrawal } from '../../features/settings/demo-account';
+import { DemoAccountConnections, DemoAccountPhoto, DemoAccountWithdrawal } from '../../features/settings/demo-account';
 import { Button } from '../../shared/ui/controls';
-import { Banner } from '../../shared/ui/feedback';
+import { Banner, UnsavedChangesDialog } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
@@ -109,6 +109,7 @@ export default function DemoAccountSettingsPage() {
   const [teams] = useState(listDemoTeams);
   const [notificationUnsaved, setNotificationUnsaved] = useState(false);
   const [photoUnsaved, setPhotoUnsaved] = useState(false);
+  const [loginConfirmationOpen, setLoginConfirmationOpen] = useState(false);
   const unsaved = notificationUnsaved || photoUnsaved;
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
     unsaved && nextLocation.pathname !== '/login' && currentLocation.pathname !== nextLocation.pathname,
@@ -141,9 +142,14 @@ export default function DemoAccountSettingsPage() {
     })),
   ], [navigate, teams]);
 
-  function goToLogin() {
+  function performGoToLogin() {
     clearSessionUser();
     void navigate('/login', { replace: true });
+  }
+
+  function goToLogin() {
+    if (unsaved) setLoginConfirmationOpen(true);
+    else performGoToLogin();
   }
 
   if (!profile) return null;
@@ -161,6 +167,7 @@ export default function DemoAccountSettingsPage() {
     onSelectScope={() => undefined}
     onSearch={() => undefined}
     onOpenNotifications={() => undefined}
+    onLogoutRequest={goToLogin}
   >
     <Content>
       <Page>
@@ -216,11 +223,13 @@ export default function DemoAccountSettingsPage() {
           </ActionRow>
         </DangerPanel>
         {blocker.state === 'blocked' && (
-          <AccountDialog title="저장하지 않은 내용이 있습니다" icon="alert" description="저장하지 않고 이동할까요?"
-            onDismiss={blocker.reset} actions={<>
-              <Button variant="secondary" onClick={blocker.reset}>취소</Button>
-              <Button onClick={blocker.proceed}>이동</Button>
-            </>} />
+          <UnsavedChangesDialog onLeave={blocker.proceed} onStay={blocker.reset} />
+        )}
+        {loginConfirmationOpen && (
+          <UnsavedChangesDialog onLeave={() => {
+            setLoginConfirmationOpen(false);
+            performGoToLogin();
+          }} onStay={() => setLoginConfirmationOpen(false)} />
         )}
       </Page>
     </Content>

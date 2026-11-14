@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useBlocker, useLocation, useNavigate } from 'react-router';
+import { useBlocker, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { logout } from '../../features/auth/logout/api/logout';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { Button } from '../../shared/ui/controls';
-import { Banner } from '../../shared/ui/feedback';
+import { Banner, UnsavedChangesDialog } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
@@ -177,11 +177,11 @@ function TeamMemberships({ state }: { state: TeamsState }) {
 
 function ProductionAccountSettingsPage() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const user = getSessionUser();
   const [teamsState, setTeamsState] = useState<TeamsState>({ status: 'loading' });
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'error'>('idle');
   const [notificationUnsaved, setNotificationUnsaved] = useState(false);
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
   const userName = user?.name ?? '사용자';
   const roleLabel = user ? (user.role === 'admin' ? '관리자' : '일반 사용자') : '역할 확인 불가';
 
@@ -195,29 +195,14 @@ function ProductionAccountSettingsPage() {
     return () => controller.abort();
   }, []);
 
-  const confirmUnsavedNavigation = useCallback((path: string) => (
-    pathname === path || !notificationUnsaved || window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')
-  ), [notificationUnsaved, pathname]);
-
   const navigateWithUnsavedCheck = useCallback((path: string) => {
-    if (!confirmUnsavedNavigation(path)) return;
     void navigate(path);
-  }, [confirmUnsavedNavigation, navigate]);
+  }, [navigate]);
 
-  const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
+  const blocker = useBlocker(useCallback(({ currentLocation, historyAction, nextLocation }) => {
     if (logoutState === 'pending' && historyAction === 'REPLACE' && nextLocation.pathname === '/login') return false;
-    return logoutState === 'pending' || (historyAction === 'POP' && notificationUnsaved);
+    return logoutState === 'pending' || (notificationUnsaved && currentLocation.pathname !== nextLocation.pathname);
   }, [logoutState, notificationUnsaved]));
-
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    if (logoutState === 'pending') {
-      blocker.reset();
-      return;
-    }
-    if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
-    else blocker.reset();
-  }, [blocker, logoutState]);
 
   useEffect(() => {
     if (!notificationUnsaved && logoutState !== 'pending') return;
@@ -241,7 +226,6 @@ function ProductionAccountSettingsPage() {
 
   const handleLogout = async () => {
     if (logoutState === 'pending') return;
-    if (!confirmUnsavedNavigation('/login')) return;
     setLogoutState('pending');
     try {
       await logout();
@@ -250,6 +234,12 @@ function ProductionAccountSettingsPage() {
     } catch {
       setLogoutState('error');
     }
+  };
+
+  const requestLogout = () => {
+    if (logoutState === 'pending') return;
+    if (notificationUnsaved) setLogoutConfirmationOpen(true);
+    else void handleLogout();
   };
 
   return (
@@ -267,8 +257,8 @@ function ProductionAccountSettingsPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      hasUnsavedInput={notificationUnsaved}
-      onLogoutPendingChange={pending => setLogoutState(pending ? 'pending' : 'idle')}
+      hasUnsavedInput={false}
+      onLogoutRequest={requestLogout}
     >
       <Content>
         <Page>
@@ -348,7 +338,7 @@ function ProductionAccountSettingsPage() {
               <Button
                 variant="danger"
                 icon={<Octicon name="sign-out" />}
-                onClick={() => void handleLogout()}
+                onClick={requestLogout}
                 disabled={logoutState === 'pending'}
               >
                 {logoutState === 'pending' ? '로그아웃 중…' : '로그아웃'}
@@ -356,6 +346,12 @@ function ProductionAccountSettingsPage() {
             </ActionRow>
             {logoutState === 'error' && <ErrorMessage role="alert">로그아웃하지 못했습니다. 다시 시도해 주세요.</ErrorMessage>}
           </Panel>
+
+          {blocker.state === 'blocked' && <UnsavedChangesDialog onLeave={blocker.proceed} onStay={blocker.reset} />}
+          {logoutConfirmationOpen && <UnsavedChangesDialog onLeave={() => {
+            setLogoutConfirmationOpen(false);
+            void handleLogout();
+          }} onStay={() => setLogoutConfirmationOpen(false)} />}
         </Page>
       </Content>
     </StudentShell>
