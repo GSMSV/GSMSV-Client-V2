@@ -420,6 +420,8 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   const [variableKey, setVariableKey] = useState("CONTACT_EMAIL");
   const [variableValue, setVariableValue] = useState("jimin@example.com");
   const [variableSecret, setVariableSecret] = useState(false);
+  const [editingVariableKey, setEditingVariableKey] = useState<string>();
+  const [editingVariableValue, setEditingVariableValue] = useState("");
   const [variablesEditing, setVariablesEditing] = useState(false);
   const [selectedDeployment, setSelectedDeployment] = useState<string>();
   const [dialog, setDialog] = useState<ServiceDialog>();
@@ -780,21 +782,39 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
               </VariableText>
               {canManage && !expired && (variablesEditing || variable.secret) && (
                 <div>
-                  <Button
+                  {editingVariableKey === variable.key ? (
+                    <>
+                      <Field>
+                        {variable.key} 값
+                        <input
+                          autoFocus
+                          aria-label={`${variable.key} 값`}
+                          type={variable.secret ? "password" : "text"}
+                          value={editingVariableValue}
+                          onChange={event => setEditingVariableValue(event.currentTarget.value)}
+                        />
+                      </Field>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setVariableChanges(current => ({
+                            ...current,
+                            variables: variables.map(item => item.key === variable.key
+                              ? { ...item, value: editingVariableValue }
+                              : item),
+                          }));
+                          setEditingVariableKey(undefined);
+                        }}
+                      >저장</Button>
+                      <Button variant="ghost" onClick={() => setEditingVariableKey(undefined)}>취소</Button>
+                    </>
+                  ) : <Button
                     variant="ghost"
                     onClick={() => {
-                      const next = window.prompt(
-                        `${variable.key} 값 바꾸기`,
-                        variable.secret ? "" : variable.value,
-                      );
-                      if (next !== null) setVariableChanges(current => ({
-                        ...current,
-                        variables: variables.map(item => item.key === variable.key ? { ...item, value: next } : item),
-                      }));
+                      setEditingVariableKey(variable.key);
+                      setEditingVariableValue(variable.secret ? "" : variable.value);
                     }}
-                  >
-                    값 바꾸기
-                  </Button>
+                  >값 바꾸기</Button>}
                   <Button
                     variant="ghost"
                     onClick={() =>
