@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isDemoMode } from '../../../../../shared/demo';
 
 export type AppServiceType = 'web' | 'worker' | 'cron';
 
@@ -24,6 +25,9 @@ function getSourceName(sourceDraftKey: string) {
 
 export function getInitialAppServiceDraft(sourceDraftKey = 'gsmsv.app-create-source-draft'): AppServiceDraft {
   const sourceName = getSourceName(sourceDraftKey);
+  if (isDemoMode()) {
+    return { appName: sourceName || 'portfolio-web', serviceType: 'web', serviceName: 'web', subdomain: 'portfolio-web', memoryMb: 512, cpu: 0.5 };
+  }
   return {
     appName: sourceName,
     serviceType: 'web',

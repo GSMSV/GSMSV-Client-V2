@@ -9,6 +9,7 @@ import { ApiRequestError } from '../../shared/api';
 import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { isDemoMode } from '../../shared/demo';
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -203,6 +204,7 @@ function serviceDescription(type: AppServiceType) {
 export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
   const { draft, update, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
   const [dialog, setDialog] = useState<DialogKind>(null);
@@ -220,14 +222,20 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   useEffect(() => () => requestController.current?.abort(), []);
 
   useEffect(() => {
+    if (demoMode) { setTeams([]); return; }
     const controller = new AbortController();
     void listMyTeams(controller.signal)
       .then(value => { if (!controller.signal.aborted) setTeams(value); })
       .catch(() => { if (!controller.signal.aborted) setTeams([]); });
     return () => controller.abort();
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
+    if (demoMode) {
+      setCurrentTeam(teamId ? { id: teamId, name: 'Demo 팀', status: 'approved', rejection_reason: null, my_role: 'leader', members: [], quota: null, permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false } } : null);
+      setTeamStatus('approved');
+      return;
+    }
     if (!teamId) {
       setTeamStatus('approved');
       setCurrentTeam(null);
@@ -246,7 +254,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
       if (!controller.signal.aborted) setTeamStatus('error');
     });
     return () => controller.abort();
-  }, [teamId, teamStatusRetry]);
+  }, [demoMode, teamId, teamStatusRetry]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
@@ -282,6 +290,12 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     }
 
     requestController.current?.abort();
+    if (demoMode) {
+      const available = value !== 'reserved';
+      setAvailability(available ? 'available' : 'unavailable');
+      setAvailabilityError(available ? '' : '현재 사용할 수 없는 주소입니다.');
+      return;
+    }
     const controller = new AbortController();
     requestController.current = controller;
     setAvailability('loading');
@@ -303,7 +317,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         ? '주소 확인 요청이 많습니다. 잠시 후 다시 확인해 주세요.'
         : '주소 사용 가능 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
-  }, [draft.subdomain]);
+  }, [demoMode, draft.subdomain]);
 
   const handleCreate = async () => {
     const name = draft.appName.trim();
@@ -311,6 +325,19 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     setCreating(true);
     setCreateError(null);
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const { addDemoApp } = await import('../../entities/app');
+        const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
+        let source: { repository: string; branch: string; sourceType: 'github' | 'container' | 'archive' } = { repository: 'gsm-jimin/portfolio-web', branch: 'main', sourceType: 'github' };
+        try {
+          const saved = window.sessionStorage.getItem(sourceDraftKey);
+          if (saved) source = { ...source, ...JSON.parse(saved) as Partial<typeof source> };
+        } catch { /* A preview can still create an app if session storage is unavailable. */ }
+        const appId = addDemoApp(name, source.repository, source.branch, draft.serviceName.trim() || 'web', draft.subdomain.trim() || 'portfolio-web', source.sourceType);
+        window.sessionStorage.removeItem(sourceDraftKey);
+        navigate(`/apps/${encodeURIComponent(appId)}/demo`);
+        return;
+      }
       const app = teamId ? await createTeamApp(teamId, name) : await createPersonalApp(name);
       sessionStorage.removeItem(sourceDraftKey);
       navigate(`/apps/${encodeURIComponent(app.grn)}`);
@@ -389,7 +416,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
 
         <PreviewBlock role="note">
           <Octicon name="info" size={16} aria-hidden="true" />
-          <span>앱 이름 {draft.appName || '미입력'}으로 만들 수 있습니다. 현재 API 계약은 이름만 저장하고 기본 production 환경을 만들며, 이 화면의 소스와 서비스 설정은 전송되지 않습니다.</span>
+          <span>{demoMode ? '화면의 입력값과 소스 예시는 브라우저에만 저장됩니다.' : `앱 이름 ${draft.appName || '미입력'}으로 만들 수 있습니다. 현재 API 계약은 이름만 저장하고 기본 production 환경을 만들며, 이 화면의 소스와 서비스 설정은 전송되지 않습니다.`}</span>
         </PreviewBlock>
 
         <Card>
@@ -398,7 +425,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서비스 유형"
             options={[...serviceOptions]}
             value={draft.serviceType}
-            disabled
+            disabled={!demoMode}
             onChange={value => update('serviceType', value as AppServiceType)}
           />
           <Hint>{serviceDescription(draft.serviceType)}</Hint>
@@ -406,7 +433,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서비스 이름"
             value={draft.serviceName}
             maxLength={30}
-            disabled
+            disabled={!demoMode}
             onChange={event => update('serviceName', event.currentTarget.value)}
             hint="앱 안에서 서비스를 구분하는 이름입니다."
           />
@@ -419,7 +446,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
             label="서브도메인"
             value={draft.subdomain}
             maxLength={63}
-            disabled
+            disabled={!demoMode}
             onChange={event => updateSubdomain(event.currentTarget.value)}
             onBlur={() => { if (draft.subdomain.trim()) void checkSubdomain(); }}
             hint={`production 주소의 이름입니다. 실제 도메인 주소는 계약에 정의되어 있지 않습니다.`}
@@ -433,7 +460,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         <Card>
           <CardHeader>
             <CardTitle>자원</CardTitle>
-            <QuotaMeta>메모리 할당량 API가 없어 값을 확인할 수 없습니다.</QuotaMeta>
+            <QuotaMeta>{demoMode ? '메모리 할당량 1/2 GB 사용 중 · 남은 할당량 1 GB' : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
           </CardHeader>
           <ResourceFields>
             <SliderField
@@ -445,7 +472,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
               minLabel="최소 256 MB"
               maxLabel="최대 1 GB"
               valueLabel={draft.memoryMb >= 1024 ? '1 GB' : `${draft.memoryMb} MB`}
-              disabled
+              disabled={!demoMode}
               onChange={value => update('memoryMb', value)}
             />
             <SliderField
@@ -457,7 +484,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
               minLabel="최소 0.25 vCPU"
               maxLabel="최대 1 vCPU"
               valueLabel={`${draft.cpu} vCPU`}
-              disabled
+              disabled={!demoMode}
               onChange={value => update('cpu', value)}
             />
           </ResourceFields>
