@@ -147,6 +147,12 @@ export default function DatabaseBackupsPage() {
   }, [databaseGrn]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load, retryKey]);
+
+  useEffect(() => {
     if (import.meta.env.DEV && isDemoMode()) {
       let cancelled = false;
       void import('../../entities/home').then(({ demoHomeTeams }) => {
@@ -154,12 +160,6 @@ export default function DatabaseBackupsPage() {
       });
       return () => { cancelled = true; };
     }
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load, retryKey]);
-
-  useEffect(() => {
     const controller = new AbortController();
     void listMyTeams(controller.signal).then(value => {
       if (!controller.signal.aborted) setTeams(value);
