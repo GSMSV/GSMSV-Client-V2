@@ -40,12 +40,18 @@ const IconButton = styled.button`
 `;
 
 export function VmSnapshotsPage() {
-  const { vmId } = useParams<{ vmId: string }>();
+  const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [state, setState] = useState(() => getDemoVmState());
   const [notice, setNotice] = useState('');
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to="/" replace />;
+  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
+  }
+  if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
+  }
   const vmRecord = vm;
 
   const manualCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'manual').length;

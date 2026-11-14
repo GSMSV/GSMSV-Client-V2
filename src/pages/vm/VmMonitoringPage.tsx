@@ -80,14 +80,20 @@ const DataGrid = styled.div`
 `;
 
 export function VmMonitoringPage() {
-  const { vmId } = useParams<{ vmId: string }>();
+  const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [range, setRange] = useState<'1시간' | '6시간' | '24시간'>('1시간');
   const [refresh, setRefresh] = useState(0);
   const state = useMemo(() => getDemoVmState(), [refresh]);
   const vm = state.vms.find(item => item.id === vmId);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to="/" replace />;
+  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
+  }
+  if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
+  }
 
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? 'GSM Connect · 일반 팀원' : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>

@@ -38,7 +38,7 @@ const WarningBar = styled.div`
 `;
 
 export function VmSettingsPage() {
-  const { vmId } = useParams<{ vmId: string }>();
+  const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const navigate = useNavigate();
   const [state, setState] = useState(() => getDemoVmState());
   const [purpose, setPurpose] = useState('');
@@ -46,7 +46,13 @@ export function VmSettingsPage() {
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to="/" replace />;
+  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
+  }
+  if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
+  }
   const vmRecord = vm;
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
   const displayedPurpose = purpose || vmRecord.purpose;
