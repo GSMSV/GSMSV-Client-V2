@@ -157,7 +157,9 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       setError('VM 이름은 영문·숫자로 시작하며 영문, 숫자, 하이픈, 밑줄만 사용할 수 있습니다.');
       return false;
     }
-    const duplicate = state.vms.some(vm => vm.owner === owner && (isTeam ? vm.teamId === teamId : true) && vm.name.toLowerCase() === draft.name.trim().toLowerCase());
+    const duplicate = state.vms.some(vm => vm.owner === owner
+      && (isTeam ? vm.teamId === teamId && vm.teamScenario === 'leader-create' : true)
+      && vm.name.toLowerCase() === draft.name.trim().toLowerCase());
     if (draft.name.trim() && duplicate) {
       setError('같은 소유자 안에서 VM 이름을 중복해서 사용할 수 없습니다.');
       return false;

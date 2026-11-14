@@ -18,6 +18,8 @@ export interface DemoVm {
   owner: VmOwner;
   teamId?: string;
   teamName?: string;
+  /** Keeps the member-view Figma fixture separate from the leader create-flow quota scenario. */
+  teamScenario?: 'member-view' | 'leader-create';
   creator: string;
   role: 'leader' | 'member';
   status: VmStatus;
@@ -93,7 +95,7 @@ export function canExtendDemoTeamVm(vm: Pick<DemoVm, 'expiresAt' | 'status'>): b
 }
 
 const initialVmState: DemoVmState = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   vms: [
     {
       id: 'portfolio-api',
@@ -152,6 +154,7 @@ const initialVmState: DemoVmState = {
       owner: 'team',
       teamId: 'demo-team',
       teamName: 'GSM Connect',
+      teamScenario: 'member-view',
       creator: '김지민',
       role: 'member',
       status: 'running',
@@ -177,6 +180,7 @@ const initialVmState: DemoVmState = {
       owner: 'team',
       teamId: 'demo-team',
       teamName: 'GSM Connect',
+      teamScenario: 'member-view',
       creator: '한도윤',
       role: 'member',
       status: 'stopped',
@@ -196,8 +200,8 @@ const initialVmState: DemoVmState = {
     },
   ],
   personalQuota: { cpu: 4, memory: 8, disk: 30, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
-  teamQuota: { cpu: 4, memory: 6, disk: 50, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
-  teamQuotas: { 'demo-team': { cpu: 4, memory: 6, disk: 50, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
+  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  teamQuotas: { 'demo-team': { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
   sequence: 1,
 };
 
@@ -222,7 +226,7 @@ const teamDraft: VmDraft = {
 export function getDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
   if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
-  if ((stored.schemaVersion ?? 0) >= 2) return stored;
+  if ((stored.schemaVersion ?? 0) >= 3) return stored;
 
   const legacySeedVms = initialVmState.vms
     .filter(vm => vm.id === 'portfolio-api' || vm.id === 'connect-api')
@@ -238,9 +242,16 @@ export function getDemoVmState(): DemoVmState {
     && stored.teamQuota.cpu === 0 && stored.teamQuota.memory === 0 && stored.teamQuota.disk === 0
     && stored.teamQuota.cpuLimit === 4 && stored.teamQuota.memoryLimit === 8 && stored.teamQuota.diskLimit === 60;
 
-  let vms = stored.vms.map(vm => vm.owner === 'team' && vm.teamId === 'gsm-connect'
-    ? { ...vm, teamId: 'demo-team', teamName: vm.teamName || 'GSM Connect' }
-    : vm);
+  let vms = stored.vms.map(vm => {
+    if (vm.owner !== 'team') return vm;
+    const normalized = vm.teamId === 'gsm-connect'
+      ? { ...vm, teamId: 'demo-team', teamName: vm.teamName || 'GSM Connect' }
+      : vm;
+    return {
+      ...normalized,
+      teamScenario: normalized.teamScenario ?? (normalized.role === 'member' ? 'member-view' : 'leader-create'),
+    };
+  });
   // Add the newer Figma rows only when the complete persisted state still matches
   // the original seed. An absent row in any user-modified state may be a deletion.
   if (hasUnchangedLegacySeed) {
@@ -256,7 +267,9 @@ export function getDemoVmState(): DemoVmState {
 
   for (const id of teamIds) {
     const previous = existingTeamQuotas[id] ?? (id === 'demo-team' ? stored.teamQuota : undefined);
-    const teamVms = vms.filter(vm => vm.owner === 'team' && (vm.teamId || 'demo-team') === id);
+    const teamVms = vms.filter(vm => vm.owner === 'team'
+      && (vm.teamId || 'demo-team') === id
+      && teamQuotaScenario(vm) === 'leader-create');
     teamQuotas[id] = {
       cpu: teamVms.reduce((sum, vm) => sum + vm.cpu, 0),
       memory: teamVms.reduce((sum, vm) => sum + vm.memory, 0),
@@ -277,7 +290,7 @@ export function getDemoVmState(): DemoVmState {
 
   const migratedState: DemoVmState = {
     ...stored,
-    schemaVersion: 2,
+    schemaVersion: 3,
     vms,
     personalQuota,
     teamQuotas,
@@ -296,7 +309,9 @@ export function saveDemoVmState(state: DemoVmState): boolean {
   ]);
   const teamQuotas = Object.fromEntries([...teamIds].map(teamId => {
     const previous = state.teamQuotas?.[teamId] ?? (teamId === 'demo-team' ? state.teamQuota : undefined);
-    const vms = state.vms.filter(vm => vm.owner === 'team' && (vm.teamId || 'demo-team') === teamId);
+    const vms = state.vms.filter(vm => vm.owner === 'team'
+      && (vm.teamId || 'demo-team') === teamId
+      && teamQuotaScenario(vm) === 'leader-create');
     return [teamId, {
       cpu: vms.reduce((sum, vm) => sum + vm.cpu, 0),
       memory: vms.reduce((sum, vm) => sum + vm.memory, 0),
@@ -308,7 +323,7 @@ export function saveDemoVmState(state: DemoVmState): boolean {
   }));
   return writeDemoState(stateKey, {
     ...state,
-    schemaVersion: 2,
+    schemaVersion: 3,
     personalQuota: {
       ...state.personalQuota,
       cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
@@ -318,6 +333,10 @@ export function saveDemoVmState(state: DemoVmState): boolean {
     teamQuotas,
     teamQuota: teamQuotas['demo-team'],
   });
+}
+
+function teamQuotaScenario(vm: DemoVm): 'member-view' | 'leader-create' {
+  return vm.teamScenario ?? (vm.role === 'member' ? 'member-view' : 'leader-create');
 }
 
 export function getDemoVmDraft(owner: VmOwner): VmDraft {
@@ -353,6 +372,7 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     purpose: draft.purpose.trim(),
     owner,
     ...(team ? { teamId, teamName } : {}),
+    ...(team ? { teamScenario: 'leader-create' as const } : {}),
     creator: team ? creatorName : '김지민',
     role: team ? 'leader' : 'leader',
     status: 'queued',
