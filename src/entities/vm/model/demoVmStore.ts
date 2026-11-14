@@ -286,7 +286,7 @@ export function getDemoVmState(): DemoVmState {
   return migratedState;
 }
 
-export function saveDemoVmState(state: DemoVmState): void {
+export function saveDemoVmState(state: DemoVmState): boolean {
   const personalVms = state.vms.filter(vm => vm.owner === 'personal');
   const teamIds = new Set([
     'demo-team',
@@ -305,7 +305,7 @@ export function saveDemoVmState(state: DemoVmState): void {
       diskLimit: previous?.diskLimit ?? 60,
     } satisfies DemoVmQuota];
   }));
-  writeDemoState(stateKey, {
+  return writeDemoState(stateKey, {
     ...state,
     schemaVersion: 2,
     personalQuota: {

@@ -29,6 +29,7 @@ export interface StudentShellProps {
   scopeLabel: string;
   teamScopeId?: string;
   userName: string;
+  profilePhotoUrl?: string | null;
   notificationCount?: number;
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
   scopeDisabled?: boolean;
@@ -52,6 +53,7 @@ export function StudentShell({
   scopeLabel,
   teamScopeId,
   userName,
+  profilePhotoUrl,
   notificationCount,
   scopeOptions,
   scopeDisabled,
@@ -105,6 +107,7 @@ export function StudentShell({
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
+          profilePhotoUrl={profilePhotoUrl}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
           scopeDisabled={scopeDisabled}

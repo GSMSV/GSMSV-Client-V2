@@ -6,6 +6,7 @@ export {
   getDemoService,
   isDemoAppId,
   saveDemoApps,
+  removeDemoAppsByTeam,
   updateDemoService,
 } from './model/demoAppState';
 export type { DemoAppVariable, DemoEnvironment, DemoManagedApp, DemoManagedService, DemoDeployment } from './model/demoAppState';

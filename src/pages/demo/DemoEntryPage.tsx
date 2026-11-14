@@ -59,7 +59,10 @@ export default function DemoEntryPage() {
   const navigate = useNavigate();
 
   async function enter(role: 'user' | 'admin', firstVisit = false) {
-    if (!startDemoSession(role)) return;
+    if (role === 'user') {
+      const { resumeDemoProfile } = await import('../../entities/profile');
+      if (!startDemoSession(role) || !resumeDemoProfile()) return;
+    } else if (!startDemoSession(role)) return;
     if (role === 'user' && import.meta.env.DEV) {
       const [{ setDemoFirstVisit }, vm] = await Promise.all([
         import('../../entities/home'),

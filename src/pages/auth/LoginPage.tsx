@@ -1,7 +1,8 @@
 import styled from 'styled-components';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { LoginErrorDialog, type LoginErrorKind } from '../../features/auth/login-error/ui/LoginErrorDialog';
 import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
+import { isDemoMode, startDemoSession } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
@@ -171,8 +172,18 @@ const Actions = styled.div`
 `;
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const errorKind = getLoginErrorKind(searchParams.get('error'));
+
+  async function login() {
+    if (import.meta.env.DEV && isDemoMode()) {
+      const { resumeDemoProfile } = await import('../../entities/profile');
+      if (resumeDemoProfile() && startDemoSession('user')) void navigate('/', { replace: true });
+      return;
+    }
+    startDataGsmLogin();
+  }
 
   return (
     <Screen>
@@ -217,13 +228,13 @@ export function LoginPage() {
           <Button
             variant="primary"
             icon={<Octicon name="sign-in" size={16} />}
-            onClick={startDataGsmLogin}
+            onClick={() => void login()}
           >
             DataGSM으로 계속하기
           </Button>
         </Actions>
       </Content>
-      {errorKind && <LoginErrorDialog kind={errorKind} onClose={() => window.location.assign('/login')} onRetry={startDataGsmLogin} />}
+      {errorKind && <LoginErrorDialog kind={errorKind} onClose={() => window.location.assign('/login')} onRetry={() => void login()} />}
     </Screen>
   );
 }

@@ -10,9 +10,13 @@ export interface DemoTeamInvitation {
   teamId?: string;
 }
 
+export interface DemoTeamDetail extends TeamDetail {
+  demoDisbandPending?: boolean;
+}
+
 interface DemoTeamState {
   schemaVersion?: number;
-  teams: TeamDetail[];
+  teams: DemoTeamDetail[];
   invitations: DemoTeamInvitation[];
   nextTeamNumber: number;
 }
@@ -92,12 +96,16 @@ function summary(team: TeamDetail): TeamSummary {
 }
 
 export function listDemoTeams(): TeamSummary[] {
-  return isDemoMode() ? getState().teams.map(summary) : [];
+  return isDemoMode() ? getState().teams.filter(team => team.my_role !== null).map(summary) : [];
 }
 
-export function getDemoTeam(teamId: string): TeamDetail | undefined {
+function resolveDemoTeamId(teamId: string) {
+  return teamId === 'gsm-connect' ? 'demo-team' : teamId;
+}
+
+export function getDemoTeam(teamId: string): DemoTeamDetail | undefined {
   if (!isDemoMode()) return undefined;
-  const resolvedTeamId = teamId === 'gsm-connect' ? 'demo-team' : teamId;
+  const resolvedTeamId = resolveDemoTeamId(teamId);
   return getState().teams.find(team => team.id === resolvedTeamId);
 }
 
@@ -158,4 +166,65 @@ export function acceptDemoTeamInvitation(token: string) {
   };
   saveState({ ...state, teams: state.teams.map(item => item.id === team.id ? updatedTeam : item), invitations: state.invitations.filter(item => item.id !== invitation.id) });
   return { team: { id: team.id, name: team.name }, my_role: 'member' as const };
+}
+
+export function transferDemoTeamLeadership(teamId: string, successorId: string): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  if (team?.my_role !== 'leader' || !team.permissions.transfer_leader || team.demoDisbandPending ||
+      !team.members.some(member => member.member_id === successorId && member.role !== 'leader')) return false;
+
+  const next: DemoTeamDetail = {
+    ...team,
+    my_role: 'member',
+    members: team.members.map(member => ({
+      ...member,
+      role: member.member_id === successorId ? 'leader' : member.role === 'leader' ? 'member' : member.role,
+    })),
+    permissions: { ...team.permissions, invite_member: false, remove_member: false, grant_devops: false, transfer_leader: false, disband_team: false },
+  };
+  return saveState({ ...state, teams: state.teams.map(item => item.id === id ? next : item) });
+}
+
+export function listDemoDisbandRequests(): DemoTeamDetail[] {
+  return isDemoMode() ? getState().teams.filter(team => team.demoDisbandPending) : [];
+}
+
+export function setDemoDisbandRequest(teamId: string, pending: boolean): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  if (!state.teams.some(team => team.id === id && team.my_role === 'leader' && team.permissions.disband_team)) return false;
+  return saveState({ ...state, teams: state.teams.map(team => team.id === id ? { ...team, demoDisbandPending: pending } : team) });
+}
+
+export function approveDemoDisbandRequest(teamId: string): boolean {
+  const state = getState();
+  if (!state.teams.some(team => team.id === teamId && team.demoDisbandPending)) return false;
+  return saveState({
+    ...state,
+    teams: state.teams.filter(team => team.id !== teamId),
+    invitations: state.invitations.filter(invitation => invitation.teamId !== teamId),
+  });
+}
+
+export function leaveDemoTeamsForWithdrawal(): boolean {
+  const state = getState();
+  if (state.teams.some(team => team.my_role !== null && team.members.length <= 1)) return false;
+
+  const teams = state.teams.map(team => {
+    if (team.my_role === null) return team;
+    const members = team.members.filter(member => member.member_id !== 'demo-student');
+    if (team.my_role === 'leader' && members.length) {
+      const successor = members.find(member => member.role === 'devops') ?? members[0];
+      return {
+        ...team,
+        my_role: null,
+        members: members.map(member => member.member_id === successor.member_id ? { ...member, role: 'leader' as const } : member),
+      };
+    }
+    return { ...team, my_role: null, members };
+  });
+
+  return saveState({ ...state, teams });
 }

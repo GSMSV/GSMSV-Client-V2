@@ -1,3 +1,4 @@
+import { getDemoProfile } from '../../profile';
 import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 export type WorkflowStatus = '대기 중' | '검토 중' | '답변 완료' | '승인 완료' | '거절';
@@ -136,7 +137,21 @@ export function getDemoDbRequests(): DedicatedDatabaseRequest[] { return localSt
 export function saveDemoDbRequests(items: DedicatedDatabaseRequest[]): boolean { return saveState('admin.databaseRequests', items); }
 export function getDemoTeamRequests(): TeamRequest[] { return localState('admin.teamRequests', demoTeamRequests); }
 export function saveDemoTeamRequests(items: TeamRequest[]): boolean { return saveState('admin.teamRequests', items); }
-export function getDemoAccounts(): DemoAccount[] { return localState('admin.accounts', demoAccounts); }
+export function getDemoAccounts(): DemoAccount[] {
+  const accounts = localState('admin.accounts', demoAccounts);
+  const profile = getDemoProfile();
+  if (!profile) return accounts;
+
+  return accounts.flatMap(account => {
+    if (account.email !== profile.email) return [account];
+    if (profile.accountDeleted) return [];
+    return [{
+      ...account,
+      github: profile.github ?? '연결 안 됨',
+      discord: profile.discordConnected ? '@jimin_2107' : '연결 안 됨',
+    }];
+  });
+}
 export function saveDemoAccounts(items: DemoAccount[]): boolean { return saveState('admin.accounts', items); }
 export function getDemoAdminVms(): DemoAdminVm[] { return localState('admin.vms', demoAdminVms); }
 export function saveDemoAdminVms(items: DemoAdminVm[]): boolean { return saveState('admin.vms', items); }
