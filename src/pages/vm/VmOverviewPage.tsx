@@ -91,8 +91,8 @@ const PowerActionsRow = styled.div`
   gap: 8px;
 `;
 
-type PowerDialog = 'graceful-progress' | 'force-confirm' | 'force-progress' | null;
-type PowerOperation = 'normal' | 'force' | null;
+type PowerDialog = 'graceful-progress' | 'force-confirm' | 'force-progress' | 'restart-progress' | null;
+type PowerOperation = 'normal' | 'force' | 'restart' | null;
 
 export function VmOverviewPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
@@ -147,12 +147,16 @@ export function VmOverviewPage() {
       powerTimer.current = null;
       return;
     }
-    const next = { ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: 'stopped' as const } : item) };
+    const next = { ...current, vms: current.vms.map(item => item.id === vmRecord.id
+      ? action === 'restart'
+        ? { ...item, status: 'running' as const, lastRestartedAt: new Date().toISOString() }
+        : { ...item, status: 'stopped' as const }
+      : item) };
     if (!saveDemoVmState(next)) {
       setNotice('전원 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
     } else {
       setState(next);
-      setNotice(action === 'normal' ? 'VM을 정상 종료했습니다.' : 'VM을 강제로 정지했습니다.');
+      setNotice(action === 'normal' ? 'VM을 정상 종료했습니다.' : action === 'force' ? 'VM을 강제로 정지했습니다.' : 'VM을 재시작했습니다.');
     }
     setPowerOperation(null);
     setPowerDialog(null);
@@ -164,8 +168,8 @@ export function VmOverviewPage() {
     if (powerOperation && !(powerOperation === 'normal' && action === 'force')) return;
     if (powerTimer.current !== null) window.clearTimeout(powerTimer.current);
     setPowerOperation(action);
-    setPowerDialog(action === 'normal' ? 'graceful-progress' : 'force-progress');
-    powerTimer.current = window.setTimeout(() => finishPowerOperation(action), action === 'normal' ? 2200 : 650);
+    setPowerDialog(action === 'normal' ? 'graceful-progress' : action === 'restart' ? 'restart-progress' : 'force-progress');
+    powerTimer.current = window.setTimeout(() => finishPowerOperation(action), action === 'normal' ? 2200 : action === 'restart' ? 1800 : 650);
   }
 
   function startVm() {
@@ -204,7 +208,7 @@ export function VmOverviewPage() {
       <Heading><div><Title>{title}</Title><StatusLine>{subtitle}</StatusLine></div><PowerActions>
         <Button variant="secondary" disabled={memberReadOnly || vm.status === 'queued' || vm.status === 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={startVm}>시작</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
-        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => { setNotice('VM을 재시작했습니다.'); }}>재시작</Button>
+        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
         {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" icon={<Octicon name="calendar" />} onClick={extend}>14일 연장</Button>}
       </PowerActions></Heading>
@@ -246,13 +250,17 @@ export function VmOverviewPage() {
       {notice && <Hint role="status">{notice}</Hint>}
       {powerOperation === 'normal' && !powerDialog && <Banner role="status"><Octicon name="clock" size={20} /><BannerCopy><strong>종료 요청 후 응답을 기다리고 있습니다</strong><span>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</span></BannerCopy><Button variant="secondary" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></Banner>}
     </DemoPage>
-    {powerDialog && <ModalSurface labelledBy="vm-power-title" onDismiss={() => setPowerDialog(null)}>
+    {powerDialog && <ModalSurface labelledBy="vm-power-title" onDismiss={() => { if (powerOperation !== 'restart') setPowerDialog(null); }}>
       <PowerPanel>
-        <PowerTitle id="vm-power-title">{powerDialog === 'graceful-progress' ? '종료 요청 후 응답을 기다리고 있습니다' : powerDialog === 'force-confirm' ? 'VM을 강제로 정지하시겠습니까?' : 'VM을 강제로 정지하는 중입니다'}</PowerTitle>
+        <PowerTitle id="vm-power-title">{powerDialog === 'graceful-progress' ? '종료 요청 후 응답을 기다리고 있습니다' : powerDialog === 'force-confirm' ? 'VM을 강제로 정지하시겠습니까?' : powerDialog === 'restart-progress' ? '이전 작업이 진행 중입니다' : 'VM을 강제로 정지하는 중입니다'}</PowerTitle>
         {powerDialog === 'graceful-progress' ? <>
           <PowerCopy>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</PowerCopy>
           <PowerCopy>· 정상 종료 요청됨 → 정지 상태 확인 중<br />· 다른 전원 작업은 이전 작업이 끝난 뒤 사용할 수 있습니다.</PowerCopy>
           <PowerActionsRow><Button variant="secondary" onClick={() => setPowerDialog(null)}>기다리기</Button><Button variant="danger" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></PowerActionsRow>
+        </> : powerDialog === 'restart-progress' ? <>
+          <PowerCopy>{vmRecord.name}을(를) 재시작하고 있습니다. 작업이 끝나면 다시 시도해 주세요.</PowerCopy>
+          <PowerCopy>· 진행 중인 작업의 상태를 계속 확인하고 있습니다.</PowerCopy>
+          <PowerActionsRow><Button variant="secondary" disabled>재시작</Button><Button variant="secondary" disabled>정상 종료</Button><Button variant="danger" disabled>강제 정지</Button></PowerActionsRow>
         </> : powerDialog === 'force-confirm' ? <>
           <PowerCopy>운영체제의 종료 절차를 기다리지 않고 {vmRecord.name}을(를) 정지합니다. 저장하지 않은 데이터가 사라질 수 있습니다.</PowerCopy>
           <PowerCopy>· VM이나 운영체제가 응답하지 않을 때 사용해 주세요.</PowerCopy>
