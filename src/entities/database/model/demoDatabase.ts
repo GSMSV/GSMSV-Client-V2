@@ -8,21 +8,23 @@ export interface DemoDatabaseState {
   backups: Record<string, DatabaseBackup[]>;
   passwords: Record<string, string>;
   lockedFixtureInitialized?: boolean;
+  welcomeFixtureInitialized?: boolean;
 }
 
-const personalGrn = 'grn:gsmsv:database:demo-student:student-db';
+const welcomeGrn = 'grn:gsmsv:database:demo-student:welcome-db';
 const lockedGrn = 'grn:gsmsv:database:demo-student:quota-locked-db';
 const teamGrn = 'grn:gsmsv:database:demo-team:connect-db';
 const demoDatabaseSeed: DemoDatabaseState = {
   lockedFixtureInitialized: true,
+  welcomeFixtureInitialized: true,
   databases: [
     {
-      grn: personalGrn, id: 'student-db', name: 'student-db',
+      grn: welcomeGrn, id: 'welcome-db', name: 'welcome-db',
       owner: { type: 'user', id: 'demo-student', name: '김민수' },
-      engine: 'postgresql', isolation: 'shared', status: 'active', write_locked: false,
-      connection: { host: 'db-demo.gs-msv.local', port: 5432, database: 'student_db', username: 'student_user', tls: true },
-      storage: { used_gb: 3.2, owner_total_used_gb: 3.2, owner_limit_gb: 10 }, max_connections: 30,
-      created_by: { name: '김민수' }, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
+      engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
+      connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'welcome_db', username: 'welcome_user', tls: true },
+      storage: { used_gb: 0.3, owner_total_used_gb: 0.3, owner_limit_gb: 1 }, max_connections: 30,
+      created_by: { name: '김민수' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-01T04:00:00.000Z', expires_at: '2026-10-06T14:59:59.000Z',
       permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
@@ -30,7 +32,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       owner: { type: 'user', id: 'demo-student', name: '김민수' },
       engine: 'mysql', isolation: 'shared', status: 'active', write_locked: true,
       connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'quota_locked_db', username: 'student_user', tls: true },
-      storage: { used_gb: 7.2, owner_total_used_gb: 10.4, owner_limit_gb: 10 }, max_connections: 30,
+      storage: { used_gb: 0.9, owner_total_used_gb: 1.2, owner_limit_gb: 1 }, max_connections: 30,
       created_by: { name: '김민수' }, created_at: '2026-10-05T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
       permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
@@ -45,16 +47,16 @@ const demoDatabaseSeed: DemoDatabaseState = {
     },
   ],
   backups: {
-    [personalGrn]: [
-      { id: 'student-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 428, expires_at: '2026-11-21T00:00:00.000Z' },
-      { id: 'student-db-daily-20261113', kind: 'daily', created_at: '2026-11-13T00:00:00.000Z', size_mb: 412, expires_at: '2026-11-20T00:00:00.000Z' },
+    [welcomeGrn]: [
+      { id: 'welcome-db-daily-20261006', kind: 'daily', created_at: '2026-10-06T00:00:00.000Z', size_mb: 82, expires_at: '2026-10-13T00:00:00.000Z' },
+      { id: 'welcome-db-daily-20261005', kind: 'daily', created_at: '2026-10-05T00:00:00.000Z', size_mb: 79, expires_at: '2026-10-12T00:00:00.000Z' },
     ],
     [lockedGrn]: [],
     [teamGrn]: [
       { id: 'connect-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 936, expires_at: '2026-11-21T00:00:00.000Z' },
     ],
   },
-  passwords: { [personalGrn]: 'demo-local-pass-student', [lockedGrn]: 'demo-local-pass-locked', [teamGrn]: 'demo-local-pass-team' },
+  passwords: { [welcomeGrn]: 'demo-local-pass-welcome', [lockedGrn]: 'demo-local-pass-locked', [teamGrn]: 'demo-local-pass-team' },
 };
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -86,6 +88,23 @@ export function getDemoDatabaseState(): DemoDatabaseState {
   }
   const validState = state as DemoDatabaseState;
   let changed = false;
+  if (!validState.welcomeFixtureInitialized) {
+    const welcomeDatabase = demoDatabaseSeed.databases.find(database => database.grn === welcomeGrn);
+    const legacyWelcomeIndex = validState.databases.findIndex(database => database.grn === 'grn:gsmsv:database:demo-student:student-db' || database.id === 'student-db');
+    const legacyWelcome = legacyWelcomeIndex >= 0 ? validState.databases[legacyWelcomeIndex] : null;
+    if (welcomeDatabase) {
+      if (legacyWelcomeIndex >= 0) validState.databases[legacyWelcomeIndex] = clone(welcomeDatabase);
+      else if (!validState.databases.some(database => database.grn === welcomeGrn)) validState.databases.push(clone(welcomeDatabase));
+      validState.backups[welcomeGrn] = legacyWelcome ? validState.backups[legacyWelcome.grn] ?? clone(demoDatabaseSeed.backups[welcomeGrn]) : clone(demoDatabaseSeed.backups[welcomeGrn]);
+      validState.passwords[welcomeGrn] = legacyWelcome ? validState.passwords[legacyWelcome.grn] ?? 'demo-local-pass-welcome' : 'demo-local-pass-welcome';
+      if (legacyWelcome && legacyWelcome.grn !== welcomeGrn) {
+        delete validState.backups[legacyWelcome.grn];
+        delete validState.passwords[legacyWelcome.grn];
+      }
+    }
+    validState.welcomeFixtureInitialized = true;
+    changed = true;
+  }
   if (!validState.lockedFixtureInitialized) {
     const lockedDatabase = demoDatabaseSeed.databases.find(database => database.grn === lockedGrn);
     if (lockedDatabase && !validState.databases.some(database => database.grn === lockedGrn)) {
@@ -107,7 +126,7 @@ export function saveDemoDatabaseState(state: DemoDatabaseState): boolean {
 
 export function listDemoDatabases(owner = 'me'): DatabaseSummary[] {
   return getDemoDatabaseState().databases
-    .filter(database => owner === 'me' ? database.owner.type === 'user' : database.owner.id === owner)
+    .filter(database => database.id !== 'quota-locked-db' && (owner === 'me' ? database.owner.type === 'user' : database.owner.id === owner))
     .map(({ grn, name, engine, isolation, status, write_locked, storage, expires_at }) => ({ grn, name, engine, isolation, status, write_locked, storage: { used_gb: storage.used_gb }, expires_at }));
 }
 
@@ -116,11 +135,11 @@ export function getDemoDatabase(grn: string): DatabaseDetail | null {
 }
 
 export function getDemoDatabaseQuota(): DatabaseQuota {
-  const personal = getDemoDatabaseState().databases.filter(database => database.owner.type === 'user');
+  const personal = getDemoDatabaseState().databases.filter(database => database.owner.type === 'user' && database.id !== 'quota-locked-db');
   return {
     db: {
-      count: { used: personal.length, limit: 3 },
-      shared_storage_gb: { used: personal.reduce((total, database) => total + database.storage.used_gb, 0), limit: 10 },
+      count: { used: personal.length, limit: 2 },
+      shared_storage_gb: { used: personal.reduce((total, database) => total + database.storage.used_gb, 0), limit: 1 },
     },
   };
 }
