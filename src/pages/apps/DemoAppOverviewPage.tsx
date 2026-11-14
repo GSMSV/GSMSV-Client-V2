@@ -1,12 +1,25 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import styled from "styled-components";
 import {
+  addDemoService,
+  canManageDemoApp,
+  demoAppMemoryLimit,
+  demoPersonalAppOwner,
+  formatDemoAppDate,
   getDemoApp,
+  getDemoAppDeletionTime,
+  getDemoAppQuota,
+  isDemoAppExpired,
+  isDemoAppSubdomainAvailable,
+  renewDemoApp,
   getDemoApps,
   saveDemoApps,
   type DemoEnvironment,
 } from "../../entities/app/demo";
+import { reconcileDemoDatabaseRestarts } from "../../features/apps/demoServiceOperations";
+import { Modal } from "./DemoAppDialog";
+import { DeleteConfirmDialog } from "../../shared/ui/feedback";
 import { getSessionUser } from "../../entities/session";
 import { isDemoMode } from "../../shared/demo";
 import { Button, SegmentedControl } from "../../shared/ui/controls";
@@ -214,7 +227,7 @@ const ServiceCardMeta = styled.div`
       ${({ theme }) => theme.typography.caption.family},
     sans-serif;
 `;
-const LinkText = styled.a`
+const LinkText = styled.span`
   color: ${({ theme }) => theme.colors.primary};
   text-decoration: none;
   font:
@@ -323,6 +336,12 @@ const Toggle = styled.label`
   }
 `;
 
+const DeletePanel = styled(DeleteConfirmDialog)`
+  width: 100%;
+  height: auto;
+  padding: 0;
+`;
+
 function getPath(appId: string, serviceId: string, tab = "deployments") {
   return `/apps/${encodeURIComponent(appId)}/services/${encodeURIComponent(serviceId)}/${tab}`;
 }
@@ -334,17 +353,29 @@ export function DemoAppOverviewPage() {
   const user = getSessionUser();
   const [environment, setEnvironment] = useState("production");
   const [notice, setNotice] = useState("");
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    const reconcile = () => {
+      const current = getDemoApp(appId);
+      if (current && reconcileDemoDatabaseRestarts(current)) refresh(value => value + 1);
+    };
+    reconcile();
+    window.addEventListener("gsmsv:demo-database-state-change", reconcile);
+    return () => window.removeEventListener("gsmsv:demo-database-state-change", reconcile);
+  }, [appId]);
+  const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
+  const listPath = `${teamPath}/apps`;
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
-    if (item === "home") navigate("/");
-    if (item === "apps") navigate("/apps");
-    if (item === "team") navigate("/teams");
-    if (item === "database") navigate("/databases");
+    if (item === "home") navigate(teamPath || "/");
+    if (item === "apps") navigate(listPath);
+    if (item === "team") navigate(teamPath || "/teams");
+    if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
   };
   if (!isDemoMode() || !app)
     return (
       <StudentShell
         activeItem="apps"
-        scopeLabel="내 Resources"
+        scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -357,7 +388,8 @@ export function DemoAppOverviewPage() {
           <Breadcrumb>Apps</Breadcrumb>
           <Card>
             <CardTitle>앱을 찾을 수 없습니다</CardTitle>
-            <Button onClick={() => navigate("/apps")}>Apps로 이동</Button>
+            <Subtitle>· 주소가 바뀌었거나 지워진 앱입니다.<br />· 볼 수 있는 권한이 없는 앱도 이렇게 보입니다.</Subtitle>
+            <Button onClick={() => navigate(listPath)}>Apps 목록</Button>
           </Card>
         </Page>
       </StudentShell>
@@ -365,19 +397,21 @@ export function DemoAppOverviewPage() {
   const visibleServices = app.services.filter(
     (service) => service.environment === environment,
   );
-  const memory = visibleServices.reduce((sum, item) => sum + item.memoryMb, 0);
+  const quota = getDemoAppQuota(app.owner ?? demoPersonalAppOwner);
+  const canManage = canManageDemoApp(app);
+  const expired = isDemoAppExpired(app);
   const extendUsage = () => {
-    const apps = getDemoApps();
-    const current = apps.find((item) => item.id === appId);
-    if (!current) return;
-    current.expiresAt = "10월 20일 14:00";
-    saveDemoApps(apps);
-    setNotice("사용 기간을 로컬 미리보기에서 연장했습니다.");
+    if (renewDemoApp(appId)) setNotice("사용 기간을 연장했습니다.");
+    else setNotice("사용 기간을 연장하지 못했습니다.");
+    refresh(value => value + 1);
   };
+  const latestDeployment = visibleServices.flatMap(service => service.deployments
+    .filter(deployment => deployment.status === "running")
+    .map(deployment => ({ service: service.name, ...deployment })))[0];
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
@@ -405,35 +439,42 @@ export function DemoAppOverviewPage() {
           >
             설정
           </Tab>
-          <Button
+          {canManage && !expired && <Button
             variant="secondary"
-            onClick={() =>
-              navigate(`/apps/${encodeURIComponent(appId)}/services/new`)
-            }
+            onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/services/new`)}
           >
             서비스 추가
-          </Button>
+          </Button>}
         </Tabs>
-        <RenewalNotice>
+        {(expired || (app.expiresAtMs ?? Infinity) - Date.now() <= 7 * 86_400_000) && <RenewalNotice role="status">
           <div>
-            <SummaryLabel>만료까지 7일 남았어요</SummaryLabel>
-            <SummaryHelp>
-              {app.expiresAt}에 정지됩니다. 연장하면 연결한 Database도 앱보다
-              먼저 끝나지 않게 함께 연장됩니다.
-            </SummaryHelp>
+            <SummaryLabel>{expired ? "정지됐습니다 · 3일 뒤 삭제됩니다" : `만료까지 ${Math.max(1, Math.ceil(((app.expiresAtMs ?? Date.now()) - Date.now()) / 86_400_000))}일 남았어요`}</SummaryLabel>
+            <SummaryHelp>{expired
+              ? `${app.expiresAt}에 사용 기간이 끝났습니다. ${app.stoppedFixture ? "10월 9일 14:00" : formatDemoAppDate(getDemoAppDeletionTime(app))} 전에 연장하면 다시 시작합니다.`
+              : `${app.expiresAt}에 정지됩니다. 연장하면 연결한 Database도 앱보다 먼저 끝나지 않게 함께 연장됩니다.`}</SummaryHelp>
           </div>
-          <Button variant="secondary" onClick={extendUsage}>
-            사용 기간 연장
-          </Button>
-        </RenewalNotice>
+          <Button variant="secondary" onClick={extendUsage}>사용 기간 연장</Button>
+        </RenewalNotice>}
+        {!canManage && <RenewalNotice role="status"><div>
+          <SummaryLabel>일반 팀원으로 보고 있습니다</SummaryLabel>
+          <SummaryHelp>상태와 로그를 보고 사용 기간을 연장할 수 있습니다. 배포·변수·설정은 팀장·DevOps가 바꿉니다.</SummaryHelp>
+        </div></RenewalNotice>}
+        {!expired && visibleServices.map(service => service.restartReason === "limit" ? (
+          <RenewalNotice key={service.id} role="status"><div>
+            <SummaryLabel>10번 넘게 다시 시작해서 멈췄습니다</SummaryLabel>
+            <SummaryHelp>짧은 시간에 계속 종료돼 {service.name}을 멈췄습니다. 로그를 확인하고 다시 배포해 주세요.</SummaryHelp>
+          </div><Button variant="secondary" onClick={() => navigate(getPath(appId, service.id, "logs"))}>로그 보기</Button></RenewalNotice>
+        ) : service.restartReason === "database" ? (
+          <RenewalNotice key={service.id} role="status"><div>
+            <SummaryLabel>Database 비밀번호가 바뀌어 다시 시작했습니다</SummaryLabel>
+            <SummaryHelp>{service.databaseId?.split(":").at(-1)} 비밀번호를 교체해서 새 값으로 {service.name}을 다시 시작했습니다.</SummaryHelp>
+          </div></RenewalNotice>
+        ) : null)}
         <Card>
           <CardTitle>환경</CardTitle>
           <SegmentedControl
             label="환경"
-            options={[
-              { value: "production", label: "production" },
-              { value: "staging", label: "staging" },
-            ]}
+            options={app.environments.map(item => ({ value: item.name, label: item.name }))}
             value={environment}
             onChange={setEnvironment}
           />
@@ -446,25 +487,26 @@ export function DemoAppOverviewPage() {
             <SummaryLabel>서비스</SummaryLabel>
             <SummaryValue>{visibleServices.length}개</SummaryValue>
             <SummaryHelp>
-              {environment === "production"
-                ? "웹 1 · 크론 1"
-                : "서비스가 없습니다"}
+              {(["웹", "워커", "크론"] as const).flatMap(type => {
+                const count = visibleServices.filter(service => service.type === type).length;
+                return count ? [`${type} ${count}`] : [];
+              }).join(" · ") || "서비스가 없습니다"}
             </SummaryHelp>
           </SummaryCard>
           <SummaryCard>
             <SummaryLabel>메모리 할당량</SummaryLabel>
-            <SummaryValue>{memory > 0 ? "1 / 2 GB" : "0 / 2 GB"}</SummaryValue>
-            <SummaryHelp>production 768 MB · staging 256 MB</SummaryHelp>
+            <SummaryValue>{quota.usedMemory} / {demoAppMemoryLimit} MB</SummaryValue>
+            <SummaryHelp>{app.environments.map(item =>
+              `${item.name} ${app.services.filter(service => service.environment === item.name).reduce((total, service) => total + service.memoryMb, 0)} MB`,
+            ).join(" · ")}</SummaryHelp>
           </SummaryCard>
           <SummaryCard>
             <SummaryLabel>최근 배포</SummaryLabel>
             <SummaryValue>
-              {visibleServices[0]?.deployments[0]?.at ?? "—"}
+              {latestDeployment?.at ?? "—"}
             </SummaryValue>
             <SummaryHelp>
-              {visibleServices[0]?.name} ·{" "}
-              {visibleServices[0]?.deployments[0]?.id} ·{" "}
-              {visibleServices[0]?.deployments[0]?.author}
+              {latestDeployment ? `${latestDeployment.service} · ${latestDeployment.commitId ?? latestDeployment.id} · ${latestDeployment.author}` : "—"}
             </SummaryHelp>
           </SummaryCard>
         </Summary>
@@ -473,8 +515,9 @@ export function DemoAppOverviewPage() {
             <CardTitle>서비스 · {environment}</CardTitle>
           </ServicesHeading>
           <ServiceGrid>
-            {visibleServices.map((service) => (
-              <ServiceCard key={service.id}>
+            {visibleServices.map((service) => {
+              const deployed = service.deployments.find(item => item.status === "running");
+              return <ServiceCard key={service.id}>
                 <ServiceHeader>
                   <Octicon
                     name={service.type === "웹" ? "globe" : "clock"}
@@ -489,33 +532,26 @@ export function DemoAppOverviewPage() {
                 </ServiceHeader>
                 <div>
                   <ServiceName>{service.name}</ServiceName>
-                  <LinkText
-                    href={`https://${service.subdomain}.gsmsv.app`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      navigate(`/public/${encodeURIComponent(appId)}/stopped`);
-                    }}
-                  >
-                    {service.type === "웹"
-                      ? `https://${service.subdomain}.{앱 도메인}`
-                      : service.type === "크론"
-                        ? "매일 03:00 (서울)"
-                        : "주소 없음"}
-                  </LinkText>
+                  {service.type === "웹" && expired ? (
+                    <LinkText as={Link} to={`/public/${encodeURIComponent(appId)}/stopped`}>https://{service.subdomain}.{"{앱 도메인}"}</LinkText>
+                  ) : <LinkText>{service.type === "웹"
+                    ? `https://${service.subdomain}.{앱 도메인}`
+                    : service.type === "크론" ? "매일 03:00 (서울)" : "주소 없음"}</LinkText>}
+                  {service.type === "크론" && <Button variant="ghost" onClick={() => navigate(getPath(appId, service.id, "settings"))}>설정 열기</Button>}
                   <Subtitle>
                     {service.type} · {service.memoryMb} MB · {service.cpu} vCPU
                   </Subtitle>
                 </div>
                 <ServiceCardMeta>
                   <span>
-                    {service.type === "웹"
-                      ? `${service.deployments[0]?.id} · ${service.deployments[0]?.at} 배포`
-                      : `지난 실행 ${service.deployments[0]?.at} · 성공`}
+                    {service.type === "크론" && service.lastCronRunAt
+                      ? `지난 실행 ${service.lastCronRunAt} · 성공`
+                      : deployed ? `${deployed.commitId ?? deployed.id} · ${deployed.at} 배포` : "—"}
                   </span>
-                  <State>{service.status}</State>
+                  <State>{expired ? "정지" : service.status}</State>
                 </ServiceCardMeta>
-              </ServiceCard>
-            ))}
+              </ServiceCard>;
+            })}
           </ServiceGrid>
         </section>
         {notice && <Notice role="status">{notice}</Notice>}
@@ -530,17 +566,20 @@ export function DemoAppSettingsPage() {
   const app = getDemoApp(appId);
   const user = getSessionUser();
   const [notice, setNotice] = useState("");
+  const [deleteName, setDeleteName] = useState<string>();
+  const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
+  const listPath = `${teamPath}/apps`;
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
-    if (item === "home") navigate("/");
-    if (item === "apps") navigate("/apps");
-    if (item === "team") navigate("/teams");
-    if (item === "database") navigate("/databases");
+    if (item === "home") navigate(teamPath || "/");
+    if (item === "apps") navigate(listPath);
+    if (item === "team") navigate(teamPath || "/teams");
+    if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
   };
   if (!isDemoMode() || !app)
     return (
       <StudentShell
         activeItem="apps"
-        scopeLabel="내 Resources"
+        scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -557,53 +596,43 @@ export function DemoAppSettingsPage() {
         </Page>
       </StudentShell>
     );
+  const canManage = canManageDemoApp(app);
   const update = (name: string, patch: Partial<DemoEnvironment>) => {
     const apps = getDemoApps();
     const target = apps
       .find((item) => item.id === appId)
       ?.environments.find((env) => env.name === name);
-    if (target) {
+    if (target && canManage) {
       Object.assign(target, patch);
-      saveDemoApps(apps);
-      setNotice("변경사항을 로컬 미리보기에 저장했습니다.");
+      setNotice(saveDemoApps(apps) ? "변경사항을 저장했습니다." : "변경사항을 저장하지 못했습니다.");
     }
   };
   const addEnvironment = () => {
     const apps = getDemoApps();
     const current = apps.find((item) => item.id === appId);
-    if (!current || current.environments.length >= 3) return;
+    if (!current || !canManage || current.environments.length >= 3) return;
     const name = window.prompt("환경 이름", "preview");
-    if (!name?.trim()) return;
+    if (!name?.trim() || current.environments.some(environment => environment.name === name.trim())) return;
     current.environments.push({
       name: name.trim(),
       branch: "develop",
       autoDeploy: true,
       waitForCi: false,
     });
-    saveDemoApps(apps);
-    setNotice("환경을 로컬 미리보기에 추가했습니다.");
+    setNotice(saveDemoApps(apps) ? "환경을 추가했습니다." : "환경을 저장하지 못했습니다.");
   };
   const extendUsage = () => {
-    const apps = getDemoApps();
-    const current = apps.find((item) => item.id === appId);
-    if (current) {
-      current.expiresAt = "10월 20일 14:00";
-      saveDemoApps(apps);
-      setNotice("사용 기간을 로컬 미리보기에서 연장했습니다.");
-    }
+    setNotice(renewDemoApp(appId) ? "사용 기간을 연장했습니다." : "사용 기간을 연장하지 못했습니다.");
   };
   const deleteApp = () => {
-    const confirmation = window.prompt(
-      `앱 이름 ${app.name}을 입력하면 로컬 미리보기에서 삭제합니다.`,
-    );
-    if (confirmation !== app.name) return;
-    saveDemoApps(getDemoApps().filter((item) => item.id !== appId));
-    navigate("/apps");
+    if (!canManage || deleteName !== app.name) return;
+    if (saveDemoApps(getDemoApps().filter(item => item.id !== appId))) navigate(listPath);
+    else setNotice("앱을 삭제하지 못했습니다.");
   };
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
@@ -643,7 +672,7 @@ export function DemoAppSettingsPage() {
             <Button
               variant="secondary"
               onClick={addEnvironment}
-              disabled={app.environments.length >= 3}
+              disabled={!canManage || app.environments.length >= 3}
             >
               환경 추가
             </Button>
@@ -665,6 +694,7 @@ export function DemoAppSettingsPage() {
                 <span>
                   <Button
                     variant="ghost"
+                    disabled={!canManage}
                     onClick={() => {
                       const branch = window.prompt("배포 브랜치", env.branch);
                       if (branch) update(env.name, { branch });
@@ -692,14 +722,14 @@ export function DemoAppSettingsPage() {
             </span>
             <input
               type="checkbox"
+              disabled={!canManage}
               checked={app.services[0]?.prPreviews ?? false}
               onChange={(event) => {
                 const apps = getDemoApps();
                 const current = apps.find((item) => item.id === appId);
                 if (current?.services[0])
                   current.services[0].prPreviews = event.currentTarget.checked;
-                saveDemoApps(apps);
-                setNotice("PR 미리보기 설정을 저장했습니다.");
+                setNotice(saveDemoApps(apps) ? "PR 미리보기 설정을 저장했습니다." : "PR 미리보기 설정을 저장하지 못했습니다.");
               }}
             />
           </Toggle>
@@ -707,6 +737,7 @@ export function DemoAppSettingsPage() {
             기준 환경
             <select
               aria-label="기준 환경"
+              disabled={!canManage}
               value={app.services[0]?.previewEnvironment ?? "production"}
               onChange={(event) => {
                 const apps = getDemoApps();
@@ -714,8 +745,7 @@ export function DemoAppSettingsPage() {
                 if (current?.services[0])
                   current.services[0].previewEnvironment =
                     event.currentTarget.value;
-                saveDemoApps(apps);
-                setNotice("기준 환경을 저장했습니다.");
+                setNotice(saveDemoApps(apps) ? "기준 환경을 저장했습니다." : "기준 환경을 저장하지 못했습니다.");
               }}
             >
               {app.environments.map((env) => (
@@ -730,14 +760,14 @@ export function DemoAppSettingsPage() {
             </span>
             <input
               type="checkbox"
+              disabled={!canManage}
               checked={app.services[0]?.previewBots ?? false}
               onChange={(event) => {
                 const apps = getDemoApps();
                 const current = apps.find((item) => item.id === appId);
                 if (current?.services[0])
                   current.services[0].previewBots = event.currentTarget.checked;
-                saveDemoApps(apps);
-                setNotice("봇 PR 미리보기 설정을 저장했습니다.");
+                setNotice(saveDemoApps(apps) ? "봇 PR 미리보기 설정을 저장했습니다." : "봇 PR 미리보기 설정을 저장하지 못했습니다.");
               }}
             />
           </Toggle>
@@ -764,7 +794,7 @@ export function DemoAppSettingsPage() {
         <Card>
           <ServicesHeading>
             <CardTitle>앱 삭제</CardTitle>
-            <Button variant="danger" onClick={deleteApp}>
+            <Button variant="danger" disabled={!canManage} onClick={() => setDeleteName("")}>
               앱 삭제
             </Button>
           </ServicesHeading>
@@ -774,6 +804,16 @@ export function DemoAppSettingsPage() {
             이름을 입력해 확인합니다.
           </Subtitle>
         </Card>
+        {deleteName !== undefined && <Modal onClose={() => setDeleteName(undefined)} titleId="delete-confirm-title">
+          <DeletePanel open title={`${app.name}을 삭제하시겠습니까?`}
+            description="아래 항목이 모두 지워집니다. 지운 앱은 되살릴 수 없습니다."
+            items={`· 서비스 ${app.services.length}개 (${app.services.map(service => service.name).join(", ")})
+· 환경 ${app.environments.length}개 (${app.environments.map(environment => environment.name).join(", ")})
+· 배포 기록과 변수`}
+            fieldLabel="확인하려면 앱 이름을 입력하세요" confirmationName={app.name}
+            value={deleteName} onValueChange={setDeleteName} onCancel={() => setDeleteName(undefined)} onConfirm={deleteApp}
+            caption="연결한 Database는 지워지지 않습니다." confirmLabel="앱 삭제" hint={`${app.name}을 정확하게 입력하세요`} />
+        </Modal>}
         {notice && <Notice role="status">{notice}</Notice>}
       </Page>
     </StudentShell>
@@ -788,18 +828,22 @@ export function DemoAddServicePage() {
   const [name, setName] = useState("");
   const [type, setType] = useState<"웹" | "워커" | "크론">("웹");
   const [subdomain, setSubdomain] = useState("");
+  const [memoryMb, setMemoryMb] = useState(512);
+  const [cpu, setCpu] = useState(0.5);
   const [notice, setNotice] = useState("");
+  const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
+  const listPath = `${teamPath}/apps`;
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
-    if (item === "home") navigate("/");
-    if (item === "apps") navigate("/apps");
-    if (item === "team") navigate("/teams");
-    if (item === "database") navigate("/databases");
+    if (item === "home") navigate(teamPath || "/");
+    if (item === "apps") navigate(listPath);
+    if (item === "team") navigate(teamPath || "/teams");
+    if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
   };
-  if (!isDemoMode() || !app)
+  if (!isDemoMode() || !app || !canManageDemoApp(app) || isDemoAppExpired(app))
     return (
       <StudentShell
         activeItem="apps"
-        scopeLabel="내 Resources"
+        scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         userName={user?.name ?? "김민수"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
@@ -815,10 +859,11 @@ export function DemoAddServicePage() {
         </Page>
       </StudentShell>
     );
+  const quota = getDemoAppQuota(app.owner ?? demoPersonalAppOwner);
   return (
     <StudentShell
       activeItem="apps"
-      scopeLabel="내 Resources"
+      scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       userName={user?.name ?? "김민수"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
@@ -850,21 +895,21 @@ export function DemoAddServicePage() {
                 setNotice("서비스 이름을 입력해 주세요.");
                 return;
               }
-              const apps = getDemoApps();
-              const target = apps.find((item) => item.id === appId);
-              if (!target) return;
-              const id = `service-${Date.now().toString(36)}`;
-              const base = {
-                ...target.services[0],
-                id,
-                name: name.trim(),
-                type,
-                subdomain:
-                  subdomain.trim() ||
-                  name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-              };
-              target.services.push(base);
-              saveDemoApps(apps);
+              if (app.services.some(service => service.name === name.trim())) {
+                setNotice("앱 안에서 이미 쓰는 서비스 이름입니다.");
+                return;
+              }
+              if (memoryMb > getDemoAppQuota(app.owner ?? demoPersonalAppOwner).freeMemory) {
+                setNotice("메모리 할당량이 모자랍니다");
+                return;
+              }
+              const domain = type === "웹" ? subdomain.trim() || name.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
+              if (type === "웹" && !isDemoAppSubdomainAvailable(domain)) {
+                setNotice("서브도메인을 쓸 수 없습니다");
+                return;
+              }
+              const id = addDemoService(appId, { name: name.trim(), type, subdomain: domain, memoryMb, cpu });
+              if (!id) { setNotice("서비스를 저장하지 못했습니다."); return; }
               navigate(getPath(appId, id));
             }}
           >
@@ -914,21 +959,21 @@ export function DemoAddServicePage() {
         )}
         <Card>
           <CardTitle>자원</CardTitle>
-          <Subtitle>메모리 할당량 1/2 GB 사용 중 · 남은 할당량 1 GB</Subtitle>
+          <Subtitle>메모리 할당량 {quota.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 {quota.freeMemory} MB</Subtitle>
           <Field>
             메모리
-            <select>
-              <option>512 MB</option>
-              <option>256 MB</option>
-              <option>1 GB</option>
+            <select value={memoryMb} onChange={event => setMemoryMb(Number(event.currentTarget.value))}>
+              <option value={512}>512 MB</option>
+              <option value={256}>256 MB</option>
+              <option value={1024}>1 GB</option>
             </select>
           </Field>
           <Field>
             CPU
-            <select>
-              <option>0.5 vCPU</option>
-              <option>0.25 vCPU</option>
-              <option>1 vCPU</option>
+            <select value={cpu} onChange={event => setCpu(Number(event.currentTarget.value))}>
+              <option value={0.5}>0.5 vCPU</option>
+              <option value={0.25}>0.25 vCPU</option>
+              <option value={1}>1 vCPU</option>
             </select>
           </Field>
           <Subtitle>

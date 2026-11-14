@@ -238,22 +238,19 @@ export default function AppsListPage() {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
       if (import.meta.env.DEV && demoMode) {
-        const [{ demoHomeQuota }, { getDemoAppSummaries, getDemoApps }] = await Promise.all([
+        const [{ demoHomeQuota }, { demoAppMemoryLimit, demoPersonalAppOwner, getDemoAppQuota }] = await Promise.all([
           import('../../entities/home'),
           import('../../entities/app/demo'),
         ]);
-        const demoApps = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
-        const storedApps = getDemoApps().filter(app => app.owner?.type === 'user' && app.owner.id === 'demo-student');
+        const usage = getDemoAppQuota(demoPersonalAppOwner);
         const baseAppQuota = demoHomeQuota.app;
-        const memoryUsed = storedApps.reduce((sum, app) => sum + app.services.reduce((total, service) => total + service.memoryMb, 0), 0);
-        const alwaysOnUsed = storedApps.reduce((sum, app) => sum + app.services.filter(service => service.alwaysOn).length, 0);
         const value: MyQuota = {
           ...demoHomeQuota,
           app: {
             ...baseAppQuota,
-            count: { ...baseAppQuota.count, used: demoApps.length },
-            memory_mb: { ...baseAppQuota.memory_mb, used: memoryUsed },
-            always_on: { ...baseAppQuota.always_on, used: alwaysOnUsed },
+            count: { limit: usage.limit, used: usage.count },
+            memory_mb: { limit: demoAppMemoryLimit, used: usage.usedMemory },
+            always_on: { ...baseAppQuota.always_on, used: usage.alwaysOn },
           },
         };
         if (!signal.aborted) setQuota({ value, loading: false, error: false });
@@ -414,7 +411,9 @@ export default function AppsListPage() {
               <Octicon name="upload" size={24} aria-hidden="true" />
               <DialogTitle id="app-quota-title">앱을 더 만들 수 없습니다</DialogTitle>
             </DialogTitleRow>
-            <DialogCopy>· 개인 앱 {appQuota?.used ?? appCount}개를 사용 중이며 한도는 {appQuota?.limit ?? '—'}개입니다.</DialogCopy>
+            <DialogCopy>{demoMode
+              ? `· 내 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`
+              : `· 개인 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`}</DialogCopy>
             <DialogCopy>· 쓰지 않는 앱을 지우면 다시 만들 수 있습니다.</DialogCopy>
             <DialogCopy>· 더 필요하면 팀을 만들어 팀 앱을 쓰세요.</DialogCopy>
             <DialogActions>
