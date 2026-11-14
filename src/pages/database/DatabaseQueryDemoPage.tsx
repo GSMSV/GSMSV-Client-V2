@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoQueryAudit, saveDemoQueryAudit } from '../../entities/demo-workflows';
@@ -68,7 +68,17 @@ export default function DatabaseQueryDemoPage() {
   const [resultCount, setResultCount] = useState(3);
   const [error, setError] = useState('');
   const [ran, setRan] = useState(false);
-  const databaseName = databaseId === 'demo-db-1' ? 'welcome-db' : databaseId;
+  const [database, setDatabase] = useState<{ name: string; engine: 'mysql' | 'postgresql'; isolation: 'shared' | 'dedicated' } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void import('../../entities/database/demo').then(demo => {
+      if (cancelled) return;
+      const value = demo.getDemoDatabase(databaseId);
+      setDatabase(value ? { name: value.name, engine: value.engine, isolation: value.isolation } : null);
+    });
+    return () => { cancelled = true; };
+  }, [databaseId]);
+  const databaseName = database?.name ?? databaseId;
 
   function runQuery() {
     const success = /\bselect\b/i.test(query) && /\bfrom\s+(users|databases)\b/i.test(query);
@@ -89,7 +99,7 @@ export default function DatabaseQueryDemoPage() {
 
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database"><PageStack>
     <Breadcrumb>Database</Breadcrumb>
-    <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>MySQL · 공유형</Subtitle></TitleGroup></Heading>
+    <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database?.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · {database?.isolation === 'dedicated' ? '전용형' : '공유형'}</Subtitle></TitleGroup></Heading>
     <nav aria-label="Database 메뉴" style={{ display: 'flex', gap: 8 }}>
       <Button variant="ghost" onClick={() => navigate(`/databases/${databaseId}`)}>접속 정보</Button>
       <Button variant="primary">쿼리 콘솔</Button>

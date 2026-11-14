@@ -133,6 +133,15 @@ export default function DatabaseDetailPage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
+    if (import.meta.env.DEV && isDemoMode()) {
+      const demo = await import('../../entities/database/demo');
+      if (signal.aborted) return;
+      const value = demo.getDemoDatabase(databaseGrn);
+      const backupItems = value ? demo.getDemoDatabaseBackups(value.grn) : [];
+      setDetail(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      setBackups({ value: backupItems, loading: false, error: false });
+      return;
+    }
     const detailRequest = getDatabase(databaseGrn, signal).then(value => {
       if (!signal.aborted) setDetail({ value, loading: false, error: false });
     }).catch(() => {
@@ -147,6 +156,13 @@ export default function DatabaseDetailPage() {
   }, [databaseGrn]);
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../entities/home').then(({ demoHomeTeams }) => {
+        if (!cancelled) setTeams(demoHomeTeams);
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
@@ -207,7 +223,10 @@ export default function DatabaseDetailPage() {
     setCredentialLoading(true);
     setCredentialError(false);
     try {
-      const value = await getDatabaseCredentials(databaseGrn);
+      const value = import.meta.env.DEV && isDemoMode()
+        ? await import('../../entities/database/demo').then(demo => demo.getDemoDatabaseCredentials(databaseGrn))
+        : await getDatabaseCredentials(databaseGrn);
+      if (!value) throw new Error('Database credentials are unavailable');
       setCredential(value);
       return value;
     } catch {
@@ -245,9 +264,18 @@ export default function DatabaseDetailPage() {
     setIsExtending(true);
     setExtendError(false);
     try {
-      const result = await extendDatabase(databaseGrn);
-      setExtendedUntil(result.expires_at);
-      setDetail(current => current.value ? { ...current, value: { ...current.value, expires_at: result.expires_at } } : current);
+      if (import.meta.env.DEV && isDemoMode()) {
+        const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
+        const demo = await import('../../entities/database/demo');
+        const result = demo.updateDemoDatabase(databaseGrn, { expires_at: expiresAt });
+        if (!result) throw new Error('Database not found');
+        setExtendedUntil(expiresAt);
+        setDetail(current => current.value ? { ...current, value: { ...current.value, expires_at: expiresAt } } : current);
+      } else {
+        const result = await extendDatabase(databaseGrn);
+        setExtendedUntil(result.expires_at);
+        setDetail(current => current.value ? { ...current, value: { ...current.value, expires_at: result.expires_at } } : current);
+      }
     } catch { setExtendError(true); }
     finally { setIsExtending(false); }
   };

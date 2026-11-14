@@ -12,6 +12,7 @@ import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -238,7 +239,7 @@ export default function DatabaseCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const owner = searchParams.get('owner') ?? 'me';
-  const teamId = owner.startsWith('team-') ? owner : undefined;
+  const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const invalidOwner = owner !== 'me' && !teamId;
   const listPath = teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases';
   const user = getSessionUser();
@@ -256,6 +257,11 @@ export default function DatabaseCreatePage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../entities/home').then(({ demoHomeTeams }) => { if (!cancelled) setTeams(demoHomeTeams); });
+      return () => { cancelled = true; };
+    }
     void listMyTeams(controller.signal).then(value => {
       if (!controller.signal.aborted) setTeams(value);
     }).catch(() => {
@@ -271,6 +277,32 @@ export default function DatabaseCreatePage() {
       setDatabases({ value: null, loading: false, error: false });
       setTeam({ value: null, loading: false, error: false });
       return () => controller.abort();
+    }
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void Promise.all([import('../../entities/database/demo'), import('../../entities/home')]).then(([demo, home]) => {
+        if (cancelled) return;
+        setDatabases({ value: demo.listDemoDatabases(teamId ?? 'me'), loading: false, error: false });
+        if (teamId) {
+          const summary = home.demoHomeTeams.find(item => item.id === teamId);
+          const value: TeamDetail | null = summary ? {
+            ...summary, rejection_reason: null, members: [],
+            quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
+            permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
+          } : null;
+          setTeam(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+          setQuota({ value: null, loading: false, error: false });
+        } else {
+          setTeam({ value: null, loading: false, error: false });
+          setQuota({ value: demo.getDemoDatabaseQuota(), loading: false, error: false });
+        }
+      }).catch(() => {
+        if (cancelled) return;
+        setDatabases({ value: null, loading: false, error: true });
+        setTeam({ value: null, loading: false, error: true });
+        setQuota({ value: null, loading: false, error: true });
+      });
+      return () => { cancelled = true; };
     }
     setDatabases(current => ({ ...current, loading: true, error: false }));
     if (teamId) {
@@ -328,6 +360,19 @@ export default function DatabaseCreatePage() {
     if (teamId && team.value?.status !== 'approved') { setDialog('notApproved'); return; }
 
     setSubmitting(true);
+    if (import.meta.env.DEV && isDemoMode()) {
+      try {
+        const { createDemoDatabase } = await import('../../entities/database/demo');
+        const owner = teamId ? { id: teamId, name: team.value?.name ?? 'GSM Connect' } : undefined;
+        createDemoDatabase(trimmedName, engine, owner);
+        setDialog('accepted');
+      } catch {
+        setDialog('failure');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     const fingerprint = `${teamId ?? 'me'}\u0000${engine}\u0000${trimmedName}`;
     if (requestKeyRef.current?.fingerprint !== fingerprint) {
       requestKeyRef.current = { fingerprint, key: newIdempotencyKey() };
@@ -349,7 +394,7 @@ export default function DatabaseCreatePage() {
     } finally {
       setSubmitting(false);
     }
-  }, [count, engine, name, needsQuotaCheck, storage, teamId, team.value?.status, writeLocked]);
+  }, [count, engine, name, needsQuotaCheck, storage, teamId, team.value?.name, team.value?.status, writeLocked]);
 
   const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
   const scopeLabel = team.value
