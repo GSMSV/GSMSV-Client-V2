@@ -226,7 +226,7 @@ export function ServerlessTabRoute() {
       variables={variables}
       storageBytesUsed={JSON.stringify(fn.variables).length}
       storageBytesLimit={8192}
-      databases={[{ id: 'student-db', label: 'student-db · PostgreSQL' }]}
+      databases={[{ id: 'welcome-db', label: 'welcome-db · MySQL' }]}
       selectedDatabaseId={fn.databaseId}
       onSelectTab={tab => selectTab(tab)}
       onAddVariable={variable => { addDemoServerlessVariable(fn.id, variable); changed(); }}
