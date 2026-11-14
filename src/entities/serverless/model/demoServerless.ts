@@ -83,6 +83,13 @@ export async function loadDemoServerlessState(): Promise<DemoServerlessState> {
   return state;
 }
 
+export async function clearDemoServerlessFunctions(): Promise<void> {
+  await transactDemoServerlessState(seed, normalizeState, state => {
+    state.functions = [];
+    state.executionsToday = 0;
+  });
+}
+
 export function getDemoServerlessFunctions(): DemoServerlessFunction[] { return getDemoServerlessState().functions; }
 export function getDemoServerlessFunction(id: string): DemoServerlessFunction | undefined { return getDemoServerlessFunctions().find(fn => fn.id === id); }
 export function getDemoServerlessQuota() { const state = getDemoServerlessState(); return { count: { used: state.functions.length, limit: 3 }, daily_executions: { used: state.executionsToday, limit: state.dailyLimit } }; }
