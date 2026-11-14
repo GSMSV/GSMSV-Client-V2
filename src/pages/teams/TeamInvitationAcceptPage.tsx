@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
 import { acceptInvitation, getInvitationAcceptanceError } from '../../features/team/accept-invitation';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
@@ -346,7 +347,9 @@ export default function TeamInvitationAcceptPage() {
     setErrorMessage(null);
 
     try {
-      const result = await acceptInvitation(token);
+      const result = import.meta.env.DEV && isDemoMode()
+        ? await import('../../entities/team/demo').then(({ acceptDemoTeamInvitation }) => acceptDemoTeamInvitation(token))
+        : await acceptInvitation(token);
       navigate(`/teams/${encodeURIComponent(result.team.id)}`, { replace: true });
     } catch (error) {
       if (error && typeof error === 'object' && 'status' in error && error.status === 401) {
@@ -354,7 +357,9 @@ export default function TeamInvitationAcceptPage() {
         setErrorMessage('학교 계정으로 로그인한 뒤 이 탭으로 돌아와 초대를 다시 수락해 주세요. 초대 정보는 이 탭에만 유지됩니다.');
         return;
       }
-      setErrorMessage(getInvitationAcceptanceError(error));
+      setErrorMessage(import.meta.env.DEV && isDemoMode() && error instanceof Error && error.message === 'GONE'
+        ? '이 초대는 만료되었거나 이미 사용 또는 취소되었습니다.'
+        : getInvitationAcceptanceError(error));
     } finally {
       setPending(false);
     }

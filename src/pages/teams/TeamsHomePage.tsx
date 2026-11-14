@@ -5,6 +5,7 @@ import { listTeamApps } from '../../entities/app';
 import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
+import { isDemoMode } from '../../shared/demo';
 import { listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
@@ -386,6 +387,10 @@ function TeamDatabaseCard({ teamId }: { teamId: string }) {
   const [usage, setUsage] = useState<TeamDatabaseUsage | null>();
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      setUsage(teamId === 'demo-team' ? { count: 1, storageGb: 3.2, dedicatedCount: 0 } : { count: 0, storageGb: 0, dedicatedCount: 0 });
+      return;
+    }
     const controller = new AbortController();
     void listDatabases({ owner: teamId, signal: controller.signal }).then(databases => {
       if (controller.signal.aborted) return;
@@ -419,6 +424,14 @@ function TeamAppsCard({ teamId }: { teamId: string }) {
   const [count, setCount] = useState<number | null>();
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      setCount(undefined);
+      void import('../../entities/app/demo').then(({ getDemoAppSummaries }) => {
+        if (!cancelled) setCount(getDemoAppSummaries({ type: 'team', id: teamId, name: 'GSM Connect' }).length);
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     setCount(undefined);
     void listTeamApps({ teamId, signal: controller.signal }).then(apps => {
@@ -458,12 +471,24 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const [pendingInvitations, setPendingInvitations] = useState<Loadable<TeamInvitation[]>>(initialLoadable);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null);
   const [retryKey, setRetryKey] = useState(0);
+  const demoMode = isDemoMode();
 
   useEffect(() => {
     setSelectedTeamId(teamId ?? null);
   }, [teamId]);
 
   useEffect(() => {
+    if (import.meta.env.DEV && demoMode) {
+      let cancelled = false;
+      setTeams(current => ({ ...current, loading: true, error: false }));
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (cancelled) return;
+        const value = listDemoTeams();
+        setTeams({ value, loading: false, error: false });
+        if (!teamId && value.length > 0) setSelectedTeamId(current => current ?? value[0].id);
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     setTeams(current => ({ ...current, loading: true, error: false }));
     void listMyTeams(controller.signal).then(value => {
@@ -474,12 +499,22 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       if (!controller.signal.aborted) setTeams({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [retryKey, teamId]);
+  }, [demoMode, retryKey, teamId]);
 
   useEffect(() => {
     if (!selectedTeamId) {
       setDetail({ value: null, loading: false, error: false });
       return;
+    }
+    if (import.meta.env.DEV && demoMode) {
+      let cancelled = false;
+      setDetail(current => ({ ...current, loading: true, error: false }));
+      void import('../../entities/team/demo').then(({ getDemoTeam }) => {
+        if (cancelled) return;
+        const value = getDemoTeam(selectedTeamId);
+        setDetail(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      });
+      return () => { cancelled = true; };
     }
     const controller = new AbortController();
     setDetail(current => ({ ...current, loading: true, error: false }));
@@ -489,7 +524,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       if (!controller.signal.aborted) setDetail({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [selectedTeamId, retryKey]);
+  }, [demoMode, selectedTeamId, retryKey]);
 
   useEffect(() => {
     const team = detail.value;
@@ -498,6 +533,14 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       return;
     }
 
+    if (import.meta.env.DEV && demoMode) {
+      let cancelled = false;
+      setPendingInvitations(current => ({ ...current, loading: true, error: false }));
+      void import('../../entities/team/demo').then(({ listDemoTeamInvitations }) => {
+        if (!cancelled) setPendingInvitations({ value: listDemoTeamInvitations(selectedTeamId), loading: false, error: false });
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     setPendingInvitations(current => ({ ...current, loading: true, error: false }));
     void listTeamInvitations(selectedTeamId, controller.signal).then(value => {
@@ -506,7 +549,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       if (!controller.signal.aborted) setPendingInvitations({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [detail.value, retryKey, selectedTeamId]);
+  }, [demoMode, detail.value, retryKey, selectedTeamId]);
 
   const selectedSummary = useMemo(
     () => teams.value?.find(team => team.id === selectedTeamId),
