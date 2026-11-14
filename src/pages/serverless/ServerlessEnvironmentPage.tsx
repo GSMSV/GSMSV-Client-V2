@@ -364,7 +364,33 @@ export function ServerlessEnvironmentPage({
   const [value, setValue] = useState('');
   const [secret, setSecret] = useState(false);
   const [secretUpdate, setSecretUpdate] = useState<{ name: string; value: string } | null>(null);
+  const [editingVariables, setEditingVariables] = useState(false);
+  const [variableDrafts, setVariableDrafts] = useState<Record<string, string>>({});
   const canEdit = Boolean(onAddVariable);
+
+  const toggleVariableEditing = () => {
+    if (editingVariables) {
+      setEditingVariables(false);
+      setVariableDrafts({});
+      return;
+    }
+    setVariableDrafts(Object.fromEntries(variables.filter(variable => !variable.secret).map(variable => [variable.name, variable.value ?? ''])));
+    setEditingVariables(true);
+    onEditVariables?.();
+  };
+
+  const saveChanges = () => {
+    if (editingVariables && onUpdateVariable) {
+      for (const variable of variables) {
+        if (variable.secret) continue;
+        const nextValue = variableDrafts[variable.name] ?? variable.value ?? '';
+        if (nextValue !== (variable.value ?? '')) onUpdateVariable(variable.name, nextValue);
+      }
+      setEditingVariables(false);
+      setVariableDrafts({});
+    }
+    onSaveChanges?.();
+  };
 
   const addVariable = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -407,7 +433,7 @@ export function ServerlessEnvironmentPage({
         </Tabs>
         <Actions>
           <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={!onAddVariable} onClick={() => document.getElementById('serverless-new-variable-name')?.focus()}>변수 추가</Button>
-          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveChanges} onClick={onSaveChanges}>변경사항 저장</Button>
+          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveChanges} onClick={saveChanges}>변경사항 저장</Button>
         </Actions>
       </TabsRow>
 
@@ -427,14 +453,20 @@ export function ServerlessEnvironmentPage({
               ? ` · ${(storageBytesUsed / 1024).toFixed(1)} / ${(storageBytesLimit / 1024).toFixed(0)} KB`
               : ''}
           </PanelTitle>
-          <Button variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled={!onEditVariables} onClick={onEditVariables}>변수 편집</Button>
+          <Button type="button" variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled={!onEditVariables || !onUpdateVariable} aria-pressed={editingVariables} onClick={toggleVariableEditing}>변수 편집</Button>
         </PanelHeading>
         {variables.map(variable => (
           <VariableRow key={variable.name}>
             <VariableIcon aria-hidden="true"><Octicon name="key" size={16} /></VariableIcon>
             <VariableCopy>
               <VariableName>{variable.name}</VariableName>
-              <VariableValue>{variable.secret ? '비밀 · 저장한 뒤 다시 볼 수 없습니다' : variable.value ?? ''}</VariableValue>
+              <VariableValue>
+                {variable.secret
+                  ? '비밀 · 저장한 뒤 다시 볼 수 없습니다'
+                  : editingVariables
+                    ? <Input aria-label={`${variable.name} 값`} value={variableDrafts[variable.name] ?? ''} onChange={event => setVariableDrafts(current => ({ ...current, [variable.name]: event.currentTarget.value }))} />
+                    : variable.value ?? ''}
+              </VariableValue>
             </VariableCopy>
             {variable.secret && (
               <RowActions>

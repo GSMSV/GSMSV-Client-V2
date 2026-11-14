@@ -231,7 +231,9 @@ export function ServerlessTabRoute() {
       onSelectTab={tab => selectTab(tab)}
       onAddVariable={variable => { addDemoServerlessVariable(fn.id, variable); changed(); }}
       onUpdateVariable={(name, value) => {
-        updateDemoServerlessVariable(fn.id, name, { name, secret: true, value });
+        const current = fn.variables.find(variable => variable.name === name);
+        if (!current) return;
+        updateDemoServerlessVariable(fn.id, name, { ...current, value, secret: current.secret });
         changed();
       }}
       onDeleteVariable={name => { deleteDemoServerlessVariable(fn.id, name); changed(); }}
