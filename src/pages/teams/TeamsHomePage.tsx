@@ -615,7 +615,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
             {currentTeam.status === 'pending' && currentTeam.permissions.invite_member && (
               <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀원 초대</Button>
             )}
-            {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/new`)}>팀 VM 만들기</Button>}
+            {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled title="팀 VM API와 생성 경로가 아직 제공되지 않습니다.">팀 VM 만들기</Button>}
           </Actions>
         </Heading>
 
