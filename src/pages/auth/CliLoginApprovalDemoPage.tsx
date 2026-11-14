@@ -133,13 +133,10 @@ export default function CliLoginApprovalDemoPage() {
     const updated = { ...request, status: '만료됨' as const };
     if (!saveDemoCliRequest(updated)) setNotice('만료 상태를 저장하지 못했습니다. 이 요청은 계속 승인할 수 없습니다.');
     setRequest(updated);
-  }, [expired, request]);
+  }, [expired, request.status]);
 
   function decide(status: CliLoginRequest['status']) {
-    if (!active) {
-      if (expired && request.status === '확인 대기') setRequest({ ...request, status: '만료됨' });
-      return;
-    }
+    if (!active) return;
     const updated = { ...request, status };
     if (!saveDemoCliRequest(updated)) {
       setNotice('요청을 저장하지 못했습니다. 다시 시도해 주세요.');
