@@ -160,20 +160,13 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
 
     if (import.meta.env.DEV && demoMode) {
       void Promise.all([
-        import('../../entities/home'),
+        import('../../entities/team/demo'),
         import('../../entities/app/demo'),
-      ]).then(([home, app]) => {
+      ]).then(([teamRepository, app]) => {
         if (signal.aborted) return;
-        const summary = home.demoHomeTeams.find(item => item.id === teamId);
-        const demoTeam: TeamDetail | null = summary ? {
-          ...summary,
-          rejection_reason: null,
-          members: [],
-          quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
-          permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
-        } : null;
-        const teamApps = app.getDemoAppSummaries({ type: 'team', id: teamId, name: summary?.name ?? 'GSM Connect' });
-        const teams = summary ? home.demoHomeTeams : [];
+        const demoTeam = teamRepository.getDemoTeam(teamId) ?? null;
+        const teamApps = app.getDemoAppSummaries({ type: 'team', id: teamId, name: demoTeam?.name ?? 'GSM Connect' });
+        const teams = teamRepository.listDemoTeams();
         setTeam(demoTeam ? { value: demoTeam, loading: false, error: false } : { value: null, loading: false, error: true });
         setApps({ value: teamApps, loading: false, error: false });
         setTeams({ value: teams, loading: false, error: false });
