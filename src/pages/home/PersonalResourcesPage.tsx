@@ -7,6 +7,7 @@ import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import type { DemoHomeState } from '../../entities/home';
+import type { DemoVm } from '../../entities/vm';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -342,6 +343,7 @@ export default function PersonalResourcesPage() {
   const demoMode = isDemoMode();
   const user = getSessionUser();
   const [demoHome, setDemoHome] = useState<DemoHomeState | null>(null);
+  const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
@@ -353,12 +355,33 @@ export default function PersonalResourcesPage() {
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (import.meta.env.DEV && demoMode) {
-      const demo = await import('../../entities/home');
+      const [demo, vmRepository] = await Promise.all([
+        import('../../entities/home'),
+        import('../../entities/vm'),
+      ]);
       if (signal.aborted) return;
-      setDemoHome(demo.getDemoHomeState());
+      const homeState = demo.getDemoHomeState();
+      const vmState = vmRepository.getDemoVmState();
+      const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
+      const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0);
+      if (homeState?.firstVisit && !firstVisit) demo.setDemoFirstVisit(false);
+      setDemoHome(homeState ? { ...homeState, firstVisit } : null);
+      setDemoVms(personalVms);
       setApps({ value: demo.demoHomeApps, loading: false, error: false });
       setDatabases({ value: demo.demoHomeDatabases, loading: false, error: false });
-      setQuota({ value: demo.demoHomeQuota, loading: false, error: false });
+      setQuota({
+        value: {
+          ...demo.demoHomeQuota,
+          vm: {
+            ...demo.demoHomeQuota.vm,
+            vcpu: { ...demo.demoHomeQuota.vm.vcpu, used: vmState.personalQuota.cpu, limit: vmState.personalQuota.cpuLimit },
+            ram_gb: { ...demo.demoHomeQuota.vm.ram_gb, used: vmState.personalQuota.memory, limit: vmState.personalQuota.memoryLimit },
+            ssd_gb: { ...demo.demoHomeQuota.vm.ssd_gb, used: vmState.personalQuota.disk, limit: vmState.personalQuota.diskLimit },
+          },
+        },
+        loading: false,
+        error: false,
+      });
       return;
     }
     const jobs = [
@@ -371,6 +394,12 @@ export default function PersonalResourcesPage() {
     setQuota(current => ({ ...current, loading: true, error: false }));
     await Promise.all(jobs);
   }, [demoMode]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load, retryKey]);
 
   useEffect(() => {
     if (import.meta.env.DEV && demoMode) {
@@ -389,12 +418,6 @@ export default function PersonalResourcesPage() {
       setTeamsLoading(false);
       return;
     }
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load, retryKey]);
-
-  useEffect(() => {
     const controller = new AbortController();
     setTeamsLoading(true);
     void listMyTeams(controller.signal)
@@ -522,10 +545,10 @@ export default function PersonalResourcesPage() {
             </QuotaPanel>
             <ResourceTable aria-label="내 VM 목록">
               <ResourceTableHeader><span>이름</span><span>상태</span><span>자원</span><span>만료일</span></ResourceTableHeader>
-              {demoMode && demoHome?.vms.length ? demoHome.vms.map(vm => <ResourceTableRow key={vm.id}>
+              {demoMode && demoVms.length ? demoVms.map(vm => <ResourceTableRow key={vm.id}>
                 <ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink>
                 <State $tone={vm.status === 'running' ? 'primary' : undefined}>{vm.status === 'running' ? '실행 중' : '중지됨'}</State>
-                <span>{vm.vcpu} vCPU · {vm.ramGb} GB RAM · {vm.ssdGb} GB SSD</span>
+                <span>{vm.cpu} vCPU · {vm.memory} GB RAM · {vm.disk} GB SSD</span>
                 <span>{formatDate(vm.expiresAt)}</span>
               </ResourceTableRow>) : demoMode ? <ResourceTableEmpty>아직 생성한 VM이 없습니다. VM 만들기를 눌러 첫 VM을 만들어 보세요.</ResourceTableEmpty> : <ResourceTableEmpty>VM 목록 계약이 공개되면 실제 상태와 만료일을 표시합니다. 현재 확인 가능한 VM 목록 API는 없습니다.</ResourceTableEmpty>}
             </ResourceTable>

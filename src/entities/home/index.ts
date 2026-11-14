@@ -8,5 +8,4 @@ export {
   setDemoFirstVisit,
   type DemoFunctionSummary,
   type DemoHomeState,
-  type DemoVmSummary,
 } from './model/demoHome';

@@ -4,16 +4,6 @@ import type { MyQuota } from '../../quota/model/types';
 import type { TeamSummary } from '../../team/model/types';
 import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
-export interface DemoVmSummary {
-  id: string;
-  name: string;
-  status: 'running' | 'stopped';
-  vcpu: number;
-  ramGb: number;
-  ssdGb: number;
-  expiresAt: string;
-}
-
 export interface DemoFunctionSummary {
   id: string;
   name: string;
@@ -24,16 +14,11 @@ export interface DemoFunctionSummary {
 
 export interface DemoHomeState {
   firstVisit: boolean;
-  vms: DemoVmSummary[];
   functions: DemoFunctionSummary[];
 }
 
 const seedHome: DemoHomeState = {
   firstVisit: false,
-  vms: [
-    { id: 'vm-ubuntu-dev', name: 'ubuntu-dev', status: 'running', vcpu: 2, ramGb: 4, ssdGb: 20, expiresAt: '2026-12-31T14:59:59.000Z' },
-    { id: 'vm-lab-server', name: 'lab-server', status: 'stopped', vcpu: 2, ramGb: 4, ssdGb: 20, expiresAt: '2026-11-30T14:59:59.000Z' },
-  ],
   functions: [
     { id: 'fn-weather-api', name: 'weather-api', runtime: 'Node.js 22', status: 'active', executionsToday: 128 },
     { id: 'fn-daily-report', name: 'daily-report', runtime: 'Node.js 22', status: 'paused', executionsToday: 0 },

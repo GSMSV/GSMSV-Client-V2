@@ -61,8 +61,19 @@ export default function DemoEntryPage() {
   async function enter(role: 'user' | 'admin', firstVisit = false) {
     if (!startDemoSession(role)) return;
     if (role === 'user' && import.meta.env.DEV) {
-      const { setDemoFirstVisit } = await import('../../entities/home');
+      const [{ setDemoFirstVisit }, vm] = await Promise.all([
+        import('../../entities/home'),
+        import('../../entities/vm'),
+      ]);
       setDemoFirstVisit(firstVisit);
+      if (firstVisit) {
+        const state = vm.getDemoVmState();
+        vm.saveDemoVmState({
+          ...state,
+          vms: state.vms.filter(item => item.owner !== 'personal'),
+          personalQuota: { ...state.personalQuota, cpu: 0, memory: 0, disk: 0 },
+        });
+      }
     }
     navigate(role === 'admin' ? '/admin/infra' : '/');
   }
