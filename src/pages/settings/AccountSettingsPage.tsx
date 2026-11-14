@@ -9,6 +9,8 @@ import { Button } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { isDemoMode } from '../../shared/demo';
+import DemoAccountSettingsPage from './DemoAccountSettingsPage';
 
 const Content = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border};
@@ -170,7 +172,7 @@ function TeamMemberships({ state }: { state: TeamsState }) {
   );
 }
 
-export default function AccountSettingsPage() {
+function ProductionAccountSettingsPage() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const user = getSessionUser();
@@ -355,4 +357,8 @@ export default function AccountSettingsPage() {
       </Content>
     </StudentShell>
   );
+}
+
+export default function AccountSettingsPage() {
+  return isDemoMode() ? <DemoAccountSettingsPage /> : <ProductionAccountSettingsPage />;
 }
