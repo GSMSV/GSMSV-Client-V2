@@ -351,6 +351,7 @@ export function getDemoApps(): DemoManagedApp[] {
 }
 
 export function getDemoAppSummaries(owner?: AppOwner): AppSummary[] {
+  if (owner?.type === "team" && !getDemoTeam(owner.id)) return [];
   return getDemoApps()
     .filter((app) => (!isDemoAppExpired(app) || Date.now() < getDemoAppDeletionTime(app)) &&
       (!owner || (app.owner?.type === owner.type && app.owner.id === owner.id)))
@@ -518,6 +519,9 @@ export function renewDemoApp(appId: string) {
 export const demoAppMemoryLimit = 2048;
 
 export function getDemoAppQuota(owner: Pick<AppOwner, "type" | "id">) {
+  if (owner.type === "team" && !getDemoTeam(owner.id)) {
+    return { count: 0, limit: 4, usedMemory: 0, freeMemory: demoAppMemoryLimit, alwaysOn: 0 };
+  }
   const apps = getDemoApps().filter((app) => app.owner?.id === owner.id && app.owner.type === owner.type &&
     (!isDemoAppExpired(app) || Date.now() < getDemoAppDeletionTime(app)));
   const services = apps.flatMap((app) => app.services);
