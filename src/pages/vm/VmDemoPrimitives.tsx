@@ -275,7 +275,7 @@ export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Res
   const routeTo = useNavigate();
   const navigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const paths: Record<Exclude<StudentNavigationKey, 'none'>, string> = {
-      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/docs', support: '/support', settings: '/settings',
+      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/docs', support: '/support/inquiries', settings: '/settings',
     };
     routeTo(paths[item]);
   };
