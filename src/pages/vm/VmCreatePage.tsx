@@ -181,10 +181,13 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   function createRequest() {
     if (!validDraft()) return;
     const { state: nextState, vm } = makeDemoVm(state, draft, owner, teamId, teamName, creatorName);
-    saveDemoVmState(nextState);
+    if (!saveDemoVmState(nextState)) {
+      setError('VM 생성 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setState(nextState);
     resetDemoVmDraft(owner);
-    navigate(isTeam ? `/teams/${encodeURIComponent(vm.teamId ?? teamId)}/vms/${encodeURIComponent(vm.id)}` : `/vms/${encodeURIComponent(vm.id)}`);
+    navigate(isTeam ? `/teams/${encodeURIComponent(vm.teamId ?? teamId)}/vms` : '/');
   }
 
   const heading = step === 'spec'

@@ -45,6 +45,10 @@ export function saveDemoNetworkState(vmGrn: string, state: DemoNetworkState): bo
   return writeDemoState(stateKey(vmGrn), state);
 }
 
+export function clearDemoNetworkState(vmGrn: string): boolean {
+  return writeDemoState(stateKey(vmGrn), { ports: [], domains: [], rules: [], firewallEnabled: false, sequence: 1 });
+}
+
 export function demoPortList(vmGrn: string): PortForwardList {
   return { items: getDemoNetworkState(vmGrn).ports, public_host: defaultHost, limits: { custom: 30 } };
 }

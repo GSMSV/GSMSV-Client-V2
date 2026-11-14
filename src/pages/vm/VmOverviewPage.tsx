@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { canExtendDemoTeamVm, getDemoVmDaysRemaining, getDemoVmState, saveDemoVmState } from '../../entities/vm';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Fact, FactLabel, FactValue, Facts, Grid2, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle } from './VmDemoPrimitives';
 
@@ -64,12 +65,44 @@ const NumberLine = styled.div`
   color: ${({ theme }) => theme.colors.faint};
 `;
 
+const PowerPanel = styled.div`
+  display: flex;
+  width: min(480px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+`;
+
+const PowerTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const PowerCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const PowerActionsRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
+type PowerDialog = 'graceful-progress' | 'force-confirm' | 'force-progress' | 'restart-progress' | null;
+type PowerOperation = 'normal' | 'force' | 'restart' | null;
+
 export function VmOverviewPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const navigate = useNavigate();
   const [state, setState] = useState(() => getDemoVmState());
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [notice, setNotice] = useState('');
+  const [powerDialog, setPowerDialog] = useState<PowerDialog>(null);
+  const [powerOperation, setPowerOperation] = useState<PowerOperation>(null);
+  const powerTimer = useRef<number | null>(null);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
@@ -104,11 +137,51 @@ export function VmOverviewPage() {
     });
   }
 
-  function power(action: 'running' | 'stopped') {
-    if (memberReadOnly || vmRecord.status === 'queued') return;
-    if (action === 'stopped' && !window.confirm('VM을 정지할까요? 실행 중인 작업이 종료됩니다.')) return;
-    persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: action } : item) }));
-    setNotice(action === 'running' ? 'VM을 시작했습니다.' : 'VM을 정지했습니다.');
+  function finishPowerOperation(action: Exclude<PowerOperation, null>) {
+    const current = getDemoVmState();
+    const currentVm = current.vms.find(item => item.id === vmRecord.id);
+    if (!currentVm || currentVm.status !== 'running') {
+      setState(current);
+      setPowerOperation(null);
+      setPowerDialog(null);
+      powerTimer.current = null;
+      return;
+    }
+    const next = { ...current, vms: current.vms.map(item => item.id === vmRecord.id
+      ? action === 'restart'
+        ? { ...item, status: 'running' as const, lastRestartedAt: new Date().toISOString() }
+        : { ...item, status: 'stopped' as const }
+      : item) };
+    if (!saveDemoVmState(next)) {
+      setNotice('전원 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+    } else {
+      setState(next);
+      setNotice(action === 'normal' ? 'VM을 정상 종료했습니다.' : action === 'force' ? 'VM을 강제로 정지했습니다.' : 'VM을 재시작했습니다.');
+    }
+    setPowerOperation(null);
+    setPowerDialog(null);
+    powerTimer.current = null;
+  }
+
+  function beginPowerOperation(action: Exclude<PowerOperation, null>) {
+    if (memberReadOnly || vmRecord.status !== 'running') return;
+    if (powerOperation && !(powerOperation === 'normal' && action === 'force')) return;
+    if (powerTimer.current !== null) window.clearTimeout(powerTimer.current);
+    setPowerOperation(action);
+    setPowerDialog(action === 'normal' ? 'graceful-progress' : action === 'restart' ? 'restart-progress' : 'force-progress');
+    powerTimer.current = window.setTimeout(() => finishPowerOperation(action), action === 'normal' ? 2200 : action === 'restart' ? 1800 : 650);
+  }
+
+  function startVm() {
+    if (memberReadOnly || vmRecord.status === 'queued' || vmRecord.status === 'running' || powerOperation) return;
+    const current = getDemoVmState();
+    const next = { ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: 'running' as const } : item) };
+    if (saveDemoVmState(next)) {
+      setState(next);
+      setNotice('VM을 시작했습니다.');
+    } else {
+      setNotice('전원 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+    }
   }
 
   function extend() {
@@ -133,10 +206,10 @@ export function VmOverviewPage() {
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? 'GSM Connect / 팀 Resources' : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{title}</Title><StatusLine>{subtitle}</StatusLine></div><PowerActions>
-        <Button variant="secondary" disabled={memberReadOnly || vm.status === 'queued' || vm.status === 'running'} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={() => power('running')}>시작</Button>
-        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running'} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => power('stopped')}>정상 종료</Button>
-        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running'} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => { setNotice('VM을 재시작했습니다.'); }}>재시작</Button>
-        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running'} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => power('stopped')}>강제 정지</Button>
+        <Button variant="secondary" disabled={memberReadOnly || vm.status === 'queued' || vm.status === 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={startVm}>시작</Button>
+        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
+        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
+        <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
         {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" icon={<Octicon name="calendar" />} onClick={extend}>14일 연장</Button>}
       </PowerActions></Heading>
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
@@ -175,6 +248,28 @@ export function VmOverviewPage() {
       </Surface>
       {vm.owner === 'team' && <Surface><SurfaceTitle>팀 정보</SurfaceTitle><KVPairs><Fact><FactLabel>소유</FactLabel><FactValue>팀 {vm.teamName} · 만든 사람 {vm.creator}</FactValue></Fact><Fact><FactLabel>내 역할</FactLabel><FactValue>일반 팀원 · 팀장이 DevOps 역할을 주면 전원과 설정을 관리할 수 있습니다</FactValue></Fact></KVPairs></Surface>}
       {notice && <Hint role="status">{notice}</Hint>}
+      {powerOperation === 'normal' && !powerDialog && <Banner role="status"><Octicon name="clock" size={20} /><BannerCopy><strong>종료 요청 후 응답을 기다리고 있습니다</strong><span>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</span></BannerCopy><Button variant="secondary" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></Banner>}
     </DemoPage>
+    {powerDialog && <ModalSurface labelledBy="vm-power-title" onDismiss={() => { if (powerOperation !== 'restart') setPowerDialog(null); }}>
+      <PowerPanel>
+        <PowerTitle id="vm-power-title">{powerDialog === 'graceful-progress' ? '종료 요청 후 응답을 기다리고 있습니다' : powerDialog === 'force-confirm' ? 'VM을 강제로 정지하시겠습니까?' : powerDialog === 'restart-progress' ? '이전 작업이 진행 중입니다' : 'VM을 강제로 정지하는 중입니다'}</PowerTitle>
+        {powerDialog === 'graceful-progress' ? <>
+          <PowerCopy>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</PowerCopy>
+          <PowerCopy>· 정상 종료 요청됨 → 정지 상태 확인 중<br />· 다른 전원 작업은 이전 작업이 끝난 뒤 사용할 수 있습니다.</PowerCopy>
+          <PowerActionsRow><Button variant="secondary" onClick={() => setPowerDialog(null)}>기다리기</Button><Button variant="danger" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></PowerActionsRow>
+        </> : powerDialog === 'restart-progress' ? <>
+          <PowerCopy>{vmRecord.name}을(를) 재시작하고 있습니다. 작업이 끝나면 다시 시도해 주세요.</PowerCopy>
+          <PowerCopy>· 진행 중인 작업의 상태를 계속 확인하고 있습니다.</PowerCopy>
+          <PowerActionsRow><Button variant="secondary" disabled>재시작</Button><Button variant="secondary" disabled>정상 종료</Button><Button variant="danger" disabled>강제 정지</Button></PowerActionsRow>
+        </> : powerDialog === 'force-confirm' ? <>
+          <PowerCopy>운영체제의 종료 절차를 기다리지 않고 {vmRecord.name}을(를) 정지합니다. 저장하지 않은 데이터가 사라질 수 있습니다.</PowerCopy>
+          <PowerCopy>· VM이나 운영체제가 응답하지 않을 때 사용해 주세요.</PowerCopy>
+          <PowerActionsRow><Button variant="secondary" onClick={() => setPowerDialog(powerOperation === 'normal' ? 'graceful-progress' : null)}>취소</Button><Button variant="danger" onClick={() => beginPowerOperation('force')}>강제 정지</Button></PowerActionsRow>
+        </> : <>
+          <PowerCopy>{vmRecord.name}의 전원 상태를 확인하고 있습니다. 다른 전원 작업은 이 작업이 끝난 뒤 사용할 수 있습니다.</PowerCopy>
+          <PowerActionsRow><Button variant="secondary" disabled>정지 처리 중</Button></PowerActionsRow>
+        </>}
+      </PowerPanel>
+    </ModalSurface>}
   </DemoShell>;
 }

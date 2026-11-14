@@ -12,7 +12,12 @@ export {
   setFirewallEnabled,
   updateDomain,
 } from './api/networkApi';
-export { getDemoDomainValidationError, getDemoNetworkState } from './model/demoNetworkStore';
+export {
+  clearDemoNetworkState,
+  getDemoDomainValidationError,
+  getDemoNetworkState,
+  saveDemoNetworkState,
+} from './model/demoNetworkStore';
 export type {
   CreateFirewallRuleRequest,
   Domain,

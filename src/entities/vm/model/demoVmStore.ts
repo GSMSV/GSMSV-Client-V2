@@ -21,6 +21,7 @@ export interface DemoVm {
   creator: string;
   role: 'leader' | 'member';
   status: VmStatus;
+  lastRestartedAt?: string;
   cpu: number;
   memory: number;
   disk: number;
