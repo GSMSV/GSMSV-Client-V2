@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
+import { isDemoMode } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
@@ -58,6 +59,13 @@ export default function NotificationSettingsPage() {
   const [logoutPending, setLogoutPending] = useState(false);
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!cancelled) setTeams(listDemoTeams());
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     void listMyTeams(controller.signal).then(value => {
       if (!controller.signal.aborted) setTeams(value);

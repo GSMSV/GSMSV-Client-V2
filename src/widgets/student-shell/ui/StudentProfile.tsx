@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../../entities/team';
+import { isDemoMode } from '../../../shared/demo';
 import { logout } from '../../../features/auth/logout/api/logout';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
@@ -129,6 +130,18 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!cancelled) setTeamsState({ status: 'ready', teams: listDemoTeams() });
+      });
+      const dismissOutside = (event: PointerEvent) => {
+        if (event.target instanceof Node && !profileRef.current?.contains(event.target)) setOpen(false);
+      };
+      document.addEventListener('pointerdown', dismissOutside);
+      panelRef.current?.focus();
+      return () => { cancelled = true; document.removeEventListener('pointerdown', dismissOutside); };
+    }
     void listMyTeams(controller.signal).then(teams => {
       if (!controller.signal.aborted) setTeamsState({ status: 'ready', teams });
     }).catch(() => {
@@ -197,7 +210,7 @@ export function StudentProfile({ userName, activeTeamId, hasUnsavedInput, onOpen
     onLogoutPendingChange?.(true);
     setLogoutError(false);
     try {
-      await logout();
+      if (!(import.meta.env.DEV && isDemoMode())) await logout();
       clearSessionUser();
       setOpen(false);
       void navigate('/login', { replace: true });

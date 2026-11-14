@@ -9,6 +9,7 @@ import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { cancelTeamInvitation, inviteTeamMember, listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 
 const Page = styled.div`
   box-sizing: border-box;
@@ -178,6 +179,17 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!selectedTeamId) { setLoading(false); return; }
     setLoading(true); setError(false); setInviteLoadError(false);
+    if (import.meta.env.DEV && isDemoMode()) {
+      const demo = await import('../../entities/team/demo');
+      if (signal?.aborted) return;
+      const detail = demo.getDemoTeam(selectedTeamId);
+      const myTeams = demo.listDemoTeams();
+      if (!detail) { setError(true); setTeam(null); setLoading(false); return; }
+      setTeam(detail); setTeams(myTeams);
+      setInvitations(demo.listDemoTeamInvitations(selectedTeamId));
+      setLoading(false);
+      return;
+    }
     try {
       const [detail, myTeams] = await Promise.all([getTeam(selectedTeamId, signal), listMyTeams(signal)]);
       if (signal?.aborted) return;
@@ -221,6 +233,13 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     }
     setBusyAction('invite'); setFormError(''); setInviteError('');
     try {
+      if (import.meta.env.DEV && isDemoMode()) {
+        const { inviteDemoTeamMember } = await import('../../entities/team/demo');
+        inviteDemoTeamMember(selectedTeamId!, trimmed);
+        setEmail('');
+        refresh();
+        return;
+      }
       await inviteTeamMember(selectedTeamId!, trimmed);
       setEmail('');
       refresh();
@@ -233,6 +252,13 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (!confirmCancel || !selectedTeamId) return;
     setBusyAction(confirmCancel.id); setInviteError('');
     try {
+      if (import.meta.env.DEV && isDemoMode()) {
+        const { cancelDemoTeamInvitation } = await import('../../entities/team/demo');
+        cancelDemoTeamInvitation(selectedTeamId, confirmCancel.id);
+        setConfirmCancel(null);
+        refresh();
+        return;
+      }
       await cancelTeamInvitation(selectedTeamId, confirmCancel.id);
       setConfirmCancel(null);
       refresh();
@@ -245,6 +271,12 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (!selectedTeamId) return;
     setBusyAction(invitation.id); setInviteError('');
     try {
+      if (import.meta.env.DEV && isDemoMode()) {
+        const { inviteDemoTeamMember } = await import('../../entities/team/demo');
+        inviteDemoTeamMember(selectedTeamId, invitation.email);
+        refresh();
+        return;
+      }
       await inviteTeamMember(selectedTeamId, invitation.email);
       refresh();
     } catch (cause) {

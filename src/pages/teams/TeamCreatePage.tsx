@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { createTeam } from '../../features/team/create-team';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -227,6 +228,13 @@ export default function TeamCreatePage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!cancelled) setTeams(listDemoTeams());
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     void listMyTeams(controller.signal).then(value => {
       if (!controller.signal.aborted) setTeams(value);
@@ -260,7 +268,9 @@ export default function TeamCreatePage() {
     setSubmitting(true);
     setError(null);
     try {
-      const team = await createTeam(normalizedName);
+      const team = import.meta.env.DEV && isDemoMode()
+        ? await import('../../entities/team/demo').then(({ createDemoTeam }) => createDemoTeam(normalizedName))
+        : await createTeam(normalizedName);
       navigate(`/teams/${encodeURIComponent(team.id)}`, { replace: true });
     } catch (requestError) {
       setError(createErrorMessage(requestError));
