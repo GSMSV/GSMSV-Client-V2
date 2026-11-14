@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { getDemoTeam } from '../../entities/team/demo';
@@ -30,6 +30,7 @@ const InfoText = styled.div`
 `;
 
 export default function DedicatedDatabaseRequestPage() {
+  const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
   const teamScopeId = routeTeamId ?? 'demo-team';
   const team = getDemoTeam(teamScopeId);
@@ -38,22 +39,35 @@ export default function DedicatedDatabaseRequestPage() {
   const [reason, setReason] = useState('다른 학생의 부하와 성능을 떼어 놓아야 합니다');
   const [description, setDescription] = useState('실시간 매칭 기능 때문에 쿼리가 많습니다. 공유 서버의 다른 학생 Database에 영향을 주지 않도록 따로 쓰고 싶습니다.');
   const [notice, setNotice] = useState('');
-  const pending = getDemoDbRequests().find((request) => request.team === teamName && (request.status === '대기 중' || request.status === '검토 중'));
+  const [requests, setRequests] = useState(() => getDemoDbRequests());
+  const teamRequests = requests.filter((request) => (request.teamId && request.teamId === teamScopeId) || request.team === teamName);
+  const latestRequest = teamRequests.at(-1);
+  const pending = [...teamRequests].reverse().find((request) => request.status === '대기 중' || request.status === '검토 중');
 
   function submitRequest() {
     if (!isDemoMode()) return;
     if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
     if (pending) {
-      const updated = { ...pending, engine, reason, description: description.trim(), status: '대기 중' as const, rejectReason: '', requestedAt: '2026.11.14' };
-      saveDemoDbRequests(getDemoDbRequests().map((item) => item.id === pending.id ? updated : item));
+      const updated = { ...pending, teamId: teamScopeId, engine, reason, description: description.trim(), status: '대기 중' as const, rejectReason: '', databaseGrn: undefined, databaseName: undefined, requestedAt: '2026.11.14' };
+      const nextRequests = requests.map((item) => item.id === pending.id ? updated : item);
+      if (!saveDemoDbRequests(nextRequests)) {
+        setNotice('신청을 저장하지 못했습니다. 다시 시도해 주세요.');
+        return;
+      }
+      setRequests(nextRequests);
       setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
       return;
     }
     const request: DedicatedDatabaseRequest = {
-      id: `db-request-${crypto.randomUUID()}`, team: teamName, applicant: '김지민 · 팀장', members: team?.members.length ?? 3,
+      id: `db-request-${crypto.randomUUID()}`, team: teamName, teamId: teamScopeId, applicant: '김지민 · 팀장', members: team?.members.length ?? 3,
       engine, reason, description: description.trim(), requestedAt: '2026.11.14', status: '대기 중', rejectReason: '',
     };
-    saveDemoDbRequests([...getDemoDbRequests(), request]);
+    const nextRequests = [...requests, request];
+    if (!saveDemoDbRequests(nextRequests)) {
+      setNotice('신청을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setRequests(nextRequests);
     setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
   }
 
@@ -62,7 +76,7 @@ export default function DedicatedDatabaseRequestPage() {
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
     {notice && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
     <Card>
-      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button icon={<Octicon name="people" size={16} />} onClick={submitRequest}>신청</Button></CardHeader>
+      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>신청</Button></CardHeader>
       <Muted>팀당 1개까지이고, 팀 Database 4개 안에 들어갑니다. 팀장과 DevOps만 신청할 수 있습니다.</Muted>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
         <Field>엔진<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 8, background: '#403d45' }}>{(['MySQL', 'PostgreSQL'] as const).map((item) => <button key={item} type="button" onClick={() => setEngine(item)} style={{ minHeight: 34, border: 0, borderRadius: 6, background: engine === item ? '#203d30' : 'transparent', color: engine === item ? '#00ff90' : '#c0bbc6', cursor: 'pointer' }}>{item}</button>)}</div></Field>
@@ -84,6 +98,14 @@ export default function DedicatedDatabaseRequestPage() {
       </Card>
     </Columns>
     <Card style={{ display: 'flex', alignItems: 'center', gap: 16 }}><Octicon name="calendar" size={18} /><div><strong style={{ color: '#f7f6f8', fontSize: 14 }}>전용형 Database의 사용 기간</strong><Muted style={{ marginTop: 4 }}>첫 31일 뒤 만료되고, 이후 2주마다 팀원 누구나 연장할 수 있습니다.</Muted></div></Card>
-    {pending && <Muted><Badge>신청 상태: {pending.status}</Badge> · {pending.engine} · {pending.requestedAt}</Muted>}
+    {latestRequest && <Card>
+      <CardHeader><SectionTitle>신청 결과</SectionTitle><Badge $tone={latestRequest.status === '승인 완료' ? 'success' : latestRequest.status === '거절' ? 'danger' : 'warning'}>{latestRequest.status}</Badge></CardHeader>
+      <Muted>{latestRequest.engine} · {latestRequest.requestedAt}</Muted>
+      {latestRequest.status === '거절' && latestRequest.rejectReason && <Alert $tone="warning" role="status"><Octicon name="info" size={16} />거절 사유: {latestRequest.rejectReason}</Alert>}
+      {latestRequest.status === '승인 완료' && latestRequest.databaseGrn && <>
+        <Muted>{latestRequest.databaseName ?? '전용 Database'}가 생성되었습니다. 상세 화면에서 접속 정보를 확인할 수 있습니다.</Muted>
+        <Button variant="secondary" icon={<Octicon name="database" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(latestRequest.databaseGrn!)}`)}>접속 정보 확인</Button>
+      </>}
+    </Card>}
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }

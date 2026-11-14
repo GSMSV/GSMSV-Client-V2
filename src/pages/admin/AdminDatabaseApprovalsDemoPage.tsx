@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
+import { createDemoDatabase, getDemoDatabase, listDemoDatabases } from '../../entities/database/demo';
+import type { DatabaseEngine } from '../../entities/database';
+import { listDemoTeams } from '../../entities/team/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
@@ -17,20 +20,53 @@ export default function AdminDatabaseApprovalsDemoPage() {
 
   function update(next: DedicatedDatabaseRequest) {
     const updated = requests.map((item) => item.id === next.id ? next : item);
+    if (!saveDemoDbRequests(updated)) return false;
     setRequests(updated);
-    saveDemoDbRequests(updated);
+    return true;
   }
 
   function approve() {
-    if (!current || current.status === '승인 완료') return;
-    update({ ...current, status: '승인 완료' });
-    setNotice(`${current.team} 전용형 신청을 승인했습니다. 이 변경은 로컬 미리보기에만 적용됩니다.`);
+    if (!current || (current.status !== '대기 중' && current.status !== '검토 중')) return;
+    const team = listDemoTeams().find((item) => item.id === current.teamId || item.name === current.team);
+    const teamId = current.teamId ?? team?.id ?? 'demo-team';
+    const teamName = team?.name ?? current.team;
+    const existingDatabases = listDemoDatabases(teamId);
+    const databaseName = current.databaseName ?? `dedicated-${current.id.replace(/[^a-z0-9]/gi, '').slice(-12).toLowerCase()}`;
+    let database = current.databaseGrn ? getDemoDatabase(current.databaseGrn) : null;
+
+    if (!database) database = existingDatabases
+      .map((item) => getDemoDatabase(item.grn))
+      .find((item) => item?.name === databaseName) ?? null;
+
+    if (!database) {
+      if (existingDatabases.length >= 4) {
+        setNotice(`${teamName} 팀의 Database 한도 4개를 모두 사용 중이라 승인할 수 없습니다.`);
+        return;
+      }
+      try {
+        const engine: DatabaseEngine = current.engine === 'MySQL' ? 'mysql' : 'postgresql';
+        database = createDemoDatabase(databaseName, engine, { id: teamId, name: teamName });
+      } catch {
+        setNotice('전용 Database를 만들지 못했습니다. 다시 시도해 주세요.');
+        return;
+      }
+    }
+
+    const approved = { ...current, teamId, status: '승인 완료' as const, databaseGrn: database.grn, databaseName: database.name };
+    if (!update(approved)) {
+      setNotice('Database는 만들어졌지만 신청 상태를 저장하지 못했습니다. 다시 승인하면 기존 Database와 연결됩니다.');
+      return;
+    }
+    setNotice(`${current.team} 전용형 신청을 승인하고 ${database.name} Database를 만들었습니다.`);
   }
 
   function reject() {
-    if (!current) return;
+    if (!current || (current.status !== '대기 중' && current.status !== '검토 중')) return;
     if (!rejectReason.trim()) { setNotice('팀장에게 전달할 거절 사유를 입력해 주세요.'); return; }
-    update({ ...current, status: '거절', rejectReason: rejectReason.trim() });
+    if (!update({ ...current, status: '거절', rejectReason: rejectReason.trim() })) {
+      setNotice('거절 사유를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(`${current.team} 신청을 거절하고 사유를 기록했습니다.`);
   }
 
@@ -52,12 +88,13 @@ export default function AdminDatabaseApprovalsDemoPage() {
     </Card>
     {current && <>
       <Card>
-        <CardHeader><div><SectionTitle>{current.team} 전용형 승인</SectionTitle><Hint>승인하면 고정 사양의 전용 DB 서버를 만들고 팀장·DevOps에게 접속 정보를 보여 줍니다.</Hint></div><Button disabled={current.status === '승인 완료'} icon={<Octicon name="check" size={16} />} onClick={approve}>승인</Button></CardHeader>
+        <CardHeader><div><SectionTitle>{current.team} 전용형 승인</SectionTitle><Hint>승인하면 고정 사양의 전용 DB 서버를 만들고 팀장·DevOps에게 접속 정보를 보여 줍니다.</Hint></div><Button disabled={current.status === '승인 완료' || current.status === '거절'} icon={<Octicon name="check" size={16} />} onClick={approve}>승인</Button></CardHeader>
         <Muted>신청 설명</Muted><div style={{ marginTop: 8, padding: 12, minHeight: 90, borderRadius: 8, background: '#403d45', color: '#c0bbc6', fontSize: 14, lineHeight: '22px' }}>{current.description}</div>
         <Field style={{ marginTop: 16 }}>사양<InputDisabled value="vCPU 2 · RAM 4 GB · SSD 20 GB" /></Field>
         {current.status === '거절' && <Alert style={{ marginTop: 16 }}><Octicon name="info" size={16} />거절 사유: {current.rejectReason}</Alert>}
+        {current.status === '승인 완료' && current.databaseGrn && <Alert style={{ marginTop: 16 }}><Octicon name="database" size={16} />생성된 Database: {current.databaseName ?? '전용 Database'} · {current.databaseGrn}</Alert>}
       </Card>
-      <Card><CardHeader><SectionTitle>거절</SectionTitle><Button variant="secondary" disabled={current.status === '거절' || current.status === '승인 완료'} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Muted>거절하면 사유가 팀장에게 전달되고, 팀은 고쳐서 다시 신청할 수 있습니다.</Muted><Field style={{ marginTop: 16 }}>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
+      <Card><CardHeader><SectionTitle>거절</SectionTitle><Button variant="secondary" disabled={current.status === '거절' || current.status === '승인 완료' || !rejectReason.trim()} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Muted>거절하면 사유가 팀장에게 전달되고, 팀은 고쳐서 다시 신청할 수 있습니다.</Muted><Field style={{ marginTop: 16 }}>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
     </>}
     <Stats><Stat>운영 중인 전용형<strong>2개</strong><Muted>서비스 런타임 안에서 만듭니다</Muted></Stat><Stat>이번 학기 신청<strong>4건</strong><Muted>승인 2 · 거절 1</Muted></Stat><Stat>공유형 Database<strong>86개</strong><Muted>합계 21 GB 사용</Muted></Stat></Stats>
     <Muted>승인 기준 · 공유형이 줄 수 없는 장점만 승인합니다. 서버 전체 설정·확장 기능 변경, 계정·database를 직접 여러 개 만들기, 다른 학생의 부하와 성능 분리.</Muted>

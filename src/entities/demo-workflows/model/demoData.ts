@@ -19,6 +19,7 @@ export interface Inquiry {
 export interface DedicatedDatabaseRequest {
   id: string;
   team: string;
+  teamId?: string;
   applicant: string;
   members: number;
   engine: 'MySQL' | 'PostgreSQL';
@@ -27,6 +28,8 @@ export interface DedicatedDatabaseRequest {
   requestedAt: string;
   status: WorkflowStatus;
   rejectReason: string;
+  databaseGrn?: string;
+  databaseName?: string;
 }
 
 export interface TeamRequest {
