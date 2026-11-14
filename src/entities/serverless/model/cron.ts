@@ -11,13 +11,24 @@ type ParsedCron = {
   dayOfWeek: CronField;
 };
 
+type CalendarSchedule = {
+  /** null means every date; otherwise values are day offsets in the repeating 400-year cycle. */
+  matchingDays: Uint32Array | null;
+  hasDates: boolean;
+  hasAdjacentDates: boolean;
+};
+
 export type CronValidation =
   | { valid: true; minimumIntervalMinutes: number | null }
-  | { valid: false; reason: 'syntax' | 'frequency'; minimumIntervalMinutes?: number };
+  | { valid: false; reason: 'syntax' | 'frequency' | 'calendar'; minimumIntervalMinutes?: number };
 
 const SEOUL_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DEMO_CLOCK = new Date('2026-09-30T09:00:00+09:00');
-const adjacentDateCache = new Map<string, boolean>();
+const GREGORIAN_CYCLE_START = Date.UTC(2000, 0, 1);
+const DAYS_IN_GREGORIAN_CYCLE = 146_097;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const calendarScheduleCache = new Map<string, CalendarSchedule>();
 const FIELD_RANGES = [
   [0, 59],
   [0, 23],
@@ -84,40 +95,71 @@ function parseCron(expression: string): ParsedCron | undefined {
   };
 }
 
-function hasAdjacentMatchingDates(parsed: ParsedCron): boolean {
-  const cacheKey = [parsed.dayOfMonth, parsed.month, parsed.dayOfWeek]
+function calendarScheduleKey(parsed: ParsedCron): string {
+  return [parsed.dayOfMonth, parsed.month, parsed.dayOfWeek]
     .map(field => `${field.wildcard}:${[...field.values].sort((left, right) => left - right).join(',')}`)
     .join('|');
-  const cachedResult = adjacentDateCache.get(cacheKey);
-  if (cachedResult !== undefined) return cachedResult;
-
-  const cycleStart = Date.UTC(2000, 0, 1);
-  const dayMilliseconds = 24 * 60 * 60 * 1000;
-  const daysInGregorianCycle = 146_097;
-  let firstDateMatches = false;
-  let previousDateMatches = false;
-
-  for (let day = 0; day < daysInGregorianCycle; day += 1) {
-    const matches = matchesCronDate(parsed, new Date(cycleStart + day * dayMilliseconds));
-    if (day === 0) firstDateMatches = matches;
-    if (matches && previousDateMatches) {
-      adjacentDateCache.set(cacheKey, true);
-      if (adjacentDateCache.size > 256) adjacentDateCache.clear();
-      return true;
-    }
-    previousDateMatches = matches;
-  }
-
-  const hasAdjacentDates = previousDateMatches && firstDateMatches;
-  adjacentDateCache.set(cacheKey, hasAdjacentDates);
-  if (adjacentDateCache.size > 256) adjacentDateCache.clear();
-  return hasAdjacentDates;
 }
 
-function getMinimumScheduleInterval(parsed: ParsedCron): number | null {
-  const times = [...parsed.hour.values]
+function matchesCalendarDate(parsed: ParsedCron, date: Date): boolean {
+  const dayOfMonth = date.getUTCDate();
+  const month = date.getUTCMonth() + 1;
+  const dayOfWeek = date.getUTCDay();
+  const dayMatches = parsed.dayOfMonth.wildcard
+    ? parsed.dayOfWeek.values.has(dayOfWeek)
+    : parsed.dayOfWeek.wildcard
+      ? parsed.dayOfMonth.values.has(dayOfMonth)
+      : parsed.dayOfMonth.values.has(dayOfMonth) || parsed.dayOfWeek.values.has(dayOfWeek);
+
+  return dayMatches && parsed.month.values.has(month);
+}
+
+function getCalendarSchedule(parsed: ParsedCron): CalendarSchedule {
+  const key = calendarScheduleKey(parsed);
+  const cached = calendarScheduleCache.get(key);
+  if (cached) {
+    calendarScheduleCache.delete(key);
+    calendarScheduleCache.set(key, cached);
+    return cached;
+  }
+
+  if (parsed.dayOfMonth.wildcard && parsed.month.wildcard && parsed.dayOfWeek.wildcard) {
+    const everyDate = { matchingDays: null, hasDates: true, hasAdjacentDates: true };
+    calendarScheduleCache.set(key, everyDate);
+    return everyDate;
+  }
+
+  const matchingDays: number[] = [];
+  let previousDateMatches = false;
+  let hasAdjacentDates = false;
+  for (let day = 0; day < DAYS_IN_GREGORIAN_CYCLE; day += 1) {
+    const matches = matchesCalendarDate(parsed, new Date(GREGORIAN_CYCLE_START + day * DAY_MS));
+    if (matches) matchingDays.push(day);
+    if (matches && previousDateMatches) hasAdjacentDates = true;
+    previousDateMatches = matches;
+  }
+  if (matchingDays[0] === 0 && matchingDays[matchingDays.length - 1] === DAYS_IN_GREGORIAN_CYCLE - 1) {
+    hasAdjacentDates = true;
+  }
+
+  const schedule = {
+    matchingDays: Uint32Array.from(matchingDays),
+    hasDates: matchingDays.length > 0,
+    hasAdjacentDates,
+  };
+  calendarScheduleCache.set(key, schedule);
+  if (calendarScheduleCache.size > 8) calendarScheduleCache.delete(calendarScheduleCache.keys().next().value!);
+  return schedule;
+}
+
+function getScheduledMinutes(parsed: ParsedCron): number[] {
+  return [...parsed.hour.values]
     .flatMap(hour => [...parsed.minute.values].map(minute => hour * 60 + minute))
     .sort((left, right) => left - right);
+}
+
+function getMinimumScheduleInterval(parsed: ParsedCron, calendarSchedule: CalendarSchedule): number | null {
+  const times = getScheduledMinutes(parsed);
   if (!times.length) return null;
 
   let minimum: number | null = null;
@@ -127,7 +169,7 @@ function getMinimumScheduleInterval(parsed: ParsedCron): number | null {
   }
 
   const overnightInterval = 24 * 60 - times[times.length - 1] + times[0];
-  if (overnightInterval < 5 && hasAdjacentMatchingDates(parsed)) {
+  if (overnightInterval < 5 && calendarSchedule.hasAdjacentDates) {
     minimum = minimum === null ? overnightInterval : Math.min(minimum, overnightInterval);
   }
   return minimum;
@@ -136,29 +178,29 @@ function getMinimumScheduleInterval(parsed: ParsedCron): number | null {
 export function validateCronExpression(expression: string): CronValidation {
   const parsed = parseCron(expression);
   if (!parsed) return { valid: false, reason: 'syntax' };
-  const minimumIntervalMinutes = getMinimumScheduleInterval(parsed);
+  const calendarSchedule = getCalendarSchedule(parsed);
+  if (!calendarSchedule.hasDates) return { valid: false, reason: 'calendar' };
+  const minimumIntervalMinutes = getMinimumScheduleInterval(parsed, calendarSchedule);
   if (minimumIntervalMinutes !== null && minimumIntervalMinutes < 5) {
     return { valid: false, reason: 'frequency', minimumIntervalMinutes };
   }
   return { valid: true, minimumIntervalMinutes };
 }
 
-function matchesCronDate(parsed: ParsedCron, localDate: Date): boolean {
-  const minute = localDate.getUTCMinutes();
-  const hour = localDate.getUTCHours();
-  const dayOfMonth = localDate.getUTCDate();
-  const month = localDate.getUTCMonth() + 1;
-  const dayOfWeek = localDate.getUTCDay();
-  const dayMatches = parsed.dayOfMonth.wildcard
-    ? parsed.dayOfWeek.values.has(dayOfWeek)
-    : parsed.dayOfWeek.wildcard
-      ? parsed.dayOfMonth.values.has(dayOfMonth)
-      : parsed.dayOfMonth.values.has(dayOfMonth) || parsed.dayOfWeek.values.has(dayOfWeek);
+function getCycleDayIndex(date: Date): number {
+  const cycleYear = 2000 + (((date.getUTCFullYear() - 2000) % 400) + 400) % 400;
+  return Math.floor((Date.UTC(cycleYear, date.getUTCMonth(), date.getUTCDate()) - GREGORIAN_CYCLE_START) / DAY_MS);
+}
 
-  return parsed.minute.values.has(minute)
-    && parsed.hour.values.has(hour)
-    && dayMatches
-    && parsed.month.values.has(month);
+function findFirstMatchingDay(days: Uint32Array, dayIndex: number): number {
+  let low = 0;
+  let high = days.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (days[middle] < dayIndex) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 export function getNextCronExecution(
@@ -169,11 +211,32 @@ export function getNextCronExecution(
   const parsed = parseCron(expression);
   if (!validation.valid || !parsed) return undefined;
 
-  const nextMinute = Math.floor((after.getTime() + SEOUL_OFFSET_MS) / 60_000) * 60_000 + 60_000 - SEOUL_OFFSET_MS;
-  const searchLimit = nextMinute + 366 * 24 * 60 * 60_000;
-  for (let timestamp = nextMinute; timestamp <= searchLimit; timestamp += 60_000) {
-    const localDate = new Date(timestamp + SEOUL_OFFSET_MS);
-    if (matchesCronDate(parsed, localDate)) return new Date(timestamp);
+  const calendarSchedule = getCalendarSchedule(parsed);
+  const scheduledMinutes = getScheduledMinutes(parsed);
+  const localNextMinute = Math.floor((after.getTime() + SEOUL_OFFSET_MS) / MINUTE_MS) * MINUTE_MS + MINUTE_MS;
+  const localCursor = new Date(localNextMinute);
+  const localDayStart = Date.UTC(localCursor.getUTCFullYear(), localCursor.getUTCMonth(), localCursor.getUTCDate());
+  const firstMinute = localCursor.getUTCHours() * 60 + localCursor.getUTCMinutes();
+
+  if (calendarSchedule.matchingDays === null) {
+    const minute = scheduledMinutes.find(candidate => candidate >= firstMinute);
+    if (minute !== undefined) return new Date(localDayStart + minute * MINUTE_MS - SEOUL_OFFSET_MS);
+    return new Date(localDayStart + DAY_MS + scheduledMinutes[0] * MINUTE_MS - SEOUL_OFFSET_MS);
+  }
+
+  const days = calendarSchedule.matchingDays;
+  const currentCycleDay = getCycleDayIndex(localCursor);
+  const firstMatch = findFirstMatchingDay(days, currentCycleDay);
+  for (let offset = 0; offset < days.length; offset += 1) {
+    const matchingDay = days[(firstMatch + offset) % days.length];
+    const dayDistance = matchingDay >= currentCycleDay
+      ? matchingDay - currentCycleDay
+      : DAYS_IN_GREGORIAN_CYCLE - currentCycleDay + matchingDay;
+    const earliestMinute = dayDistance === 0 ? firstMinute : 0;
+    const minute = scheduledMinutes.find(candidate => candidate >= earliestMinute);
+    if (minute !== undefined) {
+      return new Date(localDayStart + dayDistance * DAY_MS + minute * MINUTE_MS - SEOUL_OFFSET_MS);
+    }
   }
   return undefined;
 }

@@ -158,8 +158,16 @@ export function ServerlessTriggersRoute() {
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
         onAddTrigger={trigger => {
           const added = addDemoServerlessTrigger(fn.id, trigger);
-          if (added) changed();
-          return added;
+          changed();
+          if (added) return true;
+          const latestFunction = getDemoServerlessFunction(fn.id);
+          if (trigger.type === 'HTTP' && latestFunction?.triggers.some(item => item.type === 'HTTP')) {
+            return '이 함수에는 HTTP Trigger가 이미 있습니다. 기존 HTTP Trigger를 삭제한 뒤 다시 추가해 주세요.';
+          }
+          if (trigger.type === 'Cron' && (latestFunction?.triggers.filter(item => item.type === 'Cron').length ?? 0) >= 3) {
+            return 'Cron Trigger는 함수마다 3개까지 추가할 수 있습니다. 기존 Trigger를 삭제한 뒤 다시 시도해 주세요.';
+          }
+          return '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.';
         }}
         onRegenerateUrl={() => { regenerateDemoServerlessUrl(fn.id); changed(); }}
         onTest={() => void navigate(tabPath(fn.id, 'test'))}
