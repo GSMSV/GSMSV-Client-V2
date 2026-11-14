@@ -27,7 +27,7 @@ const seedHome: DemoHomeState = {
 
 export const demoHomeQuota: MyQuota = {
   vm: { vcpu: { used: 4, limit: 4 }, ram_gb: { used: 8, limit: 8 }, ssd_gb: { used: 40, limit: 50 }, max_creatable: { vcpu: 2, ram_gb: 4, ssd_gb: 20 } },
-  db: { count: { used: 1, limit: 3 }, shared_storage_gb: { used: 3.2, limit: 10 } },
+  db: { count: { used: 1, limit: 2 }, shared_storage_gb: { used: 0.3, limit: 1 } },
   fn: { count: { used: 2, limit: 5 }, daily_executions: { used: 128, limit: 1000 } },
   app: { count: { used: 1, limit: 3 }, memory_mb: { used: 1024, limit: 4096 }, always_on: { used: 0, limit: 1 } },
 };
@@ -35,8 +35,8 @@ export const demoHomeQuota: MyQuota = {
 export const demoHomeTeams: TeamSummary[] = [{ id: 'demo-team', name: 'GSM Connect', status: 'approved', my_role: 'leader', member_count: 4 }];
 
 export const demoHomeDatabases: DatabaseSummary[] = [{
-  grn: 'grn:gsmsv:database:demo-student:student-db', name: 'student-db', engine: 'postgresql', isolation: 'shared', status: 'active', write_locked: false,
-  storage: { used_gb: 3.2 }, expires_at: '2026-12-31T14:59:59.000Z',
+  grn: 'grn:gsmsv:database:demo-student:welcome-db', name: 'welcome-db', engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
+  storage: { used_gb: 0.3 }, expires_at: '2026-10-06T14:59:59.000Z',
 }];
 
 export const demoHomeApps: AppSummary[] = [{

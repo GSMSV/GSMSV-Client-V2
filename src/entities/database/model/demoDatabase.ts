@@ -89,18 +89,41 @@ export function getDemoDatabaseState(): DemoDatabaseState {
   const validState = state as DemoDatabaseState;
   let changed = false;
   if (!validState.welcomeFixtureInitialized) {
-    const welcomeDatabase = demoDatabaseSeed.databases.find(database => database.grn === welcomeGrn);
-    const legacyWelcomeIndex = validState.databases.findIndex(database => database.grn === 'grn:gsmsv:database:demo-student:student-db' || database.id === 'student-db');
-    const legacyWelcome = legacyWelcomeIndex >= 0 ? validState.databases[legacyWelcomeIndex] : null;
-    if (welcomeDatabase) {
-      if (legacyWelcomeIndex >= 0) validState.databases[legacyWelcomeIndex] = clone(welcomeDatabase);
-      else if (!validState.databases.some(database => database.grn === welcomeGrn)) validState.databases.push(clone(welcomeDatabase));
-      validState.backups[welcomeGrn] = legacyWelcome ? validState.backups[legacyWelcome.grn] ?? clone(demoDatabaseSeed.backups[welcomeGrn]) : clone(demoDatabaseSeed.backups[welcomeGrn]);
-      validState.passwords[welcomeGrn] = legacyWelcome ? validState.passwords[legacyWelcome.grn] ?? 'demo-local-pass-welcome' : 'demo-local-pass-welcome';
-      if (legacyWelcome && legacyWelcome.grn !== welcomeGrn) {
-        delete validState.backups[legacyWelcome.grn];
-        delete validState.passwords[legacyWelcome.grn];
+    const welcomeSeed = demoDatabaseSeed.databases.find(database => database.grn === welcomeGrn);
+    const legacyIndex = validState.databases.findIndex(database => database.grn === 'grn:gsmsv:database:demo-student:student-db' || database.id === 'student-db');
+    const canonicalIndex = validState.databases.findIndex(database => database.grn === welcomeGrn || database.id === 'welcome-db');
+    const sourceIndex = legacyIndex >= 0 ? legacyIndex : canonicalIndex;
+    const source = sourceIndex >= 0 ? validState.databases[sourceIndex] : null;
+    if (welcomeSeed && source) {
+      const canonical = {
+        ...source,
+        grn: welcomeGrn,
+        id: 'welcome-db',
+        name: source.id === 'student-db' && source.name === 'student-db' ? 'welcome-db' : source.name,
+        engine: welcomeSeed.engine,
+        isolation: welcomeSeed.isolation,
+        connection: clone(welcomeSeed.connection),
+        storage: { ...source.storage, owner_limit_gb: welcomeSeed.storage.owner_limit_gb },
+        max_connections: welcomeSeed.max_connections,
+      };
+      validState.databases[sourceIndex] = canonical;
+      const duplicateIndex = validState.databases.findIndex((database, index) => index !== sourceIndex && (database.grn === welcomeGrn || database.id === 'welcome-db'));
+      if (duplicateIndex >= 0) validState.databases.splice(duplicateIndex, 1);
+      const sourceBackups = validState.backups[source.grn] ?? [];
+      const canonicalBackups = validState.backups[welcomeGrn] ?? [];
+      const mergedBackups = [...sourceBackups, ...canonicalBackups];
+      validState.backups[welcomeGrn] = mergedBackups.length
+        ? [...new Map(mergedBackups.map(backup => [backup.id, backup])).values()]
+        : clone(demoDatabaseSeed.backups[welcomeGrn]);
+      validState.passwords[welcomeGrn] = validState.passwords[source.grn] ?? validState.passwords[welcomeGrn] ?? 'demo-local-pass-welcome';
+      if (source.grn !== welcomeGrn) {
+        delete validState.backups[source.grn];
+        delete validState.passwords[source.grn];
       }
+    } else if (welcomeSeed) {
+      validState.databases.push(clone(welcomeSeed));
+      validState.backups[welcomeGrn] ??= clone(demoDatabaseSeed.backups[welcomeGrn]);
+      validState.passwords[welcomeGrn] ??= 'demo-local-pass-welcome';
     }
     validState.welcomeFixtureInitialized = true;
     changed = true;
