@@ -270,8 +270,8 @@ export default function AppsListPage() {
     setTeams(current => ({ ...current, loading: true }));
     try {
       if (import.meta.env.DEV && demoMode) {
-        const { demoHomeTeams } = await import('../../entities/home');
-        if (!signal.aborted) setTeams({ value: demoHomeTeams, loading: false });
+        const { listDemoTeams } = await import('../../entities/team/demo');
+        if (!signal.aborted) setTeams({ value: listDemoTeams(), loading: false });
         return;
       }
       const value = await listMyTeams(signal);

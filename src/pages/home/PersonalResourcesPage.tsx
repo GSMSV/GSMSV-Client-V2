@@ -355,9 +355,11 @@ export default function PersonalResourcesPage() {
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (import.meta.env.DEV && demoMode) {
-      const [demo, vmRepository] = await Promise.all([
+      const [demo, vmRepository, appRepository, serverlessRepository] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),
+        import('../../entities/app/demo'),
+        import('../../entities/serverless'),
       ]);
       if (signal.aborted) return;
       const homeState = demo.getDemoHomeState();
@@ -365,10 +367,21 @@ export default function PersonalResourcesPage() {
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
       const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0);
       if (homeState?.firstVisit && !firstVisit) demo.setDemoFirstVisit(false);
-      setDemoHome(homeState ? { ...homeState, firstVisit } : null);
+      setDemoHome(homeState ? {
+        ...homeState,
+        firstVisit,
+        functions: serverlessRepository.getDemoServerlessFunctions().map(fn => ({
+          id: fn.id,
+          name: fn.name,
+          runtime: fn.runtime === 'javascript' ? 'Node.js' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
+          status: fn.active ? 'active' : 'paused',
+          executionsToday: fn.runs.length,
+        })),
+      } : null);
       setDemoVms(personalVms);
-      setApps({ value: demo.demoHomeApps, loading: false, error: false });
+      setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' }), loading: false, error: false });
       setDatabases({ value: demo.demoHomeDatabases, loading: false, error: false });
+      const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
       setQuota({
         value: {
           ...demo.demoHomeQuota,
@@ -378,6 +391,7 @@ export default function PersonalResourcesPage() {
             ram_gb: { ...demo.demoHomeQuota.vm.ram_gb, used: vmState.personalQuota.memory, limit: vmState.personalQuota.memoryLimit },
             ssd_gb: { ...demo.demoHomeQuota.vm.ssd_gb, used: vmState.personalQuota.disk, limit: vmState.personalQuota.diskLimit },
           },
+          fn: serverlessQuota,
         },
         loading: false,
         error: false,
@@ -404,9 +418,9 @@ export default function PersonalResourcesPage() {
   useEffect(() => {
     if (import.meta.env.DEV && demoMode) {
       let cancelled = false;
-      void import('../../entities/home').then(demo => {
+      void import('../../entities/team/demo').then(repository => {
         if (cancelled) return;
-        setTeams(demo.demoHomeTeams);
+        setTeams(repository.listDemoTeams());
         setTeamsError(false);
         setTeamsLoading(false);
       });
@@ -615,7 +629,7 @@ export default function PersonalResourcesPage() {
                 {apps.value?.map(app => {
                   const status = appStatus(app.status);
                   return <Card key={app.grn}>
-                    <CardActions><IconBox><Octicon name="upload" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(`/apps/${encodeURIComponent(app.grn)}`)}>앱 관리</Button></CardActions>
+                    <CardActions><IconBox><Octicon name="upload" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(demoMode ? `/apps/${encodeURIComponent(app.id)}/demo` : `/apps/${encodeURIComponent(app.grn)}`)}>앱 관리</Button></CardActions>
                     <CardName>{app.name}</CardName>
                     <CardDescription>앱 서비스 상세 정보는 별도 API 계약을 확인할 수 없습니다.</CardDescription>
                     <CardFooter><span>만료 {formatDate(app.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
