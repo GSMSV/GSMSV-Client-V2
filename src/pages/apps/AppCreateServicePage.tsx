@@ -326,14 +326,17 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     setCreateError(null);
     try {
       if (import.meta.env.DEV && demoMode) {
-        const { addDemoApp } = await import('../../entities/app');
+        const { addDemoApp } = await import('../../entities/app/demo');
         const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
         let source: { repository: string; branch: string; sourceType: 'github' | 'container' | 'archive' } = { repository: 'gsm-jimin/portfolio-web', branch: 'main', sourceType: 'github' };
         try {
           const saved = window.sessionStorage.getItem(sourceDraftKey);
           if (saved) source = { ...source, ...JSON.parse(saved) as Partial<typeof source> };
         } catch { /* A preview can still create an app if session storage is unavailable. */ }
-        const appId = addDemoApp(name, source.repository, source.branch, draft.serviceName.trim() || 'web', draft.subdomain.trim() || 'portfolio-web', source.sourceType);
+        const owner = teamId
+          ? { type: 'team' as const, id: teamId, name: currentTeam?.name ?? 'GSM Connect' }
+          : { type: 'user' as const, id: 'demo-student', name: user?.name ?? '김민수' };
+        const appId = addDemoApp(name, source.repository, source.branch, draft.serviceName.trim() || 'web', draft.subdomain.trim() || 'portfolio-web', source.sourceType, owner);
         window.sessionStorage.removeItem(sourceDraftKey);
         navigate(`/apps/${encodeURIComponent(appId)}/demo`);
         return;

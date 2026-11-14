@@ -6,7 +6,7 @@ import {
   getDemoApps,
   saveDemoApps,
   type DemoEnvironment,
-} from "../../entities/app";
+} from "../../entities/app/demo";
 import { getSessionUser } from "../../entities/session";
 import { isDemoMode } from "../../shared/demo";
 import { Button, SegmentedControl } from "../../shared/ui/controls";

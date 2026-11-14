@@ -7,7 +7,7 @@ import {
   updateDemoService,
   type DemoManagedService,
   type DemoAppVariable,
-} from "../../entities/app";
+} from "../../entities/app/demo";
 import { getSessionUser } from "../../entities/session";
 import { isDemoMode } from "../../shared/demo";
 import { Button, SliderField } from "../../shared/ui/controls";
