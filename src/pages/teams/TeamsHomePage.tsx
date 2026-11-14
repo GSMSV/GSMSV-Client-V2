@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { listTeamApps } from '../../entities/app';
 import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
+import type { DemoVm } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
@@ -173,6 +174,34 @@ const VmNotice = styled.div`
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
   text-align: center;
+`;
+
+const VmDataRow = styled.div`
+  display: grid;
+  grid-template-columns: 1.15fr 0.75fr 1.35fr 1fr 1fr 56px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  &:last-child { border-bottom: 0; }
+`;
+
+const VmNameButton = styled.button`
+  justify-self: start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 3px; }
 `;
 
 const ServiceSection = styled.section`
@@ -469,9 +498,32 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
   const [detail, setDetail] = useState<Loadable<TeamDetail>>(initialLoadable);
   const [pendingInvitations, setPendingInvitations] = useState<Loadable<TeamInvitation[]>>(initialLoadable);
+  const [demoTeamVms, setDemoTeamVms] = useState<DemoVm[]>([]);
+  const [demoVmQuota, setDemoVmQuota] = useState<TeamDetail['quota']>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null);
   const [retryKey, setRetryKey] = useState(0);
   const demoMode = isDemoMode();
+
+  useEffect(() => {
+    if (!(import.meta.env.DEV && demoMode && selectedTeamId)) {
+      setDemoTeamVms([]);
+      setDemoVmQuota(null);
+      return;
+    }
+    let cancelled = false;
+    void import('../../entities/vm').then(({ getDemoVmQuota, getDemoVmState, listDemoTeamVms }) => {
+      if (cancelled) return;
+      const state = getDemoVmState();
+      const quota = getDemoVmQuota(state, selectedTeamId);
+      setDemoTeamVms(listDemoTeamVms(state, selectedTeamId));
+      setDemoVmQuota({ vm: {
+        vcpu: { used: quota.cpu, limit: quota.cpuLimit },
+        ram_gb: { used: quota.memory, limit: quota.memoryLimit },
+        ssd_gb: { used: quota.disk, limit: quota.diskLimit },
+      } });
+    });
+    return () => { cancelled = true; };
+  }, [demoMode, retryKey, selectedTeamId]);
 
   useEffect(() => {
     setSelectedTeamId(teamId ?? null);
@@ -588,7 +640,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const role = currentTeam
     ? currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'
     : selectedSummary ? roleLabel[selectedSummary.my_role] : '';
-  const quota = currentTeam?.quota?.vm;
+  const quota = (import.meta.env.DEV && demoMode ? demoVmQuota?.vm : undefined) ?? currentTeam?.quota?.vm;
   const vcpu = quotaState(quota?.vcpu);
   const statusMessage = currentTeam ? getStatusMessage(currentTeam) : null;
   const canCreateTeamVm = Boolean(currentTeam?.status === 'approved' && (currentTeam.my_role === null || currentTeam.my_role === 'leader' || currentTeam.my_role === 'devops'));
@@ -644,6 +696,16 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       : quota!.vcpu.used >= quota!.vcpu.limit
         ? `팀 vCPU ${quota!.vcpu.used}/${quota!.vcpu.limit} 사용 중 · 팀 설정에서 할당량 늘리기를 요청하세요.`
         : undefined;
+    const createQuotaReason = !quota?.vcpu || !quota.ram_gb || !quota.ssd_gb
+      ? '팀 할당량 정보를 확인할 수 없습니다.'
+      : quota.vcpu.used >= quota.vcpu.limit
+        ? '팀 vCPU를 모두 사용 중입니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
+        : quota.ram_gb.used + 1 > quota.ram_gb.limit
+          ? '팀 RAM 할당량이 부족합니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
+          : quota.ssd_gb.used + 10 > quota.ssd_gb.limit
+            ? '팀 SSD 할당량이 부족합니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
+            : undefined;
+    const teamVmCreateDisabled = !canCreateTeamVm || Boolean(createQuotaReason);
     content = (
       <Page>
         <Breadcrumb>{currentTeam.name} / 팀 Resources</Breadcrumb>
@@ -658,7 +720,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
             {currentTeam.status === 'pending' && currentTeam.permissions.invite_member && (
               <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀원 초대</Button>
             )}
-            {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled title="팀 VM API와 생성 경로가 아직 제공되지 않습니다.">팀 VM 만들기</Button>}
+            {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={teamVmCreateDisabled} title={createQuotaReason} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/new`)}>팀 VM 만들기</Button>}
           </Actions>
         </Heading>
 
@@ -682,7 +744,18 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         <VmPanel>
           <SectionHeading><SectionTitle>팀 VM</SectionTitle></SectionHeading>
           <VmTable aria-hidden="true"><span>VM</span><span>상태</span><span>Resources</span><span>만든 사람</span><span>만료</span><span>관리</span></VmTable>
-          <VmNotice>팀 VM 목록 정보가 제공되지 않습니다.</VmNotice>
+          {import.meta.env.DEV && demoMode
+            ? demoTeamVms.length > 0
+              ? demoTeamVms.map(vm => <VmDataRow key={vm.id}>
+                <VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton>
+                <span>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '대기 중'}</span>
+                <span>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</span>
+                <span>{vm.creator}</span>
+                <span>{vm.expiresAt.split(' ')[0]}</span>
+                <Button variant="ghost" aria-label={`${vm.name} 관리`} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}><Octicon name="chevron-right" size={16} /></Button>
+              </VmDataRow>)
+              : <VmNotice>팀 VM이 없습니다.</VmNotice>
+            : <VmNotice>팀 VM 목록 정보가 제공되지 않습니다.</VmNotice>}
         </VmPanel>
 
         <ServiceSection>

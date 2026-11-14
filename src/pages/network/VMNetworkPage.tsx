@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import {
   createDomain,
@@ -20,8 +20,10 @@ import {
   type NetworkProtocol,
   type PortForward,
 } from '../../entities/network';
+import { getDemoVmState } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -36,10 +38,11 @@ const Page = styled.div`
   padding: 40px;
 `;
 
-const Breadcrumb = styled.p`
+const Breadcrumb = styled(Link)`
   margin: 0;
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  text-decoration: none;
 `;
 
 const Heading = styled.section`
@@ -388,9 +391,19 @@ function DialogFrame({ title, children, onClose }: { title: string; children: Re
 }
 
 export default function VMNetworkPage() {
-  const { vmGrn } = useParams<{ vmGrn: string }>();
+  const { vmGrn, teamId: routeTeamId } = useParams<{ vmGrn: string; teamId?: string }>();
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoVm = isDemoMode() ? getDemoVmState().vms.find(vm => vm.grn === vmGrn) : undefined;
+  const teamId = routeTeamId ?? (demoVm?.owner === 'team' ? demoVm.teamId : undefined);
+  const resourceVmId = encodeURIComponent(demoVm?.id ?? vmGrn ?? '');
+  const resourceBase = teamId
+    ? `/teams/${encodeURIComponent(teamId)}/vms/${resourceVmId}`
+    : `/vms/${resourceVmId}`;
+  const fallbackNetworkPath = teamId
+    ? `/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(vmGrn ?? '')}/network`
+    : `/vms/${encodeURIComponent(vmGrn ?? '')}/network`;
+  const demoNavigationAvailable = Boolean(isDemoMode() && demoVm && (demoVm.owner !== 'team' || demoVm.teamId === teamId));
   const [ports, setPorts] = useState<Loadable<Awaited<ReturnType<typeof listPortForwards>>>>(initial);
   const [rules, setRules] = useState<Loadable<Awaited<ReturnType<typeof listFirewallRules>>>>(initial);
   const [domains, setDomains] = useState<Loadable<Awaited<ReturnType<typeof listDomains>>>>(initial);
@@ -436,7 +449,6 @@ export default function VMNetworkPage() {
   const domainRemaining = Math.max(0, (domains.value?.limits.per_vm ?? 0) - (domains.value?.items.length ?? 0));
   const ruleRemaining = Math.max(0, (rules.value?.limits.per_vm ?? 0) - (rules.value?.items.length ?? 0));
   const busy = ports.loading || rules.loading || domains.loading;
-  const vmSegment = vmGrn ? encodeURIComponent(vmGrn) : '';
   const hasUnsavedInput = Boolean(
     (action === 'port' && (portForm.internalPort || portForm.allowedSource || portForm.description || portForm.protocol !== 'tcp'))
     || ((action === 'rule' || action?.startsWith('firewall-')) && (
@@ -448,8 +460,8 @@ export default function VMNetworkPage() {
   const expectedInternalPort = useMemo(() => Number.parseInt(domainForm.internalPort, 10), [domainForm.internalPort]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'home') navigate('/');
-    if (item === 'team') navigate('/teams');
+    if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
+    if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
     if (item === 'apps') navigate('/apps');
     if (item === 'database') navigate('/databases');
   };
@@ -553,15 +565,22 @@ export default function VMNetworkPage() {
   const openAction = (kind: ActionKind) => { setAction(kind); setError(''); setSubmitting(false); };
 
   const publicHost = ports.value?.public_host;
-  const userName = user?.name ?? '사용자';
+  const userName = demoVm?.owner === 'team' ? '윤채원' : user?.name ?? '사용자';
+
+  if (isDemoMode() && routeTeamId && (!demoVm || demoVm.owner !== 'team' || demoVm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}/vms`} replace />;
+  }
+  if (isDemoMode() && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(demoVm.teamId)}/vms/${encodeURIComponent(demoVm.id)}/network`} replace />;
+  }
 
   return (
     <StudentShell
       activeItem="home"
-      scopeLabel="내 Resources"
+      scopeLabel={teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} · 일반 팀원` : '내 Resources'}
       userName={userName}
       scopeDisabled
-      scopeDisabledReason="VM 소유 범위 정보가 제공되지 않아 범위를 변경할 수 없습니다."
+      scopeDisabledReason={teamId ? '팀 VM Network 화면에서는 현재 팀 범위를 유지합니다.' : 'VM 소유 범위 정보가 제공되지 않아 범위를 변경할 수 없습니다.'}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate('/teams/new')}
       onOpenStatus={() => navigate('/status')}
@@ -571,17 +590,17 @@ export default function VMNetworkPage() {
       hasUnsavedInput={hasUnsavedInput}
     >
       <Page>
-        <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
+        <Breadcrumb to={teamId ? `/teams/${encodeURIComponent(teamId)}` : '/'}>{teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
         <Heading>
           <Title>VM Network</Title>
           <Subtitle>외부 접속과 트래픽 규칙 관리</Subtitle>
         </Heading>
         <Tabs aria-label="VM navigation">
-          <Tab to={`/vms/${vmSegment}/network`} aria-disabled="true" title="VM 개요 API 계약이 없어 이 화면은 아직 연결되지 않았습니다." onClick={event => event.preventDefault()}>개요</Tab>
-          <Tab to={`/vms/${vmSegment}/network`} aria-disabled="true" title="VM Monitoring API 계약이 없어 이 화면은 아직 연결되지 않았습니다." onClick={event => event.preventDefault()}>Monitoring</Tab>
-          <Tab to={`/vms/${vmSegment}/network`} $active>Network</Tab>
-          <Tab to={`/vms/${vmSegment}/network`} aria-disabled="true" title="VM Snapshot API 계약이 없어 이 화면은 아직 연결되지 않았습니다." onClick={event => event.preventDefault()}>Snapshot</Tab>
-          <Tab to={`/vms/${vmSegment}/network`} aria-disabled="true" title="VM 설정 API 계약이 없어 이 화면은 아직 연결되지 않았습니다." onClick={event => event.preventDefault()}>설정</Tab>
+          <Tab to={demoNavigationAvailable ? resourceBase : fallbackNetworkPath} aria-disabled={!demoNavigationAvailable} title={!demoNavigationAvailable ? 'VM 개요 API 계약이 없어 이 화면은 아직 연결되지 않았습니다.' : undefined} onClick={!demoNavigationAvailable ? event => event.preventDefault() : undefined}>개요</Tab>
+          <Tab to={demoNavigationAvailable ? `${resourceBase}/monitoring` : fallbackNetworkPath} aria-disabled={!demoNavigationAvailable} title={!demoNavigationAvailable ? 'VM Monitoring API 계약이 없어 이 화면은 아직 연결되지 않았습니다.' : undefined} onClick={!demoNavigationAvailable ? event => event.preventDefault() : undefined}>Monitoring</Tab>
+          <Tab to={fallbackNetworkPath} $active>Network</Tab>
+          <Tab to={demoNavigationAvailable ? `${resourceBase}/snapshots` : fallbackNetworkPath} aria-disabled={!demoNavigationAvailable} title={!demoNavigationAvailable ? 'VM Snapshot API 계약이 없어 이 화면은 아직 연결되지 않았습니다.' : undefined} onClick={!demoNavigationAvailable ? event => event.preventDefault() : undefined}>Snapshot</Tab>
+          <Tab to={demoNavigationAvailable ? `${resourceBase}/settings` : fallbackNetworkPath} aria-disabled={!demoNavigationAvailable} title={!demoNavigationAvailable ? 'VM 설정 API 계약이 없어 이 화면은 아직 연결되지 않았습니다.' : undefined} onClick={!demoNavigationAvailable ? event => event.preventDefault() : undefined}>설정</Tab>
         </Tabs>
 
         <Banner>

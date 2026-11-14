@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoVmState } from '../../entities/vm';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -80,18 +81,26 @@ const DataGrid = styled.div`
 `;
 
 export function VmMonitoringPage() {
-  const { vmId } = useParams<{ vmId: string }>();
+  const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [range, setRange] = useState<'1시간' | '6시간' | '24시간'>('1시간');
   const [refresh, setRefresh] = useState(0);
   const state = useMemo(() => getDemoVmState(), [refresh]);
   const vm = state.vms.find(item => item.id === vmId);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to="/" replace />;
+  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
+  }
+  if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(vm.teamId)}`} replace />;
+  }
+  const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
+  const teamName = team?.name ?? vm.teamName ?? '팀';
 
-  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? 'GSM Connect · 일반 팀원' : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
+  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
-      <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
+      <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText> · Resource 사용 기록</StatusLine></div><RangeButtons>
         {(['6시간', '24시간', '1시간'] as const).map(value => <Button key={value} variant={range === value ? 'primary' : 'secondary'} icon={range === value ? <Octicon name="clock" /> : undefined} onClick={() => setRange(value)}>{value}</Button>)}
         <Button variant="secondary" icon={<Octicon name="sync" />} onClick={() => setRefresh(value => value + 1)}>새로고침</Button>

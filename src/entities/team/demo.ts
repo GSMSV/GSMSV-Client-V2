@@ -11,12 +11,14 @@ export interface DemoTeamInvitation {
 }
 
 interface DemoTeamState {
+  schemaVersion?: number;
   teams: TeamDetail[];
   invitations: DemoTeamInvitation[];
   nextTeamNumber: number;
 }
 
 const seedState: DemoTeamState = {
+  schemaVersion: 1,
   teams: [{
     id: 'demo-team',
     name: 'GSM Connect',
@@ -24,12 +26,11 @@ const seedState: DemoTeamState = {
     rejection_reason: null,
     my_role: 'leader',
     members: [
-      { member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader', profile_image_url: null },
-      { member_id: 'demo-member-1', name: '이지은', email: 'jieun@example.com', role: 'devops', profile_image_url: null },
-      { member_id: 'demo-member-2', name: '박서준', email: 'seojun@example.com', role: 'member', profile_image_url: null },
-      { member_id: 'demo-member-3', name: '최하은', email: 'haeun@example.com', role: 'member', profile_image_url: null },
+      { member_id: 'demo-student', name: '김지민', email: 'jimin@example.com', role: 'leader', profile_image_url: null },
+      { member_id: 'demo-member-1', name: '한도윤', email: 'doyoon@example.com', role: 'devops', profile_image_url: null },
+      { member_id: 'demo-member-2', name: '윤채원', email: 'chaewon@example.com', role: 'member', profile_image_url: null },
     ],
-    quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
+    quota: { vm: { vcpu: { used: 4, limit: 4 }, ram_gb: { used: 6, limit: 8 }, ssd_gb: { used: 50, limit: 60 } } },
     permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
   }],
   invitations: [{ id: 'demo-invite-token', token: 'demo-invite-token', teamId: 'demo-team', email: 'student@example.com', sent_at: '2026-11-12T09:00:00.000Z', expires_at: '2026-11-19T09:00:00.000Z' }],
@@ -40,9 +41,46 @@ function getState(): DemoTeamState {
   const state = readDemoState<unknown>('teams', seedState);
   if (!state || typeof state !== 'object') return seedState;
   const candidate = state as Partial<DemoTeamState>;
-  return Array.isArray(candidate.teams) && Array.isArray(candidate.invitations) && Number.isInteger(candidate.nextTeamNumber)
-    ? candidate as DemoTeamState
-    : seedState;
+  if (!Array.isArray(candidate.teams) || !Array.isArray(candidate.invitations) || !Number.isInteger(candidate.nextTeamNumber)) return seedState;
+  if ((candidate.schemaVersion ?? 0) >= 1) return candidate as DemoTeamState;
+
+  const previousSeedMembers = [
+    { member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader' },
+    { member_id: 'demo-member-1', name: '이지은', email: 'jieun@example.com', role: 'devops' },
+    { member_id: 'demo-member-2', name: '박서준', email: 'seojun@example.com', role: 'member' },
+    { member_id: 'demo-member-3', name: '최하은', email: 'haeun@example.com', role: 'member' },
+  ];
+  const existingInvitations = candidate.invitations as DemoTeamInvitation[];
+  let changed = false;
+  const teams = candidate.teams.map(team => {
+    const id = team.id === 'gsm-connect' ? 'demo-team' : team.id;
+    if (id !== team.id) changed = true;
+    if (id !== 'demo-team') return id === team.id ? team : { ...team, id };
+
+    const membersAreSeedOnly = team.members.length === previousSeedMembers.length && team.members.every(member => {
+      const previous = previousSeedMembers.find(candidate => candidate.member_id === member.member_id);
+      return Boolean(previous && previous.name === member.name && previous.email === member.email && previous.role === member.role);
+    });
+    const desiredMembers = seedState.teams[0].members;
+    const membersMatchFigma = team.members.length === desiredMembers.length && team.members.every(member => {
+      const desired = desiredMembers.find(candidate => candidate.member_id === member.member_id);
+      return Boolean(desired && desired.name === member.name && desired.email === member.email && desired.role === member.role);
+    });
+    const members = membersAreSeedOnly && !membersMatchFigma ? desiredMembers : team.members;
+    const oldSeedQuota = team.quota?.vm?.vcpu.used === 2 && team.quota.vm.vcpu.limit === 4
+      && team.quota.vm.ram_gb.used === 4 && team.quota.vm.ram_gb.limit === 8
+      && team.quota.vm.ssd_gb.used === 20 && team.quota.vm.ssd_gb.limit === 60;
+    const quota = oldSeedQuota ? seedState.teams[0].quota : team.quota;
+    if (members !== team.members || quota !== team.quota) changed = true;
+    return { ...team, id, members, quota };
+  });
+  const invitations = existingInvitations.map(invitation => invitation.teamId === 'gsm-connect'
+    ? { ...invitation, teamId: 'demo-team' }
+    : invitation);
+  if (invitations.some((invitation, index) => invitation !== existingInvitations[index])) changed = true;
+  const nextState = { ...candidate, schemaVersion: 1, teams, invitations } as DemoTeamState;
+  if (changed || (candidate.schemaVersion ?? 0) < 1) saveState(nextState);
+  return nextState;
 }
 
 function saveState(state: DemoTeamState) {
@@ -58,7 +96,9 @@ export function listDemoTeams(): TeamSummary[] {
 }
 
 export function getDemoTeam(teamId: string): TeamDetail | undefined {
-  return isDemoMode() ? getState().teams.find(team => team.id === teamId) : undefined;
+  if (!isDemoMode()) return undefined;
+  const resolvedTeamId = teamId === 'gsm-connect' ? 'demo-team' : teamId;
+  return getState().teams.find(team => team.id === resolvedTeamId);
 }
 
 export function createDemoTeam(name: string): TeamSummary {

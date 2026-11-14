@@ -181,11 +181,18 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     setLoading(true); setError(false); setInviteLoadError(false);
     if (import.meta.env.DEV && isDemoMode()) {
       const demo = await import('../../entities/team/demo');
+      const vmRepository = await import('../../entities/vm');
       if (signal?.aborted) return;
       const detail = demo.getDemoTeam(selectedTeamId);
       const myTeams = demo.listDemoTeams();
       if (!detail) { setError(true); setTeam(null); setLoading(false); return; }
-      setTeam(detail); setTeams(myTeams);
+      const vmQuota = vmRepository.getDemoVmQuota(vmRepository.getDemoVmState(), selectedTeamId);
+      const syncedDetail = detail.quota ? { ...detail, quota: { vm: {
+        vcpu: { used: vmQuota.cpu, limit: vmQuota.cpuLimit },
+        ram_gb: { used: vmQuota.memory, limit: vmQuota.memoryLimit },
+        ssd_gb: { used: vmQuota.disk, limit: vmQuota.diskLimit },
+      } } } : detail;
+      setTeam(syncedDetail); setTeams(myTeams);
       setInvitations(demo.listDemoTeamInvitations(selectedTeamId));
       setLoading(false);
       return;
