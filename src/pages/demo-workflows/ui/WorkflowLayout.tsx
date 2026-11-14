@@ -291,14 +291,14 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
     const secondary = [
       ['Docs', 'book', '/help'],
       ['문의', 'comment-discussion', '/support/inquiries'],
-      ['설정', 'gear', '/settings/account'],
+      ['설정', 'gear', '/settings'],
     ] as const;
     return <AdminLayout><AdminSidebar><Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand><Workspace>관리자 워크스페이스</Workspace><AdminNav>{primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => navigate(href)}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}<AdminDivider />{secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => navigate(href)}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}</AdminNav><div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div></AdminSidebar><AdminMain><AdminHeader><AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel><AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch><AdminIdentity>♙ 관리자</AdminIdentity></AdminHeader><AdminContent>{children}</AdminContent></AdminMain></AdminLayout>;
   }
 
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const paths: Record<Exclude<StudentNavigationKey, 'none'>, string> = {
-      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/help', support: '/support/inquiries', settings: '/settings/account',
+      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/help', support: '/support/inquiries', settings: '/settings',
     };
     void navigate(paths[item]);
   };
