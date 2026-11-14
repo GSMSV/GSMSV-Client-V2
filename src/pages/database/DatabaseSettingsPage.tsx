@@ -5,6 +5,7 @@ import { deleteDatabase, getDatabase, renameDatabase, rotateDatabasePassword } f
 import type { DatabaseDetail, DatabaseOperation, DatabasePasswordRotation } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
+import { isDemoMode } from '../../shared/demo';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard, RevealableSecret } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -118,6 +119,14 @@ export default function DatabaseSettingsPage(){
 
   const load=useCallback(async(signal:AbortSignal)=>{
     setDetail(current=>({...current,loading:true,error:false}));
+    if(import.meta.env.DEV&&isDemoMode()){
+      const demo=await import('../../entities/database/demo');
+      if(signal.aborted)return;
+      const value=demo.getDemoDatabase(databaseGrn);
+      if(value){setDetail({value,loading:false,error:false});setName(value.name);}
+      else setDetail({value:null,loading:false,error:true});
+      return;
+    }
     try{
       const value=await getDatabase(databaseGrn,signal);
       if(!signal.aborted){setDetail({value,loading:false,error:false});setName(value.name);}
@@ -126,7 +135,25 @@ export default function DatabaseSettingsPage(){
     }
   },[databaseGrn]);
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load,retryKey]);
-  useEffect(()=>{const controller=new AbortController();void listMyTeams(controller.signal).then(value=>{if(!controller.signal.aborted)setTeams(value);}).catch(()=>{if(!controller.signal.aborted)setTeams([]);});return()=>controller.abort();},[]);
+  useEffect(()=>{
+    if(import.meta.env.DEV&&isDemoMode()){
+      let cancelled=false;
+      void import('../../entities/home').then(({demoHomeTeams})=>{if(!cancelled)setTeams(demoHomeTeams);});
+      return()=>{cancelled=true;};
+    }
+    const controller=new AbortController();
+    void listMyTeams(controller.signal).then(value=>{if(!controller.signal.aborted)setTeams(value);}).catch(()=>{if(!controller.signal.aborted)setTeams([]);});
+    return()=>controller.abort();
+  },[]);
+  useEffect(()=>{
+    if(!(import.meta.env.DEV&&isDemoMode())||deleteOperation?.operation.status!=='queued')return;
+    const timer=window.setTimeout(()=>{
+      setDeleteOperation(current=>current?{...current,operation:{...current.operation,status:'completed'}}:current);
+      const current=detail.value;
+      navigate(current?databaseListPath(current):'/databases');
+    },4_000);
+    return()=>window.clearTimeout(timer);
+  },[deleteOperation,navigate,detail.value]);
   useEffect(()=>{
     if(!showRotationDialog&&!rotationResult&&!showDeleteDialog)return;
     const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!rotating&&!deleting){setShowRotationDialog(false);setRotationResult(null);setShowDeleteDialog(false);}};
@@ -161,6 +188,13 @@ export default function DatabaseSettingsPage(){
     if(!value||!value.permissions.update||!nameValid||!nameDirty||saving)return;
     setSaving(true);setSaveError(false);setSaved(false);
     try{
+      if(import.meta.env.DEV&&isDemoMode()){
+        const demo=await import('../../entities/database/demo');
+        const result=demo.updateDemoDatabase(value.grn,{name:trimmedName,updated_at:new Date().toISOString()});
+        if(!result)throw new Error('Database not found');
+        setDetail(current=>current.value?{...current,value:{...current.value,name:result.name,updated_at:result.updated_at}}:current);
+        setName(result.name);setSaved(true);return;
+      }
       const result=await renameDatabase(value.grn,trimmedName);
       setDetail(current=>current.value?{...current,value:{...current.value,name:result.name}}:current);
       setName(result.name);setSaved(true);
@@ -171,7 +205,16 @@ export default function DatabaseSettingsPage(){
   const rotatePassword=async()=>{
     if(!value||!value.permissions.rotate_password||rotating)return;
     setRotating(true);setRotationError(false);
-    try{const result=await rotateDatabasePassword(value.grn);setRotationResult(result);setShowRotationDialog(false);}
+    try{
+      if(import.meta.env.DEV&&isDemoMode()){
+        const demo=await import('../../entities/database/demo');
+        const password=`demo-${crypto.randomUUID().slice(0,18)}`;
+        demo.setDemoDatabasePassword(value.grn,password);
+        setRotationResult({password,rotated_at:new Date().toISOString(),reconnected:{functions:1,app_cells:1}});
+        setShowRotationDialog(false);return;
+      }
+      const result=await rotateDatabasePassword(value.grn);setRotationResult(result);setShowRotationDialog(false);
+    }
     catch{setRotationError(true);}
     finally{setRotating(false);}
   };
@@ -179,7 +222,15 @@ export default function DatabaseSettingsPage(){
   const deleteResource=async()=>{
     if(!value||!value.permissions.delete||confirmName!==value.name||deleting)return;
     setDeleting(true);setDeleteError(false);
-    try{const result=await deleteDatabase(value.grn,confirmName,{idempotencyKey:deleteIdempotencyKey.current??crypto.randomUUID()});setDeleteOperation(result);setShowDeleteDialog(false);setConfirmName('');deleteIdempotencyKey.current=null;}
+    try{
+      if(import.meta.env.DEV&&isDemoMode()){
+        const demo=await import('../../entities/database/demo');
+        if(!demo.deleteDemoDatabase(value.grn))throw new Error('Database not found');
+        setDeleteOperation({operation:{id:`demo-op-${crypto.randomUUID()}`,type:'delete',status:'queued'},resource:{grn:value.grn,status:'deleting'}});
+        setShowDeleteDialog(false);setConfirmName('');deleteIdempotencyKey.current=null;return;
+      }
+      const result=await deleteDatabase(value.grn,confirmName,{idempotencyKey:deleteIdempotencyKey.current??crypto.randomUUID()});setDeleteOperation(result);setShowDeleteDialog(false);setConfirmName('');deleteIdempotencyKey.current=null;
+    }
     catch{setDeleteError(true);}
     finally{setDeleting(false);}
   };
@@ -192,7 +243,7 @@ export default function DatabaseSettingsPage(){
         <TabsRow>
           <Tabs aria-label="Database 상세 메뉴">
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}`)}>접속 정보</Tab>
-            <Tab type="button" title="쿼리 실행 API가 계약에 없어 제공되지 않습니다" disabled>쿼리 콘솔</Tab>
+            <Tab type="button" title={import.meta.env.DEV && isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 제공되지 않습니다'} disabled={!(import.meta.env.DEV && isDemoMode())} onClick={()=>{if(import.meta.env.DEV&&isDemoMode())navigate(`/databases/${encodeURIComponent(value.grn)}/query`);}}>쿼리 콘솔</Tab>
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}/backups`)}>백업</Tab>
             <Tab type="button" $active aria-current="page">설정</Tab>
           </Tabs>

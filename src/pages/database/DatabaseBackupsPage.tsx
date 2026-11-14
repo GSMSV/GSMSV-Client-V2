@@ -5,6 +5,7 @@ import { downloadDatabaseBackup, getDatabase, listDatabaseBackups, restoreDataba
 import type { DatabaseBackup, DatabaseDetail, RestoreDatabaseBackupResponse } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -124,6 +125,14 @@ export default function DatabaseBackupsPage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
+    if (import.meta.env.DEV && isDemoMode()) {
+      const demo = await import('../../entities/database/demo');
+      if (signal.aborted) return;
+      const value = demo.getDemoDatabase(databaseGrn);
+      setDetail(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      setBackups({ value: value ? demo.getDemoDatabaseBackups(value.grn) : [], loading: false, error: false });
+      return;
+    }
     const detailRequest = getDatabase(databaseGrn, signal).then(value => {
       if (!signal.aborted) setDetail({ value, loading: false, error: false });
     }).catch(() => {
@@ -144,6 +153,20 @@ export default function DatabaseBackupsPage() {
   }, [load, retryKey]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV || !isDemoMode()) return;
+    const refresh = () => setRetryKey(value => value + 1);
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.DEV && isDemoMode()) {
+      let cancelled = false;
+      void import('../../entities/home').then(({ demoHomeTeams }) => {
+        if (!cancelled) setTeams(demoHomeTeams);
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     void listMyTeams(controller.signal).then(value => {
       if (!controller.signal.aborted) setTeams(value);
@@ -200,7 +223,13 @@ export default function DatabaseBackupsPage() {
     setDownloadingId(backup.id);
     setFailedDownloadBackup(null);
     try {
-      const blob = await downloadDatabaseBackup(databaseGrn, backup.id);
+      const blob = import.meta.env.DEV && isDemoMode()
+        ? await new Response(
+          new Blob([`-- Local demo backup: ${backup.id}\n-- Database: ${detail.value?.name ?? databaseGrn}\nSELECT 1;\n`])
+            .stream()
+            .pipeThrough(new CompressionStream('gzip')),
+        ).arrayBuffer().then(bytes => new Blob([bytes], { type: 'application/gzip' }))
+        : await downloadDatabaseBackup(databaseGrn, backup.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -219,7 +248,28 @@ export default function DatabaseBackupsPage() {
     setRestoring(true);
     setRestoreError(false);
     try {
-      const result = await restoreDatabaseBackup(databaseGrn, selectedBackup.id, confirmName);
+      let result: RestoreDatabaseBackupResponse;
+      if (import.meta.env.DEV && isDemoMode()) {
+        const demo = await import('../../entities/database/demo');
+        const preRestoreId = `pre-restore-${crypto.randomUUID()}`;
+        demo.addDemoPreRestoreBackup(databaseGrn, {
+          id: preRestoreId,
+          kind: 'pre_restore',
+          created_at: new Date().toISOString(),
+          size_mb: detail.value.storage.used_gb * 128,
+          expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        });
+        result = {
+          operation: { id: `demo-op-${crypto.randomUUID()}`, type: 'restore', status: 'queued' },
+          resource: { grn: detail.value.grn },
+          pre_restore_backup: { id: preRestoreId },
+        };
+        setBackups(current => current.value
+          ? { ...current, value: demo.getDemoDatabaseBackups(databaseGrn) }
+          : current);
+      } else {
+        result = await restoreDatabaseBackup(databaseGrn, selectedBackup.id, confirmName);
+      }
       setRestoreOperation(result);
       setSelectedBackup(null);
       setConfirmName('');

@@ -355,11 +355,12 @@ export default function PersonalResourcesPage() {
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (import.meta.env.DEV && demoMode) {
-      const [demo, vmRepository, appRepository, serverlessRepository] = await Promise.all([
+      const [demo, vmRepository, appRepository, serverlessRepository, databaseRepository] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),
         import('../../entities/app/demo'),
         import('../../entities/serverless'),
+        import('../../entities/database/demo'),
       ]);
       if (signal.aborted) return;
       const homeState = demo.getDemoHomeState();
@@ -380,11 +381,12 @@ export default function PersonalResourcesPage() {
       } : null);
       setDemoVms(personalVms);
       setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' }), loading: false, error: false });
-      setDatabases({ value: demo.demoHomeDatabases, loading: false, error: false });
+      setDatabases({ value: databaseRepository.listDemoDatabases('me'), loading: false, error: false });
       const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
       setQuota({
         value: {
           ...demo.demoHomeQuota,
+          db: databaseRepository.getDemoDatabaseQuota().db,
           vm: {
             ...demo.demoHomeQuota.vm,
             vcpu: { ...demo.demoHomeQuota.vm.vcpu, used: vmState.personalQuota.cpu, limit: vmState.personalQuota.cpuLimit },
@@ -414,6 +416,13 @@ export default function PersonalResourcesPage() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, retryKey]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !demoMode) return;
+    const refresh = () => setRetryKey(value => value + 1);
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, [demoMode]);
 
   useEffect(() => {
     if (import.meta.env.DEV && demoMode) {

@@ -5,6 +5,7 @@ import { listDatabases, type DatabaseStatus, type DatabaseSummary } from '../../
 import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -285,8 +286,9 @@ export default function DatabaseListPage() {
   const [searchParams] = useSearchParams();
   const owner = searchParams.get('owner') ?? 'me';
   const isTeamScope = owner !== 'me';
-  const teamId = owner.startsWith('team-') ? owner : undefined;
+  const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);
@@ -300,28 +302,49 @@ export default function DatabaseListPage() {
   const loadList = useCallback(async (signal: AbortSignal) => {
     setDatabases(current => ({ ...current, loading: true, error: false }));
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const { listDemoDatabases } = await import('../../entities/database/demo');
+        const items = listDemoDatabases(owner);
+        if (!signal.aborted) setDatabases({ value: items, loading: false, error: false });
+        return;
+      }
       const items = await listDatabases({ owner, signal });
       if (!signal.aborted) setDatabases({ value: items, loading: false, error: false });
     } catch {
       if (!signal.aborted) setDatabases({ value: null, loading: false, error: true });
     }
-  }, [owner]);
+  }, [demoMode, owner]);
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const { getDemoDatabaseQuota } = await import('../../entities/database/demo');
+        if (!signal.aborted) setQuota({ value: getDemoDatabaseQuota(), loading: false, error: false });
+        return;
+      }
       const value = await getMyDatabaseQuota(signal);
       if (!signal.aborted) setQuota({ value, loading: false, error: false });
     } catch {
       if (!signal.aborted) setQuota({ value: null, loading: false, error: true });
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     const controller = new AbortController();
     void loadList(controller.signal);
     return () => controller.abort();
   }, [loadList, retryKey]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !demoMode) return;
+    const refresh = () => {
+      setRetryKey(value => value + 1);
+      setQuotaRetryKey(value => value + 1);
+    };
+    window.addEventListener('gsmsv:demo-database-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+  }, [demoMode]);
 
   useEffect(() => {
     if (owner !== 'me') {
@@ -334,6 +357,13 @@ export default function DatabaseListPage() {
   }, [loadQuota, quotaRetryKey, owner]);
 
   useEffect(() => {
+    if (import.meta.env.DEV && demoMode) {
+      let cancelled = false;
+      void import('../../entities/home').then(({ demoHomeTeams }) => {
+        if (!cancelled) setTeams({ value: demoHomeTeams, loading: false, error: false });
+      });
+      return () => { cancelled = true; };
+    }
     const controller = new AbortController();
     setTeams(current => ({ ...current, loading: true, error: false }));
     void listMyTeams(controller.signal).then(value => {
@@ -342,9 +372,25 @@ export default function DatabaseListPage() {
       if (!controller.signal.aborted) setTeams({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [scopeRetryKey]);
+  }, [demoMode, scopeRetryKey]);
 
   useEffect(() => {
+    if (import.meta.env.DEV && demoMode && teamId) {
+      let cancelled = false;
+      void import('../../entities/home').then(({ demoHomeTeams }) => {
+        if (cancelled) return;
+        const summary = demoHomeTeams.find(team => team.id === teamId);
+        const value: TeamDetail | null = summary ? {
+          ...summary,
+          rejection_reason: null,
+          members: [],
+          quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
+          permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
+        } : null;
+        setCurrentTeam(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      });
+      return () => { cancelled = true; };
+    }
     if (!teamId) {
       setCurrentTeam({ value: null, loading: false, error: false });
       return;
@@ -357,7 +403,7 @@ export default function DatabaseListPage() {
       if (!controller.signal.aborted) setCurrentTeam({ value: null, loading: false, error: true });
     });
     return () => controller.abort();
-  }, [teamId]);
+  }, [demoMode, teamId]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'database') navigate('/databases');

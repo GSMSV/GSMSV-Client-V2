@@ -1,6 +1,5 @@
 export {
   demoHomeApps,
-  demoHomeDatabases,
   demoHomeQuota,
   demoHomeTeams,
   getDemoHomeState,
