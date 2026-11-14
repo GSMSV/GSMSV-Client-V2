@@ -378,10 +378,11 @@ function databaseStatus(database: DatabaseSummary) {
 
 export default function PersonalResourcesPage() {
   const navigate = useNavigate();
-  const demoMode = isDemoMode();
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const user = getSessionUser();
   const [demoHome, setDemoHome] = useState<DemoHomeState | null>(null);
   const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
+  const [expiringPersonalVmId, setExpiringPersonalVmId] = useState<string | null>(null);
   const [personalExtensionNotice, setPersonalExtensionNotice] = useState('');
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
@@ -406,6 +407,7 @@ export default function PersonalResourcesPage() {
       const homeState = demo.getDemoHomeState();
       const vmState = vmRepository.getDemoVmState();
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
+      setExpiringPersonalVmId(personalVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued')?.id ?? null);
       const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0);
       if (homeState?.firstVisit && !firstVisit) demo.setDemoFirstVisit(false);
       setDemoHome(homeState ? {
@@ -540,7 +542,7 @@ export default function PersonalResourcesPage() {
   const personalVmCreateDisabled = !demoMode || Boolean(personalVmCreateReason);
   const queuedPersonalVms = demoVms.filter(vm => vm.status === 'queued');
   const activePersonalVms = demoVms.filter(vm => vm.status !== 'queued');
-  const expiringPersonalVm = demoVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued');
+  const expiringPersonalVm = demoVms.find(vm => vm.id === expiringPersonalVmId && vm.status !== 'queued');
 
   async function extendPersonalVm(vmId: string) {
     if (!(import.meta.env.DEV && demoMode)) return;

@@ -147,7 +147,7 @@ const roleLabel: Record<TeamRole, string> = {
 export default function TeamAppsListPage({ teamId }: { teamId: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = isDemoMode();
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const [team, setTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);

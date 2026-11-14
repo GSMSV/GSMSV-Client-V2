@@ -288,7 +288,7 @@ export default function DatabaseListPage() {
   const isTeamScope = owner !== 'me';
   const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const user = getSessionUser();
-  const demoMode = isDemoMode();
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);

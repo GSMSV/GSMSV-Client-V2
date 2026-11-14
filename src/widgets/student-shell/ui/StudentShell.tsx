@@ -122,7 +122,7 @@ export function StudentShell({
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
-          profilePhotoUrl={profilePhotoUrl ?? (isDemoMode() ? getDemoProfile()?.photoDataUrl : undefined)}
+          profilePhotoUrl={profilePhotoUrl ?? (import.meta.env.DEV && isDemoMode() ? getDemoProfile()?.photoDataUrl : undefined)}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
           scopeDisabled={scopeDisabled}

@@ -10,10 +10,13 @@ import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from 
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
-import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
-import { getDemoProfile } from '../../entities/profile';
-import { addDemoApp, demoPersonalAppOwner, getDemoAppQuota, isDemoAppSubdomainAvailable } from '../../entities/app/demo';
-import { getDemoInstalledRepositories, isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
+
+type DemoServiceModules = {
+  team: typeof import('../../entities/team/demo');
+  profile: typeof import('../../entities/profile');
+  app: typeof import('../../entities/app/demo');
+  draft: typeof import('../../features/apps/createDemoAppDraft');
+};
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -210,14 +213,15 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const user = getSessionUser();
   const demoMode = import.meta.env.DEV && isDemoMode();
   const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
-  const source = import.meta.env.DEV && demoMode ? readDemoAppDraft(teamId) : null;
+  const [demoModules, setDemoModules] = useState<DemoServiceModules | null>(null);
+  const [source, setSource] = useState<ReturnType<DemoServiceModules['draft']['readDemoAppDraft']> | null>(null);
   const { draft: serviceDraft, update, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
   const draft = demoMode ? { ...serviceDraft, appName: source?.name ?? '' } : serviceDraft;
-  const owner = import.meta.env.DEV ? (teamId ? { type: 'team' as const, id: teamId, name: '' } : demoPersonalAppOwner) : null;
-  const quota = import.meta.env.DEV && demoMode && owner ? getDemoAppQuota(owner) : null;
+  const owner = import.meta.env.DEV && demoMode && demoModules ? (teamId ? { type: 'team' as const, id: teamId, name: '' } : demoModules.app.demoPersonalAppOwner) : null;
+  const quota = import.meta.env.DEV && demoMode && owner && demoModules ? demoModules.app.getDemoAppQuota(owner) : null;
   const listPath = teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps';
   const sourcePath = `${listPath}/new`;
-  const [dialog, setDialog] = useState<DialogKind>(() => import.meta.env.DEV && demoMode && teamId && getDemoTeam(teamId)?.status === 'pending' ? 'team-pending' : null);
+  const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
   const [availabilityError, setAvailabilityError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -228,13 +232,37 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
   const requestController = useRef<AbortController | null>(null);
   const subdomainInputId = 'app-service-subdomain';
-  const [demoDomain, setDemoDomain] = useState(() => source?.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') ?? '');
+  const [demoDomain, setDemoDomain] = useState('');
   const subdomainValue = demoMode ? demoDomain : draft.subdomain;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !demoMode) { setDemoModules(null); setSource(null); return; }
+    let active = true;
+    void Promise.all([
+      import('../../entities/team/demo'),
+      import('../../entities/profile'),
+      import('../../entities/app/demo'),
+      import('../../features/apps/createDemoAppDraft'),
+    ]).then(([team, profile, app, draftModule]) => {
+      if (!active) return;
+      const modules = { team, profile, app, draft: draftModule };
+      const loadedSource = draftModule.readDemoAppDraft(teamId) ?? null;
+      const current = teamId ? team.getDemoTeam(teamId) : undefined;
+      setDemoModules(modules);
+      setSource(loadedSource);
+      setDemoDomain(loadedSource?.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') ?? '');
+      setTeams(team.listDemoTeams());
+      setCurrentTeam(current ?? null);
+      setTeamStatus(current?.status ?? (teamId ? 'error' : 'approved'));
+      setDialog(current?.status === 'pending' ? 'team-pending' : null);
+    });
+    return () => { active = false; };
+  }, [demoMode, teamId]);
 
   useEffect(() => () => requestController.current?.abort(), []);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) { setTeams(listDemoTeams()); return; }
+    if (import.meta.env.DEV && demoMode) return;
     const controller = new AbortController();
     void listMyTeams(controller.signal)
       .then(value => { if (!controller.signal.aborted) setTeams(value); })
@@ -244,9 +272,6 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
 
   useEffect(() => {
     if (import.meta.env.DEV && demoMode) {
-      const team = teamId ? getDemoTeam(teamId) : undefined;
-      setCurrentTeam(team ?? null);
-      setTeamStatus(team?.status ?? (teamId ? 'error' : 'approved'));
       return;
     }
     if (!teamId) {
@@ -304,7 +329,8 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
 
     requestController.current?.abort();
     if (import.meta.env.DEV && demoMode) {
-      const available = isDemoAppSubdomainAvailable(value);
+      if (!demoModules) return;
+      const available = demoModules.app.isDemoAppSubdomainAvailable(value);
       setAvailability(available ? 'available' : 'unavailable');
       setAvailabilityError(available ? '' : '현재 사용할 수 없는 주소입니다.');
       return;
@@ -330,7 +356,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         ? '주소 확인 요청이 많습니다. 잠시 후 다시 확인해 주세요.'
         : '주소 사용 가능 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
-  }, [demoMode, subdomainValue]);
+  }, [demoMode, demoModules, subdomainValue]);
 
   const handleCreate = async () => {
     const name = draft.appName.trim();
@@ -339,27 +365,28 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     setCreateError(null);
     try {
       if (import.meta.env.DEV && demoMode && owner) {
+        if (!demoModules) return;
         if (!source) { navigate(sourcePath); return; }
         if (teamId && (!currentTeam || currentTeam.status !== 'approved' || currentTeam.my_role === 'member')) return;
-        if (source.sourceType === 'github' && (!getDemoProfile()?.github ||
-          !isDemoRepositoryAccessible(source.repository, getDemoInstalledRepositories()))) {
+        if (source.sourceType === 'github' && (!demoModules.profile.getDemoProfile()?.github ||
+          !demoModules.draft.isDemoRepositoryAccessible(source.repository, demoModules.draft.getDemoInstalledRepositories()))) {
           navigate(sourcePath);
           return;
         }
-        const currentQuota = getDemoAppQuota(owner);
+        const currentQuota = demoModules.app.getDemoAppQuota(owner);
         if (currentQuota.count >= currentQuota.limit) { setDialog('quota'); return; }
         if (draft.memoryMb > currentQuota.freeMemory) { setDialog('memory'); return; }
         const subdomain = draft.serviceType === 'web' ? subdomainValue.trim() : '';
-        if (draft.serviceType === 'web' && !isDemoAppSubdomainAvailable(subdomain)) { setDialog('domain-unavailable'); return; }
+        if (draft.serviceType === 'web' && !demoModules.app.isDemoAppSubdomainAvailable(subdomain)) { setDialog('domain-unavailable'); return; }
         const type = serviceOptions.find(option => option.value === draft.serviceType)?.label ?? '웹';
-        const appId = addDemoApp({
+        const appId = demoModules.app.addDemoApp({
           ...source,
           name,
           owner: { ...owner, name: currentTeam?.name ?? user?.name ?? owner.name },
           service: { name: draft.serviceName.trim() || type, type, subdomain, memoryMb: draft.memoryMb, cpu: draft.cpu, watchPaths: source.watchPaths },
         });
         if (!appId) { setCreateError({ message: '앱을 저장하지 못했습니다. 다시 시도해 주세요.' }); return; }
-        saveDemoAppDraft(teamId, null);
+        demoModules.draft.saveDemoAppDraft(teamId, null);
         navigate(`/apps/${encodeURIComponent(appId)}/demo`);
         return;
       }
