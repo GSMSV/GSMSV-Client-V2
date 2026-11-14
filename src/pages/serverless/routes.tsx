@@ -1,116 +1,77 @@
-import { lazy, useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
-import { getMyQuota } from '../../entities/quota';
-import { ServerlessShell } from '../../widgets/serverless-shell';
+import { lazy, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { Navigate, useNavigate, useParams, type RouteObject } from 'react-router';
+import {
+  addDemoServerlessTrigger,
+  addDemoServerlessVariable,
+  createDemoServerlessFunction,
+  deleteDemoServerlessFunction,
+  deleteDemoServerlessRuns,
+  deleteDemoServerlessTrigger,
+  deleteDemoServerlessVariable,
+  executeDemoServerlessTest,
+  extendDemoServerlessFunction,
+  getDemoServerlessFunction,
+  getDemoServerlessQuota,
+  getDemoServerlessUrl,
+  regenerateDemoServerlessUrl,
+  rollbackDemoServerlessVersion,
+  saveDemoServerlessCode,
+  saveDemoServerlessSettings,
+  setDemoServerlessActive,
+  setDemoServerlessDatabase,
+  setDemoServerlessDomain,
+  updateDemoServerlessTrigger,
+  updateDemoServerlessVariable,
+  type DemoServerlessFunction,
+} from '../../entities/serverless';
+import type { ServerlessEnvironmentVariable } from './ServerlessEnvironmentPage';
+import type { ServerlessFunctionSettings, ServerlessFunctionTab } from './ServerlessFunctionPage';
 import type { ServerlessFunctionDraft } from './ServerlessCreatePage';
+import type { ServerlessTriggerTab } from './ServerlessTriggersPage';
+import type { ServerlessTestTab } from './ServerlessTestPage';
+import type { ServerlessLogsTab } from './ServerlessLogsPage';
+import { isDemoMode } from '../../shared/demo';
+import { ServerlessShell } from '../../widgets/serverless-shell';
 
 const CreatePage = lazy(() => import('./ServerlessCreatePage'));
-const FunctionPage = lazy(async () => {
-  const module = await import('./ServerlessFunctionPage');
-  return { default: module.ServerlessFunctionPage };
-});
-const TriggersPage = lazy(async () => {
-  const module = await import('./ServerlessTriggersPage');
-  return { default: module.ServerlessTriggersPage };
-});
-const EnvironmentPage = lazy(async () => {
-  const module = await import('./ServerlessEnvironmentPage');
-  return { default: module.ServerlessEnvironmentPage };
-});
-const VersionsPage = lazy(async () => {
-  const module = await import('./ServerlessVersionsPage');
-  return { default: module.ServerlessVersionsPage };
-});
-const TestPage = lazy(async () => {
-  const module = await import('./ServerlessTestPage');
-  return { default: module.ServerlessTestPage };
-});
-const LogsPage = lazy(async () => {
-  const module = await import('./ServerlessLogsPage');
-  return { default: module.ServerlessLogsPage };
-});
+const FunctionPage = lazy(async () => ({ default: (await import('./ServerlessFunctionPage')).ServerlessFunctionPage }));
+const TriggersPage = lazy(async () => ({ default: (await import('./ServerlessTriggersPage')).ServerlessTriggersPage }));
+const EnvironmentPage = lazy(async () => ({ default: (await import('./ServerlessEnvironmentPage')).ServerlessEnvironmentPage }));
+const VersionsPage = lazy(async () => ({ default: (await import('./ServerlessVersionsPage')).ServerlessVersionsPage }));
+const TestPage = lazy(async () => ({ default: (await import('./ServerlessTestPage')).ServerlessTestPage }));
+const LogsPage = lazy(async () => ({ default: (await import('./ServerlessLogsPage')).ServerlessLogsPage }));
+export const serverlessDemoRoutes: RouteObject[] = [
+  { path: '/serverless/new', element: <ServerlessCreateRoute /> },
+  { path: '/serverless/:functionId/triggers', element: <ServerlessTriggersRoute /> },
+  { path: '/serverless/:functionId/:tab', element: <ServerlessTabRoute /> },
+  { path: '/serverless/:functionId', element: <ServerlessFunctionRoute /> },
+];
 
 const tabSlugs: Record<string, string> = {
-  '코드': '', code: '',
-  '버전': 'versions', versions: 'versions',
-  Trigger: 'triggers', triggers: 'triggers',
-  '환경변수': 'environment', environment: 'environment',
-  '테스트': 'test', test: 'test',
-  Logs: 'logs', logs: 'logs',
+  '코드': '', code: '', '버전': 'versions', versions: 'versions', Trigger: 'triggers', triggers: 'triggers',
+  '환경변수': 'environment', environment: 'environment', '테스트': 'test', test: 'test', Logs: 'logs', logs: 'logs',
 };
-
-const previewDailyExecutions = { used: 1284, limit: 10_000 };
-const healthCheckCode = `def handler(request, env):
-    return {
-        "status": "ok",
-        "service": "health-check"
-    }`;
-const previewVersions = [
-  { id: '7', label: '버전 7', savedAt: '2026. 09. 29. 14:32', author: '김지민', changeSummary: '코드', current: true },
-  { id: '6', label: '버전 6', savedAt: '2026. 09. 29. 11:05', author: '김지민', changeSummary: '실행 제한', current: false },
-  { id: '5', label: '버전 5', savedAt: '2026. 09. 28. 17:20', author: '김지민', changeSummary: '코드 · Runtime', current: false },
-];
-const previewVariables = [
-  { name: 'GREETING', secret: false, value: '안녕하세요' },
-  { name: 'API_KEY', secret: true },
-];
-const previewRuns = [
-  { id: 'run-1', result: 'success' as const, startedAt: '2026. 09. 29. 14:34:12', path: '수동', duration: '182ms', outputLines: ['Greeting sent 지민', 'Using API_KEY ••••••••'] },
-  { id: 'run-2', result: 'success' as const, startedAt: '2026. 09. 29. 13:08:27', path: 'HTTP POST', duration: '95ms' },
-  { id: 'run-3', result: 'success' as const, startedAt: '2026. 09. 29. 09:00:00', path: '예약', duration: '1.2초' },
-  { id: 'run-4', result: 'timeout' as const, startedAt: '2026. 09. 28. 17:23:41', path: 'HTTP POST', duration: '30초' },
-];
-const previewTestResult = {
-  responseJson: '{\n  "message": "안녕하세요, 지민!"\n}',
-  statusLabel: '성공',
-  statusMessage: '함수가 정상적으로 응답했습니다',
-  pathLabel: '수동 실행',
-  pathCaption: '오늘 실행 횟수에 포함됩니다',
-  durationLabel: '182ms',
-  durationCaption: '메모리 46MB',
-  logs: 'Greeting sent 지민',
-  timestampLabel: '2026. 09. 29. 14:34:12',
-};
-
 function tabPath(functionId: string | undefined, tab: string) {
   const base = `/serverless/${encodeURIComponent(functionId ?? '')}`;
   const segment = tabSlugs[tab];
   return segment ? `${base}/${segment}` : base;
 }
-
-function safeDecode(value: string | undefined) {
-  try {
-    return decodeURIComponent(value ?? '');
-  } catch {
-    return value ?? '';
-  }
+function getFunction(functionId: string | undefined, demoMode: boolean): DemoServerlessFunction | undefined {
+  return demoMode && functionId ? getDemoServerlessFunction(functionId) : undefined;
 }
-
-function getDraft(locationState: unknown): ServerlessFunctionDraft | undefined {
-  if (!locationState || typeof locationState !== 'object') return undefined;
-  const draft = (locationState as { serverlessDraft?: ServerlessFunctionDraft }).serverlessDraft;
-  return draft && typeof draft.name === 'string' ? draft : undefined;
-}
-
-function hasValidFunctionId(functionId: string | undefined, draft: ServerlessFunctionDraft | undefined) {
-  const id = safeDecode(functionId);
-  return id === 'welcome-api' || id === 'health-check' || Boolean(draft && id === draft.name);
-}
-
-function getFunctionDescription(functionId: string | undefined) {
-  return safeDecode(functionId) === 'health-check'
-    ? '개발 중인 서비스의 응답 상태를 확인합니다.'
-    : '서비스 첫 방문자를 위한 환영 메시지를 반환합니다.';
-}
+function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(value => value + 1); }
 
 export function ServerlessCreateRoute() {
   const navigate = useNavigate();
-  if (!import.meta.env.DEV) return <Navigate to="/serverless" replace />;
+  if (!isDemoMode()) return <Navigate to="/serverless" replace />;
   return (
     <ServerlessShell>
       <CreatePage
         onCancel={() => void navigate('/serverless')}
-        onCreate={draft => void navigate('/serverless', { state: { serverlessDraft: draft } })}
+        onCreate={(draft: ServerlessFunctionDraft) => {
+          const id = createDemoServerlessFunction(draft);
+          void navigate(`/serverless/${encodeURIComponent(id)}`);
+        }}
       />
     </ServerlessShell>
   );
@@ -118,27 +79,38 @@ export function ServerlessCreateRoute() {
 
 export function ServerlessFunctionRoute() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { functionId } = useParams<{ functionId: string }>();
-  const draft = getDraft(location.state);
-  if (!import.meta.env.DEV || !hasValidFunctionId(functionId, draft)) return <Navigate to="/serverless" replace />;
-  const isHealthCheck = safeDecode(functionId) === 'health-check';
-  const name = draft?.name ?? safeDecode(functionId);
-
+  const demoMode = isDemoMode();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const fn = getFunction(functionId, demoMode);
+  void revision;
+  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  const enabledTabs: ServerlessFunctionTab[] = ['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs'];
+  const changed = () => refresh(setRevision);
   return (
     <ServerlessShell>
       <FunctionPage
-        name={name}
-        description={draft?.description ?? getFunctionDescription(functionId)}
-        runtime={draft?.runtime ?? (isHealthCheck ? 'python' : 'javascript')}
-        timeoutSeconds={draft?.timeoutSeconds}
-        memoryMb={draft?.memoryMb}
-        code={draft?.code ?? (isHealthCheck ? healthCheckCode : undefined)}
-        active={draft ? false : !isHealthCheck}
-        expiresAtLabel={draft ? '저장되지 않은 초안' : isHealthCheck ? '2026. 10. 02.' : '2026. 10. 06.'}
-        enabledTabs={['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs']}
-        onNavigateTab={tab => void navigate(tabPath(functionId, tab), { state: location.state })}
-        onManageTriggers={() => void navigate(tabPath(functionId, 'Trigger'), { state: location.state })}
+        key={`${fn.id}-${revision}`}
+        name={fn.name}
+        description={fn.description}
+        runtime={fn.runtime}
+        timeoutSeconds={fn.timeoutSeconds}
+        memoryMb={fn.memoryMb}
+        code={fn.code}
+        active={fn.active}
+        expiresAtLabel={fn.expiresAt}
+        savedVersionLabel={fn.versions[0] ? `${fn.versions[0].label} · ${fn.versions[0].savedAt} 저장` : '저장된 버전 없음'}
+        triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP' ? `${trigger.type} ${trigger.schedule}` : trigger.schedule).join(' · ') || '연결된 Trigger 없음'}
+        enabledTabs={enabledTabs}
+        onNavigateTab={tab => void navigate(tabPath(fn.id, tab))}
+        onManageTriggers={() => void navigate(tabPath(fn.id, 'Trigger'))}
+        onDelete={() => { deleteDemoServerlessFunction(fn.id); void navigate('/serverless'); }}
+        onSaveSettings={(settings: ServerlessFunctionSettings) => { saveDemoServerlessSettings(fn.id, settings); changed(); }}
+        onSaveCode={code => { saveDemoServerlessCode(fn.id, code); changed(); }}
+        onTest={() => void navigate(tabPath(fn.id, 'test'))}
+        onExtend={() => { extendDemoServerlessFunction(fn.id); changed(); }}
+        onToggleActive={active => { setDemoServerlessActive(fn.id, active); changed(); }}
       />
     </ServerlessShell>
   );
@@ -146,39 +118,42 @@ export function ServerlessFunctionRoute() {
 
 export function ServerlessTriggersRoute() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { functionId } = useParams<{ functionId: string }>();
-  const [dailyExecutions, setDailyExecutions] = useState<{ used: number; limit: number } | undefined>();
-  const draft = getDraft(location.state);
-  const isHealthCheck = safeDecode(functionId) === 'health-check';
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void getMyQuota(controller.signal).then(value => {
-      if (!controller.signal.aborted) setDailyExecutions(value.fn.daily_executions);
-    }).catch(() => {
-      if (!controller.signal.aborted && import.meta.env.DEV) setDailyExecutions(previewDailyExecutions);
-    });
-    return () => controller.abort();
-  }, []);
-
-  if (!import.meta.env.DEV || !hasValidFunctionId(functionId, draft)) return <Navigate to="/serverless" replace />;
+  const demoMode = isDemoMode();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const fn = getFunction(functionId, demoMode);
+  void revision;
+  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  const changed = () => refresh(setRevision);
+  const quota = getDemoServerlessQuota();
   return (
     <ServerlessShell>
       <TriggersPage
-        functionName={draft?.name ?? safeDecode(functionId)}
-        publicUrl={draft || isHealthCheck ? undefined : 'https://q8w2n5r7t1vz.example.com'}
-        httpMethod={draft ? undefined : isHealthCheck ? 'GET' : 'POST'}
-        concurrentLimit={draft ? undefined : isHealthCheck ? undefined : 2}
-        dailyExecutions={dailyExecutions}
-        triggers={draft ? [] : isHealthCheck ? [
-          { id: 'health-http', type: 'HTTP', schedule: 'GET 요청 시', enabled: false },
-        ] : [
-          { id: 'http', type: 'HTTP', schedule: 'POST 요청 시', enabled: true },
-          { id: 'cron', type: 'Cron', schedule: '매일 오전 9:00', enabled: true },
-        ]}
-        enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']}
-        onSelectTab={tab => void navigate(tabPath(functionId, tab), { state: location.state })}
+        functionName={fn.name}
+        publicUrl={fn.publicUrl ?? getDemoServerlessUrl(fn.id)}
+        httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule.split(' ')[0]}
+        concurrentLimit={2}
+        dailyExecutions={quota.daily_executions}
+        triggers={fn.triggers}
+        nextCronExecution={fn.triggers.some(trigger => trigger.type === 'Cron' && trigger.enabled) ? '2026. 09. 30. 오전 09:00' : undefined}
+        domain={fn.domain}
+        enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTriggerTab[]}
+        onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
+        onAddTrigger={() => {
+          const schedule = window.prompt('예약 실행 표현식을 입력하세요', '매일 오전 9:00');
+          if (schedule?.trim()) { addDemoServerlessTrigger(fn.id, { type: 'Cron', schedule: schedule.trim(), enabled: true }); changed(); }
+        }}
+        onRegenerateUrl={() => { regenerateDemoServerlessUrl(fn.id); changed(); }}
+        onTest={() => void navigate(tabPath(fn.id, 'test'))}
+        onCopyAddress={() => { void navigator.clipboard.writeText(fn.publicUrl ?? getDemoServerlessUrl(fn.id)); }}
+        onOpenDocsExample={() => void navigate('/help')}
+        onToggleTrigger={(id, enabled) => { updateDemoServerlessTrigger(fn.id, id, enabled); changed(); }}
+        onDeleteTrigger={id => { deleteDemoServerlessTrigger(fn.id, id); changed(); }}
+        onConnectDomain={() => {
+          const domain = window.prompt('연결할 도메인을 입력하세요', fn.domain ?? '');
+          if (domain?.trim()) { setDemoServerlessDomain(fn.id, domain.trim()); changed(); }
+        }}
       />
     </ServerlessShell>
   );
@@ -186,28 +161,71 @@ export function ServerlessTriggersRoute() {
 
 export function ServerlessTabRoute() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { functionId, tab = '' } = useParams<{ functionId: string; tab: string }>();
-  const draft = getDraft(location.state);
-  if (!import.meta.env.DEV || !hasValidFunctionId(functionId, draft)) return <Navigate to="/serverless" replace />;
-  if (!Object.hasOwn(tabSlugs, tab) || tab === 'triggers') return <Navigate to={tabPath(functionId, '코드')} replace />;
-
-  const name = draft?.name ?? safeDecode(functionId);
-  const isHealthCheck = safeDecode(functionId) === 'health-check';
-  const description = draft?.description ?? getFunctionDescription(functionId);
-  const onSelectTab = (nextTab: string) => void navigate(tabPath(functionId, nextTab), { state: location.state });
+  const demoMode = isDemoMode();
+  const [revision, setRevision] = useState(0);
+  const [page, setPage] = useState(1);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  useEffect(() => { refresh(setRevision); setPage(1); setSelectedRunId(null); }, [functionId, tab]);
+  const fn = getFunction(functionId, demoMode);
+  void revision;
+  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  if (!Object.hasOwn(tabSlugs, tab) || tab === 'triggers') return <Navigate to={tabPath(fn.id, '코드')} replace />;
+  const changed = () => refresh(setRevision);
+  const selectTab = (nextTab: string) => void navigate(tabPath(fn.id, nextTab));
   let content = null;
 
   if (tab === 'versions') {
-    content = <VersionsPage functionName={name} description={description} versions={draft || isHealthCheck ? [] : previewVersions} onSelectTab={onSelectTab} />;
+    content = <VersionsPage functionName={fn.name} description={fn.description} versions={fn.versions} onSelectTab={tab => selectTab(tab)} onRollback={id => { rollbackDemoServerlessVersion(fn.id, id); changed(); void navigate(tabPath(fn.id, '코드')); }} />;
   } else if (tab === 'environment') {
-    content = <EnvironmentPage functionName={name} variables={draft || isHealthCheck ? [] : previewVariables} storageBytesUsed={draft || isHealthCheck ? undefined : 205} storageBytesLimit={draft || isHealthCheck ? undefined : 8192} onSelectTab={onSelectTab} />;
+    const variables: ServerlessEnvironmentVariable[] = fn.variables.map(variable => ({ name: variable.name, secret: variable.secret, ...(variable.secret ? {} : { value: variable.value }) }));
+    content = <EnvironmentPage
+      functionName={fn.name}
+      variables={variables}
+      storageBytesUsed={JSON.stringify(fn.variables).length}
+      storageBytesLimit={8192}
+      databases={[{ id: 'student-db', label: 'student-db · PostgreSQL' }]}
+      selectedDatabaseId={fn.databaseId}
+      onSelectTab={tab => selectTab(tab)}
+      onAddVariable={variable => { addDemoServerlessVariable(fn.id, variable); changed(); }}
+      onUpdateVariable={(name, variable) => {
+        const value = window.prompt(`새 값을 입력하세요 · ${name}`, '');
+        if (value !== null) { updateDemoServerlessVariable(fn.id, name, { ...variable, value }); changed(); }
+      }}
+      onDeleteVariable={name => { deleteDemoServerlessVariable(fn.id, name); changed(); }}
+      onSaveChanges={changed}
+      onEditVariables={changed}
+      onSelectDatabase={id => { setDemoServerlessDatabase(fn.id, id); changed(); }}
+    />;
   } else if (tab === 'test') {
-    content = <TestPage functionName={name} result={draft || isHealthCheck ? null : previewTestResult} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
+    content = <TestPage
+      functionName={fn.name}
+      result={fn.testResult}
+      enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTestTab[]}
+      onExecute={payload => { executeDemoServerlessTest(fn.id, payload); changed(); }}
+      onCopyResponse={response => { void navigator.clipboard.writeText(response); }}
+      onViewLogs={() => void navigate(tabPath(fn.id, 'logs'))}
+      onSelectTab={tab => selectTab(tab)}
+    />;
   } else if (tab === 'logs') {
-    content = <LogsPage functionName={name} runs={draft || isHealthCheck ? [] : previewRuns} totalCount={draft || isHealthCheck ? 0 : 248} page={1} pageSize={100} selectedRunId={draft || isHealthCheck ? undefined : 'run-1'} enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs']} onSelectTab={onSelectTab} />;
+    const pageSize = 100;
+    const runs = fn.runs.slice((page - 1) * pageSize, page * pageSize);
+    content = <LogsPage
+      functionName={fn.name}
+      runs={runs}
+      totalCount={fn.runs.length}
+      page={page}
+      pageSize={pageSize}
+      selectedRunId={selectedRunId}
+      enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessLogsTab[]}
+      onSelectTab={tab => selectTab(tab)}
+      onSelectRun={setSelectedRunId}
+      onPageChange={setPage}
+      onRefresh={changed}
+      onDeleteAll={() => { deleteDemoServerlessRuns(fn.id); setSelectedRunId(null); setPage(1); changed(); }}
+    />;
   } else {
-    return <Navigate to={tabPath(functionId, '코드')} replace />;
+    return <Navigate to={tabPath(fn.id, '코드')} replace />;
   }
 
   return <ServerlessShell>{content}</ServerlessShell>;
