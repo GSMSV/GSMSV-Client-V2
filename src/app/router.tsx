@@ -1,9 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, useParams } from 'react-router';
+import { createBrowserRouter, useParams, type RouteObject } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
-const DemoEntryPage = lazy(() => import('../pages/demo/DemoEntryPage'));
 const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const DatabaseListPage = lazy(() => import('../pages/database/DatabaseListPage'));
@@ -71,15 +70,34 @@ function VMNetworkRoute() {
   return <VMNetworkPage key={vmGrn} />;
 }
 
+let demoRoutes: RouteObject[] = [];
+
+if (import.meta.env.DEV) {
+  const [entry, vms, databaseSupport, apps] = await Promise.all([
+    import('../pages/demo/DemoEntryPage'),
+    import('../pages/vm/demoRoutes'),
+    import('../pages/demo-workflows/routes'),
+    import('../pages/apps/demoRoutes'),
+  ]);
+  const DemoEntryPage = entry.default;
+
+  demoRoutes = [
+    {
+      path: '/__demo',
+      element: (
+        <Suspense fallback={null}>
+          <DemoEntryPage />
+        </Suspense>
+      ),
+    },
+    ...vms.demoVmRoutes,
+    ...databaseSupport.demoDatabaseSupportRoutes,
+    ...apps.demoAppRoutes,
+  ];
+}
+
 export const router = createBrowserRouter([
-  {
-    path: '/__demo',
-    element: (
-      <Suspense fallback={null}>
-        <DemoEntryPage />
-      </Suspense>
-    ),
-  },
+  ...demoRoutes,
   {
     path: '/',
     element: (

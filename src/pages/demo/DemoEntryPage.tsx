@@ -58,8 +58,23 @@ const SecondaryButton = styled(Button)`
 export default function DemoEntryPage() {
   const navigate = useNavigate();
 
-  function enter(role: 'user' | 'admin') {
+  async function enter(role: 'user' | 'admin', firstVisit = false) {
     if (!startDemoSession(role)) return;
+    if (role === 'user' && import.meta.env.DEV) {
+      const [{ setDemoFirstVisit }, vm] = await Promise.all([
+        import('../../entities/home'),
+        import('../../entities/vm'),
+      ]);
+      setDemoFirstVisit(firstVisit);
+      if (firstVisit) {
+        const state = vm.getDemoVmState();
+        vm.saveDemoVmState({
+          ...state,
+          vms: state.vms.filter(item => item.owner !== 'personal'),
+          personalQuota: { ...state.personalQuota, cpu: 0, memory: 0, disk: 0 },
+        });
+      }
+    }
     navigate(role === 'admin' ? '/admin/infra' : '/');
   }
 
@@ -70,6 +85,7 @@ export default function DemoEntryPage() {
         <Copy>Figma 화면을 목데이터로 확인하는 개발 전용 미리보기입니다. 입력과 변경 내용은 이 브라우저에만 저장됩니다.</Copy>
         <Actions>
           <Button onClick={() => enter('user')}>학생 화면 열기</Button>
+          <Button onClick={() => enter('user', true)}>첫 방문 화면 열기</Button>
           <Button onClick={() => enter('admin')}>관리자 화면 열기</Button>
           <SecondaryButton onClick={stopDemoMode}>미리보기 초기화</SecondaryButton>
         </Actions>
