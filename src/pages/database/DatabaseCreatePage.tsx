@@ -242,6 +242,7 @@ export default function DatabaseCreatePage() {
   const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const invalidOwner = owner !== 'me' && !teamId;
   const listPath = teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases';
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const user = getSessionUser();
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
@@ -509,7 +510,13 @@ export default function DatabaseCreatePage() {
             <Label>엔진</Label>
             <EngineChoices role="group" aria-label="Database 엔진">
               <EngineButton type="button" $selected={engine === 'mysql'} aria-pressed={engine === 'mysql'} onClick={() => setEngine('mysql')}>MySQL</EngineButton>
-              <EngineButton type="button" $selected={false} aria-disabled="true" onClick={() => setDialog('postgres')}>PostgreSQL</EngineButton>
+              <EngineButton
+                type="button"
+                $selected={engine === 'postgresql'}
+                aria-pressed={engine === 'postgresql'}
+                aria-disabled={!demoMode}
+                onClick={() => demoMode ? setEngine('postgresql') : setDialog('postgres')}
+              >PostgreSQL</EngineButton>
             </EngineChoices>
           </FormSection>
           <FormSection>
