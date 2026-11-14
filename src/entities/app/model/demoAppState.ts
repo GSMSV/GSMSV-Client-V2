@@ -373,7 +373,9 @@ export function saveDemoApps(apps: DemoManagedApp[]): boolean {
 }
 
 export function getDemoApp(id: string): DemoManagedApp | undefined {
-  return getDemoApps().find((app) => app.id === id && (!isDemoAppExpired(app) || Date.now() < getDemoAppDeletionTime(app)));
+  return getDemoApps().find((app) => app.id === id
+    && (!isDemoAppExpired(app) || Date.now() < getDemoAppDeletionTime(app))
+    && (app.owner?.type !== "team" || Boolean(getDemoTeam(app.owner.id))));
 }
 
 export function getDemoService(
