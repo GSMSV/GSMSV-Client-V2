@@ -111,7 +111,7 @@ export function ServerlessFunctionRoute() {
   const enabledTabs: ServerlessFunctionTab[] = ['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs'];
   const changed = () => refresh(setRevision);
   return (
-    <ServerlessShell teamScopeId={fn.teamId}>
+    <ServerlessShell>
       <FunctionPage
         key={`${fn.id}-${revision}`}
         name={fn.name}
@@ -162,7 +162,7 @@ export function ServerlessTriggersRoute() {
     .filter((nextExecution): nextExecution is Date => Boolean(nextExecution))
     .sort((left, right) => left.getTime() - right.getTime())[0];
   return (
-    <ServerlessShell teamScopeId={fn.teamId}>
+    <ServerlessShell>
       <TriggersPage
         key={fn.id}
         functionName={fn.name}
@@ -270,5 +270,5 @@ export function ServerlessTabRoute() {
     return <Navigate to={tabPath(fn.id, '코드')} replace />;
   }
 
-  return <ServerlessShell teamScopeId={fn.teamId}>{content}</ServerlessShell>;
+  return <ServerlessShell>{content}</ServerlessShell>;
 }
