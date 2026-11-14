@@ -156,10 +156,11 @@ export function ServerlessTriggersRoute() {
         domain={fn.domain}
         enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTriggerTab[]}
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
-        onAddTrigger={trigger => {
-          const added = addDemoServerlessTrigger(fn.id, trigger);
+        onAddTrigger={async trigger => {
+          const added = await addDemoServerlessTrigger(fn.id, trigger);
           changed();
-          if (added) return true;
+          if (added === true) return true;
+          if (typeof added === 'string') return added;
           const latestFunction = getDemoServerlessFunction(fn.id);
           if (trigger.type === 'HTTP' && latestFunction?.triggers.some(item => item.type === 'HTTP')) {
             return '이 함수에는 HTTP Trigger가 이미 있습니다. 기존 HTTP Trigger를 삭제한 뒤 다시 추가해 주세요.';

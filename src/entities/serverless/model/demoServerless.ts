@@ -123,17 +123,25 @@ export function deleteDemoServerlessVariable(id: string, name: string) { return 
 export function updateDemoServerlessVariable(id: string, name: string, variable: DemoServerlessVariable) { return mutate(id, fn => { fn.variables = fn.variables.map(item => item.name === name ? variable : item); }); }
 export function setDemoServerlessDatabase(id: string, databaseId: string) { return mutate(id, fn => { fn.databaseId = databaseId; fn.variables = [...fn.variables.filter(item => item.name !== 'DATABASE_URL'), ...(databaseId ? [{ name: 'DATABASE_URL', secret: true }] : [])]; }); }
 export function setDemoServerlessDomain(id: string, domain: string | null) { return mutate(id, fn => { fn.domain = domain; }); }
-export function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): boolean {
-  return Boolean(mutate(id, fn => {
-    if (trigger.type === 'HTTP') {
-      if (fn.triggers.some(item => item.type === 'HTTP')) return false;
-      if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
-    } else {
-      if (fn.triggers.filter(item => item.type === 'Cron').length >= 3) return false;
-      if (!validateCronExpression(trigger.schedule).valid) return false;
-    }
-    fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
-  }));
+export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): Promise<boolean | string> {
+  if (typeof navigator === 'undefined' || !navigator.locks?.request) {
+    return '이 브라우저에서는 여러 탭의 동시 변경을 안전하게 처리할 수 없습니다. 다른 탭을 닫고 다시 시도해 주세요.';
+  }
+
+  try {
+    return await navigator.locks.request('gsmsv:demo:serverless-trigger-write', { mode: 'exclusive' }, () => Boolean(mutate(id, fn => {
+      if (trigger.type === 'HTTP') {
+        if (fn.triggers.some(item => item.type === 'HTTP')) return false;
+        if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
+      } else {
+        if (fn.triggers.filter(item => item.type === 'Cron').length >= 3) return false;
+        if (!validateCronExpression(trigger.schedule).valid) return false;
+      }
+      fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
+    })));
+  } catch {
+    return '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.';
+  }
 }
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }

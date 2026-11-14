@@ -10,7 +10,7 @@ type TriggerAddResult = boolean | string | void;
 
 export interface TriggerDialogProps {
   type: TriggerType;
-  onAdd: (trigger: TriggerDraft) => TriggerAddResult;
+  onAdd: (trigger: TriggerDraft) => TriggerAddResult | Promise<TriggerAddResult>;
   onClose: () => void;
 }
 
@@ -115,17 +115,20 @@ const MethodOptions = [
 export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
   const panelRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
+  const isSubmittingRef = useRef(false);
   onCloseRef.current = onClose;
   const [method, setMethod] = useState('ALL');
   const [cronExpression, setCronExpression] = useState('*/5 * * * *');
   const [submissionError, setSubmissionError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  isSubmittingRef.current = isSubmitting;
   const validation = validateCronExpression(cronExpression);
   const nextExecution = validation.valid ? getNextCronExecution(cronExpression) : undefined;
 
   useEffect(() => {
     panelRef.current?.focus();
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Escape' && !isSubmittingRef.current) onCloseRef.current();
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
@@ -160,19 +163,27 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
     }
   };
 
-  const submit = () => {
-    if (isCron && !validation.valid) return;
-    const added = onAdd({ type, schedule: isCron ? cronExpression.trim() : method, enabled: true });
-    if (added === false || typeof added === 'string') {
-      setSubmissionError(typeof added === 'string' ? added : '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.');
-      return;
+  const submit = async () => {
+    if ((isCron && !validation.valid) || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmissionError('');
+    try {
+      const added = await onAdd({ type, schedule: isCron ? cronExpression.trim() : method, enabled: true });
+      if (added === false || typeof added === 'string') {
+        setSubmissionError(typeof added === 'string' ? added : '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.');
+        return;
+      }
+      onClose();
+    } catch {
+      setSubmissionError('최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.');
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   return (
     <Overlay
-      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
+      onMouseDown={event => { if (event.target === event.currentTarget && !isSubmitting) onClose(); }}
       onKeyDown={handleKeyDown}
     >
       <Panel ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="serverless-trigger-dialog-title" tabIndex={-1}>
@@ -219,14 +230,14 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
         )}
 
         <Actions>
-          <Button variant="secondary" icon={<Octicon name={hasCronError ? 'arrow-left' : 'x'} size={16} />} onClick={onClose}>
+          <Button variant="secondary" disabled={isSubmitting} icon={<Octicon name={hasCronError ? 'arrow-left' : 'x'} size={16} />} onClick={onClose}>
             {hasCronError ? '돌아가기' : '취소'}
           </Button>
           <Button
             variant="primary"
             icon={<Octicon name="plus" size={16} />}
-            disabled={!onAdd || Boolean(hasCronError) || Boolean(submissionError)}
-            onClick={submit}
+            disabled={!onAdd || Boolean(hasCronError) || Boolean(submissionError) || isSubmitting}
+            onClick={() => void submit()}
           >Trigger 추가</Button>
         </Actions>
         {hasCronError && <InlineHelp $error>표현식 오류를 수정한 뒤 Trigger를 추가할 수 있습니다.</InlineHelp>}

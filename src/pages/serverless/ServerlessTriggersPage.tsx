@@ -27,7 +27,7 @@ export interface ServerlessTriggersPageProps {
   domain?: string | null;
   enabledTabs?: readonly ServerlessTriggerTab[];
   onSelectTab?: (tab: ServerlessTriggerTab) => void;
-  onAddTrigger?: (trigger: Omit<DemoServerlessTrigger, 'id'>) => boolean | string | void;
+  onAddTrigger?: (trigger: Omit<DemoServerlessTrigger, 'id'>) => boolean | string | void | Promise<boolean | string | void>;
   onRegenerateUrl?: () => void;
   onTest?: () => void;
   onCopyAddress?: () => void;
