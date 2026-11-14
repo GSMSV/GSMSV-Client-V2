@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { getDemoTeam } from '../../entities/team/demo';
+import { getDemoTeamDedicatedDatabaseQuota } from '../../entities/database/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -47,6 +48,10 @@ export default function DedicatedDatabaseRequestPage() {
 
   function submitRequest() {
     if (!isDemoMode() || !canRequestDedicatedDatabase) return;
+    if (getDemoTeamDedicatedDatabaseQuota(teamScopeId).available === 0) {
+      setNotice(`${teamName} 팀은 전용 Database를 이미 사용 중이라 추가 신청할 수 없습니다.`);
+      return;
+    }
     if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
     if (pending) {
       const updated = { ...pending, teamId: teamScopeId, engine, reason, description: description.trim(), status: '대기 중' as const, rejectReason: '', databaseGrn: undefined, databaseName: undefined, requestedAt: '2026.11.14' };

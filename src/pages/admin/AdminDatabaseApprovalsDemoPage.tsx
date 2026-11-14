@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
-import { createDemoDatabase, getDemoDatabase, listDemoDatabases } from '../../entities/database/demo';
+import { createDemoDatabase, getDemoDatabase, getDemoTeamDedicatedDatabaseQuota, listDemoDatabases } from '../../entities/database/demo';
 import type { DatabaseEngine } from '../../entities/database';
 import { listDemoTeams } from '../../entities/team/demo';
 import { Button } from '../../shared/ui/controls';
@@ -39,6 +39,10 @@ export default function AdminDatabaseApprovalsDemoPage() {
       .find((item) => item?.name === databaseName) ?? null;
 
     if (!database) {
+      if (getDemoTeamDedicatedDatabaseQuota(teamId).available === 0) {
+        setNotice(`${teamName} 팀은 전용 Database 1개 한도를 사용 중이라 승인할 수 없습니다.`);
+        return;
+      }
       if (existingDatabases.length >= 4) {
         setNotice(`${teamName} 팀의 Database 한도 4개를 모두 사용 중이라 승인할 수 없습니다.`);
         return;
