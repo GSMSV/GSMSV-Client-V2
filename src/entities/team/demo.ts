@@ -192,6 +192,44 @@ export function transferDemoTeamLeadership(teamId: string, successorId: string):
   return saveState({ ...state, teams: state.teams.map(item => item.id === id ? next : item) });
 }
 
+export function leaveDemoTeam(teamId: string): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  if (!isDemoMode() || !team || team.my_role === 'leader' || team.my_role === null || team.demoDisbandPending || team.members.length <= 1) return false;
+  const next: DemoTeamDetail = {
+    ...team,
+    my_role: null,
+    members: team.members.filter(member => member.member_id !== 'demo-student'),
+    permissions: { invite_member: false, remove_member: false, grant_devops: false, transfer_leader: false, disband_team: false, leave_team: false, resubmit_team: false },
+  };
+  return saveState({ ...state, teams: state.teams.map(item => item.id === id ? next : item) });
+}
+
+export function updateDemoTeamMemberRole(teamId: string, memberId: string, role: 'member' | 'devops'): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  if (!isDemoMode() || team?.my_role !== 'leader' || !team.permissions.grant_devops || team.demoDisbandPending ||
+      !team.members.some(member => member.member_id === memberId && member.role !== 'leader')) return false;
+  return saveState({ ...state, teams: state.teams.map(item => item.id === id ? {
+    ...item,
+    members: item.members.map(member => member.member_id === memberId ? { ...member, role } : member),
+  } : item) });
+}
+
+export function removeDemoTeamMember(teamId: string, memberId: string): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  if (!isDemoMode() || team?.my_role !== 'leader' || !team.permissions.remove_member || team.demoDisbandPending ||
+      !team.members.some(member => member.member_id === memberId && member.role !== 'leader')) return false;
+  return saveState({ ...state, teams: state.teams.map(item => item.id === id ? {
+    ...item,
+    members: item.members.filter(member => member.member_id !== memberId),
+  } : item) });
+}
+
 export function listDemoDisbandRequests(): DemoTeamDetail[] {
   return isDemoMode() ? getState().teams.filter(team => team.demoDisbandPending) : [];
 }
@@ -205,7 +243,7 @@ export function setDemoDisbandRequest(teamId: string, pending: boolean): boolean
 
 export function approveDemoDisbandRequest(teamId: string): boolean {
   const state = getState();
-  if (!state.teams.some(team => team.id === teamId && team.demoDisbandPending)) return false;
+  if (getSessionUser()?.role !== 'admin' || !state.teams.some(team => team.id === teamId && team.demoDisbandPending)) return false;
   return saveState({
     ...state,
     teams: state.teams.filter(team => team.id !== teamId),

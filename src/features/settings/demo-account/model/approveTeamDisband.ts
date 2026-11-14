@@ -2,6 +2,7 @@ import { getDemoApps, removeDemoAppsByTeam } from '../../../../entities/app/demo
 import { listDemoDatabases, removeDemoDatabasesByOwner } from '../../../../entities/database/demo';
 import { approveDemoDisbandRequest, getDemoTeam } from '../../../../entities/team/demo';
 import { getDemoServerlessTeamFunctionCount, removeDemoServerlessFunctionsByTeam } from '../../../../entities/serverless';
+import { getSessionUser } from '../../../../entities/session';
 import { getDemoVmState, saveDemoVmState } from '../../../../entities/vm';
 
 export function getDemoDisbandResources(teamId: string) {
@@ -14,7 +15,7 @@ export function getDemoDisbandResources(teamId: string) {
 }
 
 export async function approveDemoTeamDisband(teamId: string): Promise<boolean> {
-  if (!getDemoTeam(teamId)?.demoDisbandPending) return false;
+  if (getSessionUser()?.role !== 'admin' || !getDemoTeam(teamId)?.demoDisbandPending) return false;
   try {
     await removeDemoServerlessFunctionsByTeam(teamId);
   } catch {

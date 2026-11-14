@@ -15,6 +15,8 @@ import { isDemoMode } from '../../shared/demo';
 
 const TransferDemoTeamLeader = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader }))) : null;
 const DemoTeamDisbandRequest = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest }))) : null;
+const LeaveDemoTeam = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.LeaveDemoTeam }))) : null;
+const DemoTeamMemberAction = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamMemberAction }))) : null;
 
 const Page = styled.div`
   box-sizing: border-box;
@@ -169,6 +171,8 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const [refreshKey, setRefreshKey] = useState(0);
   const [successor, setSuccessor] = useState<TeamMember | null>(null);
   const [showDisband, setShowDisband] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
+  const [memberAction, setMemberAction] = useState<{ member: TeamMember; action: 'grant' | 'revoke' | 'remove' } | null>(null);
   const demoMode = import.meta.env.DEV && isDemoMode();
   const [confirmCancel, setConfirmCancel] = useState<TeamInvitation | null>(null);
 
@@ -340,7 +344,11 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
                 <RoleText $leader={member.role === 'leader'}>{roleLabels[member.role]}</RoleText>
                 <Muted>계약 정보 없음</Muted>
                 <RowActions>
-                  {member.role !== 'leader' && <Button variant="ghost" disabled title="팀원 역할 변경 API가 없습니다.">역할 변경</Button>}
+                  {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending && <>
+                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
+                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: 'remove' })}>팀에서 제외</Button>
+                  </>}
+                  {member.role !== 'leader' && !demoMode && <Button variant="ghost" disabled title="팀원 역할 변경·제외 API가 없습니다.">역할 변경</Button>}
                   {member.role === 'leader' && <Muted>팀장</Muted>}
                   {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending &&
                     <Button variant="ghost" onClick={() => setSuccessor(member)}>팀장 넘기기</Button>}
@@ -348,7 +356,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
               </MemberRow>
             ))}
           </MemberTable>
-          <Muted>팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.</Muted>
+          <Muted>{demoMode ? '팀장은 DevOps 권한을 부여·회수하거나 팀원을 제외할 수 있습니다.' : '팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.'}</Muted>
         </Panel>
 
         <TwoColumns>
@@ -408,7 +416,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <DangerCopy><DangerTitle>위험 구역 · 팀 해체</DangerTitle><Muted>{demoMode
             ? '관리자가 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다. 팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴할 수 있습니다.'
             : '팀 탈퇴와 해체 요청 API가 아직 공개 계약에 없어 이 기능은 사용할 수 없습니다.'}</Muted></DangerCopy>
-          <DangerActions><Button variant="secondary" disabled={!demoMode || team.my_role === 'leader' || team.my_role === null} title={team.my_role === 'leader' ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined}>팀 탈퇴</Button>{demoMode
+          <DangerActions><Button variant="secondary" disabled={!demoMode || team.my_role === null || (team.my_role === 'leader' && team.members.length > 1)} title={team.my_role === 'leader' && team.members.length > 1 ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined} onClick={() => setShowLeave(true)}>팀 탈퇴</Button>{demoMode
             ? <Button variant="danger" disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
             : <Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button>}</DangerActions>
         </DangerPanel>
@@ -419,6 +427,15 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
         {demoMode && showDisband && DemoTeamDisbandRequest && <Suspense fallback={null}>
           <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
             onSave={() => { setShowDisband(false); refresh(); }} />
+        </Suspense>}
+        {demoMode && showLeave && LeaveDemoTeam && <Suspense fallback={null}>
+          <LeaveDemoTeam team={team} onDismiss={() => setShowLeave(false)}
+            onLeave={() => { setShowLeave(false); navigate('/teams'); }}
+            onRequestDisband={() => { setShowLeave(false); setShowDisband(true); }} />
+        </Suspense>}
+        {demoMode && memberAction && DemoTeamMemberAction && <Suspense fallback={null}>
+          <DemoTeamMemberAction teamId={team.id} member={memberAction.member} action={memberAction.action}
+            onDismiss={() => setMemberAction(null)} onSave={() => { setMemberAction(null); refresh(); }} />
         </Suspense>}
       </Page>
     );

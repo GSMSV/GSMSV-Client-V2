@@ -45,6 +45,12 @@ export async function withdrawDemoAccount(email: string, allowAutomaticHandoff: 
     return false;
   }
 
+  try {
+    await clearDemoServerlessFunctions();
+  } catch {
+    return false;
+  }
+
   const vmState = getDemoVmState();
   const apps = getDemoApps();
   const home = getDemoHomeState();
@@ -57,12 +63,6 @@ export async function withdrawDemoAccount(email: string, allowAutomaticHandoff: 
     || (home && !saveDemoHomeState({ ...home, firstVisit: true, functions: [] }))
     || !writeDemoState('notifications', null)
     || !leaveDemoTeamsForWithdrawal()) return false;
-
-  try {
-    await clearDemoServerlessFunctions();
-  } catch {
-    return false;
-  }
 
   return Boolean(updateDemoProfile({
     accountDeleted: true,
