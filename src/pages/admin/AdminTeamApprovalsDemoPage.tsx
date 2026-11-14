@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getDemoTeamRequests, saveDemoTeamRequests, type TeamRequest } from '../../entities/demo-workflows';
-import { listDemoDisbandRequests, type DemoTeamDetail } from '../../entities/team/demo';
+import { listDemoDisbandRequests, setDemoTeamApproval, type DemoTeamDetail } from '../../entities/team/demo';
 import { AccountDialog, DialogCopy, approveDemoTeamDisband, getDemoDisbandResources } from '../../features/settings/demo-account';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -29,15 +29,19 @@ export default function AdminTeamApprovalsDemoPage() {
   }
 
   function approve() {
-    if (!selected || selected.status === '승인 완료') return;
+    if (!selected || selected.status === '승인 완료' || selected.status === '거절') return;
+    const teamId = selected.teamId ?? (selected.name === 'GSM Connect' ? 'demo-team' : undefined);
+    if (teamId) setDemoTeamApproval(teamId, 'approved', { vcpu: selected.vcpu, ram: selected.ram, ssd: selected.ssd });
     update({ ...selected, status: '승인 완료' });
     setNotice(`${selected.name} 팀 신청을 승인했습니다. 로컬 미리보기에서만 적용됩니다.`);
   }
 
   function reject() {
-    if (!selected) return;
-    if (!rejectReason.trim()) { setNotice('팀장에게 전달할 거절 사유를 입력해 주세요.'); return; }
-    update({ ...selected, status: '거절', rejectReason: rejectReason.trim() });
+    const reason = rejectReason.trim();
+    if (!selected || selected.status === '거절' || selected.status === '승인 완료' || !reason) return;
+    const teamId = selected.teamId ?? (selected.name === 'GSM Connect' ? 'demo-team' : undefined);
+    if (teamId) setDemoTeamApproval(teamId, 'rejected', { rejectionReason: reason });
+    update({ ...selected, status: '거절', rejectReason: reason });
     setNotice(`${selected.name} 팀 신청을 거절했습니다.`);
   }
 
@@ -61,7 +65,7 @@ export default function AdminTeamApprovalsDemoPage() {
         <Field style={{ marginTop: 16 }}>RAM (GB)<Input type="number" min={1} value={selected.ram} onChange={(event) => patchSelected({ ram: Number(event.target.value) })} /></Field>
         <Field style={{ marginTop: 16 }}>SSD (GB)<Input type="number" min={1} value={selected.ssd} onChange={(event) => patchSelected({ ssd: Number(event.target.value) })} /></Field>
       </Card>
-      <Card><CardHeader><div><SectionTitle>거절</SectionTitle><Hint>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Hint></div><Button variant="secondary" disabled={selected.status === '거절' || selected.status === '승인 완료'} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Field>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
+      <Card><CardHeader><div><SectionTitle>거절</SectionTitle><Hint>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Hint></div><Button variant="secondary" disabled={!rejectReason.trim() || selected.status === '거절' || selected.status === '승인 완료'} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Field>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
     </>}
     {disbandRequests.length > 0 && <Card>
       <CardHeader><SectionTitle>해체 요청</SectionTitle></CardHeader>

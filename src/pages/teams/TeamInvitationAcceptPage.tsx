@@ -365,6 +365,21 @@ export default function TeamInvitationAcceptPage() {
     }
   }
 
+  async function handleReject() {
+    if (!token || pending || !(import.meta.env.DEV && isDemoMode())) return;
+    setPending(true);
+    setErrorMessage(null);
+    try {
+      const rejected = await import('../../entities/team/demo').then(({ rejectDemoTeamInvitation }) => rejectDemoTeamInvitation(token));
+      if (!rejected) throw new Error('GONE');
+      navigate('/teams', { replace: true });
+    } catch {
+      setErrorMessage('이 초대는 만료되었거나 이미 사용 또는 취소되었습니다.');
+    } finally {
+      setPending(false);
+    }
+  }
+
   const hasToken = token.length > 0;
 
   return (
@@ -445,21 +460,18 @@ export default function TeamInvitationAcceptPage() {
         </AccountCard>
 
         <ContractNotice>
-          초대 상세 조회와 거절 API가 아직 없습니다. 수락 전에 팀 이름과 초대한 사람을 확인할 수 없으며, 수락은 로그인한 학교 계정으로 요청됩니다.
+          {import.meta.env.DEV && isDemoMode()
+            ? '초대 수락과 거절은 현재 로컬 미리보기에서만 적용됩니다.'
+            : '초대 상세 조회와 거절 API가 아직 없습니다. 수락 전에 팀 이름과 초대한 사람을 확인할 수 없으며, 수락은 로그인한 학교 계정으로 요청됩니다.'}
         </ContractNotice>
         {!hasToken && <FormError role="alert">초대 링크에 유효한 토큰이 없습니다. 초대 링크를 다시 확인해 주세요.</FormError>}
         {errorMessage && <ErrorMessage role="alert">{errorMessage}</ErrorMessage>}
 
         <Actions>
           {loginRequired && <LoginLink href={invitationLoginUrl()} target="_blank" rel="noreferrer">학교 계정으로 로그인</LoginLink>}
-          <DisabledAction
-            variant="ghost"
-            icon={<Octicon name="x" size={16} />}
-            disabled
-            title="현재 공개 API에 초대 거절 operation이 없습니다."
-          >
-            거절
-          </DisabledAction>
+          {import.meta.env.DEV && isDemoMode()
+            ? <Button variant="ghost" icon={<Octicon name="x" size={16} />} disabled={!hasToken || pending} onClick={handleReject}>거절</Button>
+            : <DisabledAction variant="ghost" icon={<Octicon name="x" size={16} />} disabled title="현재 공개 API에 초대 거절 operation이 없습니다.">거절</DisabledAction>}
           <Button
             variant="primary"
             icon={<Octicon name="check" size={16} />}

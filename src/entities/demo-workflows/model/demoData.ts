@@ -31,6 +31,7 @@ export interface DedicatedDatabaseRequest {
 
 export interface TeamRequest {
   id: string;
+  teamId?: string;
   name: string;
   leader: string;
   members: number;
@@ -104,7 +105,7 @@ const demoDbRequests: DedicatedDatabaseRequest[] = [{
 }];
 
 const demoTeamRequests: TeamRequest[] = [
-  { id: 'team-request-1', name: 'GSM Connect', leader: '김지민 · 2107', members: 2, purpose: '동아리·프로젝트 연결 서비스의 API와 DB 운영', requestedAt: '2026.09.29', status: '검토 중', tier: '소형', vcpu: 4, ram: 8, ssd: 60, rejectReason: '' },
+  { id: 'team-request-1', teamId: 'demo-team', name: 'GSM Connect', leader: '김지민 · 2107', members: 2, purpose: '동아리·프로젝트 연결 서비스의 API와 DB 운영', requestedAt: '2026.09.29', status: '검토 중', tier: '소형', vcpu: 4, ram: 8, ssd: 60, rejectReason: '' },
   { id: 'team-request-2', name: '급식한입', leader: '이서준 · 2214', members: 3, purpose: '급식 알림 서비스의 웹 서버 운영', requestedAt: '2026.09.27', status: '대기 중', tier: '소형', vcpu: 4, ram: 8, ssd: 60, rejectReason: '' },
   { id: 'team-request-3', name: 'GSM 동아리', leader: '박지우 · 2118', members: 2, purpose: '동아리 모집 사이트와 파일 서버 운영', requestedAt: '2026.09.26', status: '대기 중', tier: '소형', vcpu: 4, ram: 8, ssd: 60, rejectReason: '' },
 ];

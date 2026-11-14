@@ -38,7 +38,7 @@ const seedState: DemoTeamState = {
   teams: [{
     id: 'demo-team',
     name: 'GSM Connect',
-    status: 'approved',
+    status: 'pending',
     rejection_reason: null,
     my_role: 'leader',
     members: [
@@ -143,6 +143,35 @@ export function createDemoTeam(name: string): TeamSummary {
   return summary(team);
 }
 
+export function setDemoTeamApproval(teamId: string, status: 'approved' | 'rejected', options: {
+  vcpu?: number;
+  ram?: number;
+  ssd?: number;
+  rejectionReason?: string;
+} = {}): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  if (!isDemoMode() || !team) return false;
+  const nextTeam: DemoTeamDetail = {
+    ...team,
+    status,
+    rejection_reason: status === 'rejected' ? options.rejectionReason?.trim() || null : null,
+    quota: status === 'approved' && team.quota ? {
+      vm: {
+        vcpu: { ...team.quota.vm.vcpu, limit: options.vcpu ?? team.quota.vm.vcpu.limit },
+        ram_gb: { ...team.quota.vm.ram_gb, limit: options.ram ?? team.quota.vm.ram_gb.limit },
+        ssd_gb: { ...team.quota.vm.ssd_gb, limit: options.ssd ?? team.quota.vm.ssd_gb.limit },
+      },
+    } : team.quota,
+  };
+  return saveState({
+    ...state,
+    teams: state.teams.map(item => item.id === id ? nextTeam : item),
+    invitations: status === 'rejected' ? state.invitations.filter(item => item.teamId !== id) : state.invitations,
+  });
+}
+
 export function listDemoTeamInvitations(teamId: string): DemoTeamInvitation[] {
   return isDemoMode() && getDemoTeam(teamId)?.permissions.invite_member
     ? getState().invitations.filter(invitation => invitation.teamId === teamId)
@@ -183,6 +212,13 @@ export function acceptDemoTeamInvitation(token: string) {
   };
   saveState({ ...state, teams: state.teams.map(item => item.id === team.id ? updatedTeam : item), invitations: state.invitations.filter(item => item.id !== invitation.id) });
   return { team: { id: team.id, name: team.name }, my_role: 'member' as const };
+}
+
+export function rejectDemoTeamInvitation(token: string): boolean {
+  const state = getState();
+  const invitation = state.invitations.find(item => item.id === token || item.token === token);
+  if (!isDemoMode() || !invitation) return false;
+  return saveState({ ...state, invitations: state.invitations.filter(item => item.id !== invitation.id) });
 }
 
 export function transferDemoTeamLeadership(teamId: string, successorId: string): boolean {

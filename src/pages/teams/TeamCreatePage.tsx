@@ -269,7 +269,7 @@ export default function TeamCreatePage() {
     setError(null);
     try {
       const team = import.meta.env.DEV && isDemoMode()
-        ? await import('../../entities/team/demo').then(({ createDemoTeam }) => createDemoTeam(normalizedName))
+        ? await import('../../features/team/create-team/model/createDemoTeamRequest').then(({ createDemoTeamRequest }) => createDemoTeamRequest(normalizedName, purpose))
         : await createTeam(normalizedName);
       navigate(`/teams/${encodeURIComponent(team.id)}`, { replace: true });
     } catch (requestError) {
@@ -336,7 +336,7 @@ export default function TeamCreatePage() {
                 disabled={submitting}
                 aria-describedby="team-purpose-hint"
               />
-              <Hint id="team-purpose-hint">현재 팀 생성 API는 팀 이름만 저장합니다. 이 목적은 요청에 포함되거나 저장되지 않습니다.</Hint>
+              <Hint id="team-purpose-hint">관리자가 팀 할당량을 정할 때 참고합니다.</Hint>
             </TextAreaGroup>
           </Fields>
         </FormCard>
