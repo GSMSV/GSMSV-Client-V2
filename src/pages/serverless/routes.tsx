@@ -8,11 +8,15 @@ import {
   deleteDemoServerlessRuns,
   deleteDemoServerlessTrigger,
   deleteDemoServerlessVariable,
+  describeCronExpression,
   executeDemoServerlessTest,
   extendDemoServerlessFunction,
+  formatCronExecution,
   getDemoServerlessFunction,
   getDemoServerlessQuota,
   getDemoServerlessUrl,
+  getNextCronExecution,
+  loadDemoServerlessState,
   regenerateDemoServerlessUrl,
   rollbackDemoServerlessVersion,
   saveDemoServerlessCode,
@@ -22,6 +26,7 @@ import {
   setDemoServerlessDomain,
   updateDemoServerlessTrigger,
   updateDemoServerlessVariable,
+  subscribeDemoServerlessState,
   type DemoServerlessFunction,
 } from '../../entities/serverless';
 import type { ServerlessEnvironmentVariable } from './ServerlessEnvironmentPage';
@@ -61,6 +66,25 @@ function getFunction(functionId: string | undefined, demoMode: boolean): DemoSer
 }
 function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(value => value + 1); }
 
+function useServerlessStateRevision(functionId: string | undefined, demoMode: boolean) {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!demoMode || !functionId) return;
+    let active = true;
+    const sync = () => {
+      void loadDemoServerlessState().then(() => {
+        if (active) refresh(setRevision);
+      }).catch(() => {
+        if (active) refresh(setRevision);
+      });
+    };
+    const unsubscribe = subscribeDemoServerlessState(sync);
+    sync();
+    return () => { active = false; unsubscribe(); };
+  }, [demoMode, functionId]);
+  return [revision, setRevision] as const;
+}
+
 export function ServerlessCreateRoute() {
   const navigate = useNavigate();
   if (!isDemoMode()) return <Navigate to="/serverless" replace />;
@@ -69,8 +93,7 @@ export function ServerlessCreateRoute() {
       <CreatePage
         onCancel={() => void navigate('/serverless')}
         onCreate={(draft: ServerlessFunctionDraft) => {
-          const id = createDemoServerlessFunction(draft);
-          void navigate(`/serverless/${encodeURIComponent(id)}`);
+          void createDemoServerlessFunction(draft).then(id => navigate(`/serverless/${encodeURIComponent(id)}`));
         }}
       />
     </ServerlessShell>
@@ -81,8 +104,7 @@ export function ServerlessFunctionRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
@@ -101,7 +123,9 @@ export function ServerlessFunctionRoute() {
         active={fn.active}
         expiresAtLabel={fn.expiresAt}
         savedVersionLabel={fn.versions[0] ? `${fn.versions[0].label} · ${fn.versions[0].savedAt} 저장` : '저장된 버전 없음'}
-        triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP' ? `${trigger.type} ${trigger.schedule}` : trigger.schedule).join(' · ') || '연결된 Trigger 없음'}
+        triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP'
+          ? `${trigger.type} ${trigger.schedule === 'ALL' ? '전체' : trigger.schedule}`
+          : `${describeCronExpression(trigger.schedule)} 예약 실행`).join(' · ') || '연결된 Trigger 없음'}
         enabledTabs={enabledTabs}
         onNavigateTab={tab => void navigate(tabPath(fn.id, tab))}
         onManageTriggers={() => void navigate(tabPath(fn.id, 'Trigger'))}
@@ -120,29 +144,50 @@ export function ServerlessTriggersRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
   const changed = () => refresh(setRevision);
   const quota = getDemoServerlessQuota();
+  const enabledCronTriggers = fn.triggers.filter(trigger => trigger.type === 'Cron' && trigger.enabled);
+  const isSeededFigmaPreview = fn.id === 'welcome-api'
+    && fn.triggers.length === 2
+    && enabledCronTriggers.length === 1
+    && enabledCronTriggers[0].id === 'cron'
+    && enabledCronTriggers[0].schedule === '0 9 * * *';
+  const seedPreviewClock = isSeededFigmaPreview ? new Date('2026-09-30T08:59:00+09:00') : undefined;
+  const nextCronExecution = enabledCronTriggers
+    .map(trigger => getNextCronExecution(trigger.schedule, seedPreviewClock))
+    .filter((nextExecution): nextExecution is Date => Boolean(nextExecution))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
   return (
     <ServerlessShell>
       <TriggersPage
+        key={fn.id}
         functionName={fn.name}
         publicUrl={fn.publicUrl ?? getDemoServerlessUrl(fn.id)}
-        httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule.split(' ')[0]}
+        httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule === 'ALL' ? '전체' : fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule}
         concurrentLimit={2}
         dailyExecutions={quota.daily_executions}
         triggers={fn.triggers}
-        nextCronExecution={fn.triggers.some(trigger => trigger.type === 'Cron' && trigger.enabled) ? '2026. 09. 30. 오전 09:00' : undefined}
+        nextCronExecution={nextCronExecution ? formatCronExecution(nextCronExecution) : undefined}
         domain={fn.domain}
         enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTriggerTab[]}
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
-        onAddTrigger={() => {
-          const schedule = window.prompt('예약 실행 표현식을 입력하세요', '매일 오전 9:00');
-          if (schedule?.trim()) { addDemoServerlessTrigger(fn.id, { type: 'Cron', schedule: schedule.trim(), enabled: true }); changed(); }
+        onAddTrigger={async trigger => {
+          const added = await addDemoServerlessTrigger(fn.id, trigger);
+          changed();
+          if (added === true) return true;
+          if (typeof added === 'string') return added;
+          const latestFunction = getDemoServerlessFunction(fn.id);
+          if (trigger.type === 'HTTP' && latestFunction?.triggers.some(item => item.type === 'HTTP')) {
+            return '이 함수에는 HTTP Trigger가 이미 있습니다. 기존 HTTP Trigger를 삭제한 뒤 다시 추가해 주세요.';
+          }
+          if (trigger.type === 'Cron' && (latestFunction?.triggers.filter(item => item.type === 'Cron').length ?? 0) >= 3) {
+            return 'Cron Trigger는 함수마다 3개까지 추가할 수 있습니다. 기존 Trigger를 삭제한 뒤 다시 시도해 주세요.';
+          }
+          return '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.';
         }}
         onRegenerateUrl={() => { regenerateDemoServerlessUrl(fn.id); changed(); }}
         onTest={() => void navigate(tabPath(fn.id, 'test'))}
@@ -163,10 +208,10 @@ export function ServerlessTabRoute() {
   const navigate = useNavigate();
   const { functionId, tab = '' } = useParams<{ functionId: string; tab: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const [page, setPage] = useState(1);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  useEffect(() => { refresh(setRevision); setPage(1); setSelectedRunId(null); }, [functionId, tab]);
+  useEffect(() => { setPage(1); setSelectedRunId(null); }, [functionId, tab]);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;

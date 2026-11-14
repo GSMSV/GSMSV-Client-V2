@@ -243,6 +243,7 @@ export default function ServerlessListPage() {
     if (import.meta.env.DEV && demoMode) {
       try {
         const demo = await import('../../entities/serverless');
+        await demo.loadDemoServerlessState();
         if (signal.aborted) return;
         setFunctions(demo.getDemoServerlessFunctions().map(fn => ({
           id: fn.id,
@@ -276,6 +277,13 @@ export default function ServerlessListPage() {
     void loadQuota(controller.signal);
     return () => controller.abort();
   }, [loadQuota, retryKey]);
+
+  useEffect(() => {
+    if (!demoMode) return;
+    const refresh = () => setRetryKey(value => value + 1);
+    window.addEventListener('gsmsv:demo-serverless-state-change', refresh);
+    return () => window.removeEventListener('gsmsv:demo-serverless-state-change', refresh);
+  }, [demoMode]);
 
   const count = quota.value?.count;
   const executions = quota.value?.daily_executions;

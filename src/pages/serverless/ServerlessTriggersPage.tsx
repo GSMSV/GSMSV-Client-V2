@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import styled from 'styled-components';
+import { formatCronSchedule, getNextDemoServerlessTriggerType, type DemoServerlessTrigger } from '../../entities/serverless';
+import { TriggerDialog } from '../../features/serverless/manage-triggers';
 import { Button, Switch } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -24,7 +27,7 @@ export interface ServerlessTriggersPageProps {
   domain?: string | null;
   enabledTabs?: readonly ServerlessTriggerTab[];
   onSelectTab?: (tab: ServerlessTriggerTab) => void;
-  onAddTrigger?: () => void;
+  onAddTrigger?: (trigger: Omit<DemoServerlessTrigger, 'id'>) => boolean | string | void | Promise<boolean | string | void>;
   onRegenerateUrl?: () => void;
   onTest?: () => void;
   onCopyAddress?: () => void;
@@ -290,6 +293,10 @@ export function ServerlessTriggersPage({
   onDeleteTrigger,
   onConnectDomain,
 }: ServerlessTriggersPageProps) {
+  const [dialogType, setDialogType] = useState<DemoServerlessTrigger['type'] | null>(null);
+  const nextTriggerType = getNextDemoServerlessTriggerType(triggers);
+  const closeTriggerDialog = () => setDialogType(null);
+
   return (
     <Page data-node-id="52:3715">
       <Breadcrumb>Serverless</Breadcrumb>
@@ -313,7 +320,12 @@ export function ServerlessTriggersPage({
             >{tab.label}</Tab>
           ))}
         </Tabs>
-        <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!onAddTrigger} onClick={onAddTrigger}>Trigger 추가</Button>
+        <Button
+          variant="primary"
+          icon={<Octicon name="plus" size={16} />}
+          disabled={!onAddTrigger || !nextTriggerType}
+          onClick={() => setDialogType(nextTriggerType ?? null)}
+        >Trigger 추가</Button>
       </TabsRow>
 
       <Banner
@@ -378,7 +390,7 @@ export function ServerlessTriggersPage({
           {triggers.map(trigger => (
             <TableRow key={trigger.id} role="row">
               <Cell role="cell">{trigger.type}</Cell>
-              <Cell role="cell">{trigger.schedule}</Cell>
+              <Cell role="cell">{trigger.type === 'Cron' ? formatCronSchedule(trigger.schedule) : trigger.schedule === 'ALL' ? '전체' : trigger.schedule}</Cell>
               <Cell role="cell">
                 <Switch
                   label=""
@@ -417,6 +429,7 @@ export function ServerlessTriggersPage({
           </DomainValue>
         </AddressRow>
       </Surface>
+      {dialogType && onAddTrigger && <TriggerDialog type={dialogType} onAdd={onAddTrigger} onClose={closeTriggerDialog} />}
     </Page>
   );
 }
