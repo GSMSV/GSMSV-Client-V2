@@ -44,7 +44,7 @@ export default function DedicatedDatabaseRequestPage() {
       return;
     }
     const request: DedicatedDatabaseRequest = {
-      id: `db-request-${Date.now()}`, team: 'GSM Connect', applicant: '김지민 · 팀장', members: 3,
+      id: `db-request-${crypto.randomUUID()}`, team: 'GSM Connect', applicant: '김지민 · 팀장', members: 3,
       engine, reason, description: description.trim(), requestedAt: '2026.11.14', status: '대기 중', rejectReason: '',
     };
     saveDemoDbRequests([...getDemoDbRequests(), request]);
