@@ -1,5 +1,6 @@
 export {
   isDemoMode,
+  getDemoResetGeneration,
   readDemoState,
   resetDemoState,
   startDemoSession,

@@ -16,6 +16,7 @@ import {
   getDemoServerlessQuota,
   getDemoServerlessUrl,
   getNextCronExecution,
+  loadDemoServerlessState,
   regenerateDemoServerlessUrl,
   rollbackDemoServerlessVersion,
   saveDemoServerlessCode,
@@ -25,6 +26,7 @@ import {
   setDemoServerlessDomain,
   updateDemoServerlessTrigger,
   updateDemoServerlessVariable,
+  subscribeDemoServerlessState,
   type DemoServerlessFunction,
 } from '../../entities/serverless';
 import type { ServerlessEnvironmentVariable } from './ServerlessEnvironmentPage';
@@ -64,6 +66,25 @@ function getFunction(functionId: string | undefined, demoMode: boolean): DemoSer
 }
 function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(value => value + 1); }
 
+function useServerlessStateRevision(functionId: string | undefined, demoMode: boolean) {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!demoMode || !functionId) return;
+    let active = true;
+    const sync = () => {
+      void loadDemoServerlessState().then(() => {
+        if (active) refresh(setRevision);
+      }).catch(() => {
+        if (active) refresh(setRevision);
+      });
+    };
+    const unsubscribe = subscribeDemoServerlessState(sync);
+    sync();
+    return () => { active = false; unsubscribe(); };
+  }, [demoMode, functionId]);
+  return [revision, setRevision] as const;
+}
+
 export function ServerlessCreateRoute() {
   const navigate = useNavigate();
   if (!isDemoMode()) return <Navigate to="/serverless" replace />;
@@ -72,8 +93,7 @@ export function ServerlessCreateRoute() {
       <CreatePage
         onCancel={() => void navigate('/serverless')}
         onCreate={(draft: ServerlessFunctionDraft) => {
-          const id = createDemoServerlessFunction(draft);
-          void navigate(`/serverless/${encodeURIComponent(id)}`);
+          void createDemoServerlessFunction(draft).then(id => navigate(`/serverless/${encodeURIComponent(id)}`));
         }}
       />
     </ServerlessShell>
@@ -84,8 +104,7 @@ export function ServerlessFunctionRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
@@ -125,8 +144,7 @@ export function ServerlessTriggersRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => { refresh(setRevision); }, [functionId]);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
@@ -146,6 +164,7 @@ export function ServerlessTriggersRoute() {
   return (
     <ServerlessShell>
       <TriggersPage
+        key={fn.id}
         functionName={fn.name}
         publicUrl={fn.publicUrl ?? getDemoServerlessUrl(fn.id)}
         httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule === 'ALL' ? '전체' : fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule}
@@ -189,10 +208,10 @@ export function ServerlessTabRoute() {
   const navigate = useNavigate();
   const { functionId, tab = '' } = useParams<{ functionId: string; tab: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useState(0);
+  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const [page, setPage] = useState(1);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  useEffect(() => { refresh(setRevision); setPage(1); setSelectedRunId(null); }, [functionId, tab]);
+  useEffect(() => { setPage(1); setSelectedRunId(null); }, [functionId, tab]);
   const fn = getFunction(functionId, demoMode);
   void revision;
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;

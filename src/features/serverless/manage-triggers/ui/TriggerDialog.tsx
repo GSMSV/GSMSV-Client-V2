@@ -126,12 +126,19 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
   const nextExecution = validation.valid ? getNextCronExecution(cronExpression) : undefined;
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.focus();
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSubmittingRef.current) onCloseRef.current();
+      if (event.key !== 'Escape' || isSubmittingRef.current) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('[aria-expanded="true"]')) return;
+      onCloseRef.current();
     };
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      previouslyFocused?.focus();
+    };
   }, []);
 
   const isCron = type === 'Cron';
@@ -151,9 +158,19 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return;
     const controls = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
-    if (!controls?.length) return;
-    const first = controls[0];
-    const last = controls[controls.length - 1];
+    const focusable = [...(controls ?? [])].filter(control => control.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      panelRef.current?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === panelRef.current) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+      return;
+    }
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
@@ -164,7 +181,8 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
   };
 
   const submit = async () => {
-    if ((isCron && !validation.valid) || isSubmitting) return;
+    if ((isCron && !validation.valid) || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setSubmissionError('');
     try {
@@ -177,6 +195,7 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
     } catch {
       setSubmissionError('최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -208,6 +227,7 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
               <TextField
                 label="Cron 표현식"
                 value={cronExpression}
+                disabled={isSubmitting}
                 onChange={event => { setCronExpression(event.currentTarget.value); setSubmissionError(''); }}
                 error={validation.valid ? undefined : validation.reason === 'frequency'
                   ? `${validation.minimumIntervalMinutes}분마다 실행 · 5분 이상으로 입력해 주세요.`
@@ -225,7 +245,7 @@ export function TriggerDialog({ type, onAdd, onClose }: TriggerDialogProps) {
             <Notes>
               <li>· 동시에 2개까지 실행합니다. 넘은 요청은 429로 거절합니다.</li>
             </Notes>
-            <SelectField label="받을 메서드" value={method} options={MethodOptions} onChange={setMethod} />
+            <SelectField label="받을 메서드" value={method} options={MethodOptions} onChange={setMethod} disabled={isSubmitting} />
           </>
         )}
 

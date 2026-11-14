@@ -15,7 +15,7 @@ type CalendarSchedule = {
   /** null means every date; otherwise values are day offsets in the repeating 400-year cycle. */
   matchingDays: Uint32Array | null;
   hasDates: boolean;
-  hasAdjacentDates: boolean;
+  minimumDayDistance: number | null;
 };
 
 export type CronValidation =
@@ -48,8 +48,9 @@ function parseField(source: string, minimum: number, maximum: number, sundayAlia
     const segments = part.split('/');
     if (segments.length > 2) return undefined;
     const [base, stepText] = segments;
+    if (stepText !== undefined && !/^\d+$/.test(stepText)) return undefined;
     const step = stepText === undefined ? 1 : Number(stepText);
-    if (!Number.isInteger(step) || step < 1) return undefined;
+    if (!Number.isSafeInteger(step) || step < 1) return undefined;
 
     let start: number;
     let end: number;
@@ -74,8 +75,9 @@ function parseField(source: string, minimum: number, maximum: number, sundayAlia
     }
   }
 
-  const fullRangeSize = sundayAlias ? 7 : maximum - minimum + 1;
-  return { values, wildcard: values.size === fullRangeSize };
+  // Cronie marks a day field as a wildcard when its source begins with `*`,
+  // including stepped wildcards such as `*/2`. This affects DOM/DOW matching.
+  return { values, wildcard: source.startsWith('*') };
 }
 
 function parseCron(expression: string): ParsedCron | undefined {
@@ -105,11 +107,9 @@ function matchesCalendarDate(parsed: ParsedCron, date: Date): boolean {
   const dayOfMonth = date.getUTCDate();
   const month = date.getUTCMonth() + 1;
   const dayOfWeek = date.getUTCDay();
-  const dayMatches = parsed.dayOfMonth.wildcard
-    ? parsed.dayOfWeek.values.has(dayOfWeek)
-    : parsed.dayOfWeek.wildcard
-      ? parsed.dayOfMonth.values.has(dayOfMonth)
-      : parsed.dayOfMonth.values.has(dayOfMonth) || parsed.dayOfWeek.values.has(dayOfWeek);
+  const dayMatches = parsed.dayOfMonth.wildcard || parsed.dayOfWeek.wildcard
+    ? parsed.dayOfMonth.values.has(dayOfMonth) && parsed.dayOfWeek.values.has(dayOfWeek)
+    : parsed.dayOfMonth.values.has(dayOfMonth) || parsed.dayOfWeek.values.has(dayOfWeek);
 
   return dayMatches && parsed.month.values.has(month);
 }
@@ -124,28 +124,28 @@ function getCalendarSchedule(parsed: ParsedCron): CalendarSchedule {
   }
 
   if (parsed.dayOfMonth.wildcard && parsed.month.wildcard && parsed.dayOfWeek.wildcard) {
-    const everyDate = { matchingDays: null, hasDates: true, hasAdjacentDates: true };
+    const everyDate = { matchingDays: null, hasDates: true, minimumDayDistance: 1 };
     calendarScheduleCache.set(key, everyDate);
     return everyDate;
   }
 
   const matchingDays: number[] = [];
-  let previousDateMatches = false;
-  let hasAdjacentDates = false;
   for (let day = 0; day < DAYS_IN_GREGORIAN_CYCLE; day += 1) {
     const matches = matchesCalendarDate(parsed, new Date(GREGORIAN_CYCLE_START + day * DAY_MS));
     if (matches) matchingDays.push(day);
-    if (matches && previousDateMatches) hasAdjacentDates = true;
-    previousDateMatches = matches;
   }
-  if (matchingDays[0] === 0 && matchingDays[matchingDays.length - 1] === DAYS_IN_GREGORIAN_CYCLE - 1) {
-    hasAdjacentDates = true;
+  let minimumDayDistance: number | null = null;
+  if (matchingDays.length > 0) {
+    minimumDayDistance = DAYS_IN_GREGORIAN_CYCLE - matchingDays[matchingDays.length - 1] + matchingDays[0];
+    for (let index = 1; index < matchingDays.length; index += 1) {
+      minimumDayDistance = Math.min(minimumDayDistance, matchingDays[index] - matchingDays[index - 1]);
+    }
   }
 
   const schedule = {
     matchingDays: Uint32Array.from(matchingDays),
     hasDates: matchingDays.length > 0,
-    hasAdjacentDates,
+    minimumDayDistance,
   };
   calendarScheduleCache.set(key, schedule);
   if (calendarScheduleCache.size > 8) calendarScheduleCache.delete(calendarScheduleCache.keys().next().value!);
@@ -162,17 +162,18 @@ function getMinimumScheduleInterval(parsed: ParsedCron, calendarSchedule: Calend
   const times = getScheduledMinutes(parsed);
   if (!times.length) return null;
 
-  let minimum: number | null = null;
+  let minimum = Number.POSITIVE_INFINITY;
   for (let index = 1; index < times.length; index += 1) {
     const interval = times[index] - times[index - 1];
-    minimum = minimum === null ? interval : Math.min(minimum, interval);
+    minimum = Math.min(minimum, interval);
   }
 
-  const overnightInterval = 24 * 60 - times[times.length - 1] + times[0];
-  if (overnightInterval < 5 && calendarSchedule.hasAdjacentDates) {
-    minimum = minimum === null ? overnightInterval : Math.min(minimum, overnightInterval);
+  const dayDistance = calendarSchedule.minimumDayDistance;
+  if (dayDistance !== null) {
+    const betweenDates = (dayDistance - 1) * 24 * 60 + 24 * 60 - times[times.length - 1] + times[0];
+    minimum = Math.min(minimum, betweenDates);
   }
-  return minimum;
+  return Number.isFinite(minimum) ? minimum : null;
 }
 
 export function validateCronExpression(expression: string): CronValidation {
@@ -252,7 +253,14 @@ export function describeCronExpression(expression: string): string {
   const normalized = expression.trim().replace(/\s+/g, ' ');
   if (normalized === '0 9 * * *') return '매일 09:00';
   const everyMinutes = /^\*\/(\d+) \* \* \* \*$/.exec(normalized);
-  if (everyMinutes) return `${everyMinutes[1]}분마다`;
+  if (everyMinutes) {
+    const interval = Number(everyMinutes[1]);
+    if (!Number.isSafeInteger(interval) || interval < 1) return normalized;
+    if (60 % interval === 0) return `${interval}분마다`;
+    const scheduledMinutes: string[] = [];
+    for (let minute = 0; minute < 60; minute += interval) scheduledMinutes.push(String(minute).padStart(2, '0'));
+    return `매시 ${scheduledMinutes.join('·')}분`;
+  }
   return normalized;
 }
 

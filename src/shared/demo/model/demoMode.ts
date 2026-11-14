@@ -2,6 +2,16 @@ import { saveSessionUser, type SessionUserRole } from '../../../entities/session
 
 const demoModeKey = 'gsmsv.demo.mode.v1';
 const demoStatePrefix = 'gsmsv.demo.state.v1.';
+const demoResetGenerationKey = 'gsmsv.demo.reset.generation';
+
+export function getDemoResetGeneration(): string {
+  if (typeof window === 'undefined') return '0';
+  try {
+    return window.localStorage.getItem(demoResetGenerationKey) ?? '0';
+  } catch {
+    return '0';
+  }
+}
 
 export function isDemoMode(): boolean {
   if (!import.meta.env.DEV || typeof window === 'undefined') {
@@ -66,10 +76,12 @@ export function resetDemoState(): void {
   if (typeof window === 'undefined' || !import.meta.env.DEV) return;
 
   try {
+    const nextGeneration = String(Math.max(0, Number(getDemoResetGeneration()) || 0) + 1);
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index);
-      if (key?.startsWith('gsmsv.demo.')) window.localStorage.removeItem(key);
+      if (key?.startsWith('gsmsv.demo.') && key !== demoResetGenerationKey) window.localStorage.removeItem(key);
     }
+    window.localStorage.setItem(demoResetGenerationKey, nextGeneration);
   } catch {
     // Demo reset is best effort when browser storage is unavailable.
   }

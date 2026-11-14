@@ -1,4 +1,5 @@
-import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { readDemoState } from '../../../shared/demo';
+import { DemoServerlessStorageError, transactDemoServerlessState } from './demoServerlessStorage';
 import { validateCronExpression } from './cron';
 export type DemoServerlessRuntime = 'javascript' | 'typescript' | 'python';
 export interface DemoServerlessDraft { name: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256; description: string; code: string; }
@@ -55,10 +56,9 @@ function isState(value: unknown): value is DemoServerlessState {
   return Array.isArray(candidate.functions) && typeof candidate.dailyLimit === 'number' && typeof candidate.executionsToday === 'number' && candidate.functions.every(fn => Boolean(fn && typeof fn.id === 'string' && typeof fn.name === 'string' && typeof fn.code === 'string' && Array.isArray(fn.variables) && Array.isArray(fn.triggers) && fn.triggers.every(trigger => Boolean(trigger && (trigger.type === 'HTTP' || trigger.type === 'Cron') && typeof trigger.schedule === 'string')) && Array.isArray(fn.versions) && Array.isArray(fn.runs)));
 }
 
-export function getDemoServerlessState(): DemoServerlessState {
-  const stored = readDemoState<unknown>(key, structuredClone(seed));
-  if (!isState(stored)) return structuredClone(seed);
-  const migrated = structuredClone(stored);
+function normalizeState(value: unknown): { value: DemoServerlessState; changed: boolean } {
+  if (!isState(value)) return { value: structuredClone(seed), changed: true };
+  const migrated = structuredClone(value);
   let changed = false;
   for (const fn of migrated.functions) {
     for (const trigger of fn.triggers) {
@@ -71,11 +71,18 @@ export function getDemoServerlessState(): DemoServerlessState {
       }
     }
   }
-  if (changed) writeDemoState(key, migrated);
-  return migrated;
+  return { value: migrated, changed };
 }
 
-export function saveDemoServerlessState(state: DemoServerlessState): void { writeDemoState(key, state); }
+export function getDemoServerlessState(): DemoServerlessState {
+  return normalizeState(readDemoState<unknown>(key, structuredClone(seed))).value;
+}
+
+export async function loadDemoServerlessState(): Promise<DemoServerlessState> {
+  const { state } = await transactDemoServerlessState(seed, normalizeState);
+  return state;
+}
+
 export function getDemoServerlessFunctions(): DemoServerlessFunction[] { return getDemoServerlessState().functions; }
 export function getDemoServerlessFunction(id: string): DemoServerlessFunction | undefined { return getDemoServerlessFunctions().find(fn => fn.id === id); }
 export function getDemoServerlessQuota() { const state = getDemoServerlessState(); return { count: { used: state.functions.length, limit: 3 }, daily_executions: { used: state.executionsToday, limit: state.dailyLimit } }; }
@@ -86,13 +93,12 @@ export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger
   return undefined;
 }
 
-function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void | false): DemoServerlessFunction | undefined {
-  const state = getDemoServerlessState();
-  const fn = state.functions.find(item => item.id === id);
-  if (!fn) return undefined;
-  if (update(fn, state) === false) return undefined;
-  saveDemoServerlessState(state);
-  return fn;
+function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void | false): Promise<DemoServerlessFunction | undefined> {
+  return transactDemoServerlessState(seed, normalizeState, state => {
+    const fn = state.functions.find(item => item.id === id);
+    if (!fn || update(fn, state) === false) return undefined;
+    return fn;
+  }).then(({ result }) => result);
 }
 
 function version(fn: DemoServerlessFunction, state: DemoServerlessState, summary: string) {
@@ -102,21 +108,21 @@ function version(fn: DemoServerlessFunction, state: DemoServerlessState, summary
   fn.versions = [{ id: currentId, label, savedAt: now, author: '김민수', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))];
 }
 
-export function createDemoServerlessFunction(draft: DemoServerlessDraft): string {
-  const state = getDemoServerlessState();
+export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promise<string> {
   const id = crypto.randomUUID();
   const fn: DemoServerlessFunction = { id, name: draft.name, description: draft.description, runtime: draft.runtime, timeoutSeconds: draft.timeoutSeconds, memoryMb: draft.memoryMb, code: draft.code, active: false, expiresAt: '생성 후 7일', variables: [], triggers: [], versions: [], runs: [], testResult: null };
-  version(fn, state, '함수 생성');
-  state.sequence += 1;
-  state.functions.unshift(fn);
-  saveDemoServerlessState(state);
-  return id;
+  return transactDemoServerlessState(seed, normalizeState, state => {
+    version(fn, state, '함수 생성');
+    state.sequence += 1;
+    state.functions.unshift(fn);
+    return id;
+  }).then(({ result }) => result!);
 }
 export function saveDemoServerlessCode(id: string, code: string) { return mutate(id, (fn, state) => { fn.code = code; version(fn, state, '코드'); state.sequence += 1; }); }
 export function saveDemoServerlessSettings(id: string, settings: Pick<DemoServerlessFunction, 'runtime' | 'timeoutSeconds' | 'memoryMb'>) { return mutate(id, (fn, state) => { Object.assign(fn, settings); version(fn, state, '실행 설정'); state.sequence += 1; }); }
 export function setDemoServerlessActive(id: string, active: boolean) { return mutate(id, fn => { fn.active = active; }); }
 export function extendDemoServerlessFunction(id: string) { return mutate(id, fn => { fn.expiresAt = '2026. 10. 20.'; }); }
-export function deleteDemoServerlessFunction(id: string) { const state = getDemoServerlessState(); state.functions = state.functions.filter(fn => fn.id !== id); saveDemoServerlessState(state); }
+export function deleteDemoServerlessFunction(id: string) { return transactDemoServerlessState(seed, normalizeState, state => { state.functions = state.functions.filter(fn => fn.id !== id); }); }
 export function rollbackDemoServerlessVersion(id: string, versionId: string) { return mutate(id, (fn, state) => { const target = fn.versions.find(item => item.id === versionId); if (!target) return; fn.code = target.code; fn.runtime = target.runtime; fn.timeoutSeconds = target.timeoutSeconds; fn.memoryMb = target.memoryMb; version(fn, state, `버전 ${versionId} 복원`); state.sequence += 1; }); }
 export function addDemoServerlessVariable(id: string, variable: DemoServerlessVariable) { return mutate(id, fn => { fn.variables = [...fn.variables.filter(item => item.name !== variable.name), variable]; }); }
 export function deleteDemoServerlessVariable(id: string, name: string) { return mutate(id, fn => { fn.variables = fn.variables.filter(item => item.name !== name); }); }
@@ -124,12 +130,10 @@ export function updateDemoServerlessVariable(id: string, name: string, variable:
 export function setDemoServerlessDatabase(id: string, databaseId: string) { return mutate(id, fn => { fn.databaseId = databaseId; fn.variables = [...fn.variables.filter(item => item.name !== 'DATABASE_URL'), ...(databaseId ? [{ name: 'DATABASE_URL', secret: true }] : [])]; }); }
 export function setDemoServerlessDomain(id: string, domain: string | null) { return mutate(id, fn => { fn.domain = domain; }); }
 export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): Promise<boolean | string> {
-  if (typeof navigator === 'undefined' || !navigator.locks?.request) {
-    return '이 브라우저에서는 여러 탭의 동시 변경을 안전하게 처리할 수 없습니다. 다른 탭을 닫고 다시 시도해 주세요.';
-  }
-
   try {
-    return await navigator.locks.request('gsmsv:demo:serverless-trigger-write', { mode: 'exclusive' }, () => Boolean(mutate(id, fn => {
+    return await transactDemoServerlessState(seed, normalizeState, state => {
+      const fn = state.functions.find(item => item.id === id);
+      if (!fn) return false;
       if (trigger.type === 'HTTP') {
         if (fn.triggers.some(item => item.type === 'HTTP')) return false;
         if (!['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(trigger.schedule)) return false;
@@ -138,17 +142,21 @@ export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoSer
         if (!validateCronExpression(trigger.schedule).valid) return false;
       }
       fn.triggers.push({ ...trigger, id: crypto.randomUUID(), enabled: true });
-    })));
-  } catch {
+      return true;
+    }).then(({ result }) => result ?? false);
+  } catch (error) {
+    if (error instanceof DemoServerlessStorageError) {
+      return 'Trigger를 저장하지 못했습니다. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.';
+    }
     return '최신 Trigger 상태와 달라 추가하지 못했습니다. 취소한 뒤 목록을 확인하고 다시 시도해 주세요.';
   }
 }
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
 export function regenerateDemoServerlessUrl(id: string) { return mutate(id, fn => { fn.publicUrl = `https://${crypto.randomUUID().slice(0, 12)}.example.com`; }); }
-export function executeDemoServerlessTest(id: string, payload: string): DemoServerlessTestResult | undefined {
+export function executeDemoServerlessTest(id: string, payload: string): Promise<DemoServerlessTestResult | undefined> {
   let output: DemoServerlessTestResult | undefined;
-  mutate(id, (fn, state) => {
+  return mutate(id, (fn, state) => {
     const body = JSON.parse(payload) as { name?: string };
     const name = typeof body.name === 'string' ? body.name : '지민';
     const greeting = fn.variables.find(item => item.name === 'GREETING')?.value ?? '안녕하세요';
@@ -158,8 +166,7 @@ export function executeDemoServerlessTest(id: string, payload: string): DemoServ
     fn.testResult = output;
     state.executionsToday += 1;
     fn.runs.unshift({ id: crypto.randomUUID(), result: 'success', startedAt: timestamp, path: '수동', duration: '182ms', outputLines: output.logs.split('\n') });
-  });
-  return output;
+  }).then(() => output);
 }
 export function deleteDemoServerlessRuns(id: string) { return mutate(id, fn => { fn.runs = []; }); }
 export function getDemoServerlessUrl(id: string) { const fn = getDemoServerlessFunction(id); return fn?.publicUrl ?? `https://${id === 'welcome-api' ? 'q8w2n5r7t1vz' : id}.example.com`; }

@@ -401,6 +401,7 @@ export default function PersonalResourcesPage() {
         import('../../entities/serverless'),
         import('../../entities/database/demo'),
       ]);
+      await serverlessRepository.loadDemoServerlessState();
       if (signal.aborted) return;
       const homeState = demo.getDemoHomeState();
       const vmState = vmRepository.getDemoVmState();
@@ -460,7 +461,11 @@ export default function PersonalResourcesPage() {
     if (!import.meta.env.DEV || !demoMode) return;
     const refresh = () => setRetryKey(value => value + 1);
     window.addEventListener('gsmsv:demo-database-state-change', refresh);
-    return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+    window.addEventListener('gsmsv:demo-serverless-state-change', refresh);
+    return () => {
+      window.removeEventListener('gsmsv:demo-database-state-change', refresh);
+      window.removeEventListener('gsmsv:demo-serverless-state-change', refresh);
+    };
   }, [demoMode]);
 
   useEffect(() => {
