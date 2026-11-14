@@ -408,7 +408,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <DangerCopy><DangerTitle>위험 구역 · 팀 해체</DangerTitle><Muted>{demoMode
             ? '관리자가 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다. 팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴할 수 있습니다.'
             : '팀 탈퇴와 해체 요청 API가 아직 공개 계약에 없어 이 기능은 사용할 수 없습니다.'}</Muted></DangerCopy>
-          <DangerActions><Button variant="secondary" disabled title="팀 탈퇴 API가 없습니다.">팀 탈퇴</Button>{demoMode
+          <DangerActions><Button variant="secondary" disabled={!demoMode || team.my_role === 'leader' || team.my_role === null} title={team.my_role === 'leader' ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined}>팀 탈퇴</Button>{demoMode
             ? <Button variant="danger" disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
             : <Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button>}</DangerActions>
         </DangerPanel>

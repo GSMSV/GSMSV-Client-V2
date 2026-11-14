@@ -35,7 +35,7 @@ export function DemoTeamDisbandRequest({ team, onDismiss, onSave }: {
   const [confirmation, setConfirmation] = useState('');
   const [failed, setFailed] = useState(false);
   const pending = Boolean(team.demoDisbandPending);
-  const { vms, databaseCount, appCount } = getDemoDisbandResources(team.id);
+  const { vms, databaseCount, functionCount, appCount } = getDemoDisbandResources(team.id);
   return (
     <AccountDialog title={pending ? '해체 요청을 취소하시겠습니까?' : '팀 해체를 요청하시겠습니까?'}
       icon={pending ? 'history' : 'alert'}
@@ -51,7 +51,7 @@ export function DemoTeamDisbandRequest({ team, onDismiss, onSave }: {
       {!pending && <>
         <DialogCopy>{[
           ...vms.map(vm => `· ${vm.name} · ${vm.cpu} vCPU · RAM ${vm.memory} GB · SSD ${vm.disk} GB`),
-          `· Database ${databaseCount}개 · 앱 ${appCount}개`,
+          `· Database ${databaseCount}개 · 함수 ${functionCount}개 · 앱 ${appCount}개`,
           '· 관리자가 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다.',
           '· 승인 전에는 요청을 취소할 수 있습니다.',
         ].join('\n')}</DialogCopy>

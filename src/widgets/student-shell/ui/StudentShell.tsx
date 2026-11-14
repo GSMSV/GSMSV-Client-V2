@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
 import { StudentTopbar } from './StudentTopbar';
+import { getDemoProfile } from '../../../entities/profile';
+import { isDemoMode } from '../../../shared/demo';
 
 const Layout = styled.div`
   display: flex;
@@ -107,7 +109,7 @@ export function StudentShell({
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
-          profilePhotoUrl={profilePhotoUrl}
+          profilePhotoUrl={profilePhotoUrl ?? (isDemoMode() ? getDemoProfile()?.photoDataUrl : undefined)}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
           scopeDisabled={scopeDisabled}

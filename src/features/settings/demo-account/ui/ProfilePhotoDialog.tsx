@@ -73,7 +73,7 @@ export function ProfilePhotoCropDialog({ photo, onSave, onDismiss }: {
   }
 
   return (
-    <AccountDialog wide title="프로필 사진 자르기" icon="image"
+    <AccountDialog title="프로필 사진 자르기" icon="image"
       description="사진을 움직여 얼굴이 정사각형 영역 안에 들어오도록 맞춰주세요. 저장하면 상단 프로필에도 반영됩니다."
       onDismiss={onDismiss} actions={<>
         <Button variant="secondary" onClick={onDismiss}>취소</Button>
@@ -111,7 +111,7 @@ export function ProfilePhotoCropDialog({ photo, onSave, onDismiss }: {
       <Zoom>확대 · {Math.round(zoom * 100)}%
         <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={event => setZoom(event.currentTarget.valueAsNumber)} />
       </Zoom>
-      <DialogCopy>{'· 자르기 영역 · 정사각형 1:1\n· JPG · PNG · WebP / 최대 2MB'}</DialogCopy>
+      <DialogCopy>{`· 선택한 파일 ${photo.filename} · ${photo.sizeMb} MB\n· 자르기 영역 · 정사각형 1:1\n· JPG · PNG · WebP / 최대 2MB`}</DialogCopy>
       {saveFailed && <DialogCopy role="alert">프로필 사진을 저장하지 못했습니다.</DialogCopy>}
     </AccountDialog>
   );

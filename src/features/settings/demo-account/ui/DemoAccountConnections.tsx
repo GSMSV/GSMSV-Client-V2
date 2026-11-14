@@ -70,7 +70,7 @@ export function DemoAccountConnections({ profile, onSave, onLogout }: {
         setDialog('github-conflict');
       } else if (githubOutcome === 'expired' && !tryOtherGithub) {
         setDialog('github-error');
-      } else if (onSave({ github: '@gsm-jimin' })) {
+      } else if (onSave({ github: githubOutcome === 'conflict' && tryOtherGithub ? '@gsm-jimin-alt' : '@gsm-jimin' })) {
         setDialog('github-success');
       } else {
         setDialog('github-error');

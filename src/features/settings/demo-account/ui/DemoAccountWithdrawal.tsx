@@ -18,6 +18,7 @@ export function DemoAccountWithdrawal({ email, deleted, onWithdraw, onLogin }: {
   const [automaticHandoff, setAutomaticHandoff] = useState(false);
   const [items, setItems] = useState('');
   const [failed, setFailed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const dismiss = () => setStep(null);
 
   function start(allowAutomaticHandoff = false) {
@@ -64,15 +65,18 @@ export function DemoAccountWithdrawal({ email, deleted, onWithdraw, onLogin }: {
         description="되돌릴 수 없습니다. 아래 개인 자원이 모두 삭제되고 팀 자원은 팀에 남습니다."
         items={items} fieldLabel="확인하려면 학교 이메일을 입력하세요"
         confirmationName={email} value={confirmation} onValueChange={setConfirmation}
-        onCancel={dismiss} onConfirm={() => {
+        onCancel={dismiss} confirmDisabled={submitting} onConfirm={() => {
           const next = getWithdrawalStep(automaticHandoff);
           if (next.kind !== 'confirm') {
             setStep(next);
-          } else if (withdrawDemoAccount(confirmation, automaticHandoff)) {
-            dismiss();
-            onWithdraw();
           } else {
-            setFailed(true);
+            setSubmitting(true);
+            void withdrawDemoAccount(confirmation, automaticHandoff).then(success => {
+              if (success) {
+                dismiss();
+                onWithdraw();
+              } else setFailed(true);
+            }).catch(() => setFailed(true)).finally(() => setSubmitting(false));
           }
         }}
         caption="다시 로그인하면 새 계정으로 시작합니다."

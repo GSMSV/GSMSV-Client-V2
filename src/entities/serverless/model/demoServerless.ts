@@ -11,7 +11,7 @@ export interface DemoServerlessRun { id: string; result: 'success' | 'failure' |
 export interface DemoServerlessTestResult { responseJson: string; statusLabel: string; statusMessage: string; pathLabel: string; pathCaption: string; durationLabel: string; durationCaption: string; logs: string; timestampLabel: string; }
 export interface DemoServerlessFunction {
   id: string; name: string; description: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256;
-  code: string; active: boolean; expiresAt: string; publicUrl?: string; domain?: string | null; databaseId?: string; variables: DemoServerlessVariable[]; triggers: DemoServerlessTrigger[];
+  code: string; active: boolean; expiresAt: string; publicUrl?: string; domain?: string | null; databaseId?: string; teamId?: string; variables: DemoServerlessVariable[]; triggers: DemoServerlessTrigger[];
   versions: DemoServerlessVersion[]; runs: DemoServerlessRun[]; testResult: DemoServerlessTestResult | null;
 }
 export interface DemoServerlessState { functions: DemoServerlessFunction[]; dailyLimit: number; executionsToday: number; sequence: number; }
@@ -46,6 +46,11 @@ const seed: DemoServerlessState = {
       id: 'health-check', name: 'health-check', description: '개발 중인 서비스의 응답 상태를 확인합니다.', runtime: 'python', timeoutSeconds: 30, memoryMb: 128,
       code: pyCode, active: false, expiresAt: '2026. 10. 02.', variables: [],
       triggers: [{ id: 'health-http', type: 'HTTP', schedule: 'GET', enabled: false }], versions: [], runs: [], testResult: null,
+    },
+    {
+      id: 'connect-api', name: 'connect-api', description: 'GSM Connect 팀 API', runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128,
+      code: jsCode, active: true, expiresAt: '2026. 10. 06.', teamId: 'demo-team', variables: [],
+      triggers: [{ id: 'connect-http', type: 'HTTP', schedule: 'POST', enabled: true }], versions: [], runs: [], testResult: null,
     },
   ],
 };
@@ -85,14 +90,21 @@ export async function loadDemoServerlessState(): Promise<DemoServerlessState> {
 
 export async function clearDemoServerlessFunctions(): Promise<void> {
   await transactDemoServerlessState(seed, normalizeState, state => {
-    state.functions = [];
+    state.functions = state.functions.filter(fn => Boolean(fn.teamId));
     state.executionsToday = 0;
   });
 }
 
-export function getDemoServerlessFunctions(): DemoServerlessFunction[] { return getDemoServerlessState().functions; }
+export async function removeDemoServerlessFunctionsByTeam(teamId: string): Promise<void> {
+  await transactDemoServerlessState(seed, normalizeState, state => {
+    state.functions = state.functions.filter(fn => fn.teamId !== teamId);
+  });
+}
+
+export function getDemoServerlessFunctions(): DemoServerlessFunction[] { return getDemoServerlessState().functions.filter(fn => !fn.teamId); }
+export function getDemoServerlessTeamFunctionCount(teamId: string): number { return getDemoServerlessState().functions.filter(fn => fn.teamId === teamId).length; }
 export function getDemoServerlessFunction(id: string): DemoServerlessFunction | undefined { return getDemoServerlessFunctions().find(fn => fn.id === id); }
-export function getDemoServerlessQuota() { const state = getDemoServerlessState(); return { count: { used: state.functions.length, limit: 3 }, daily_executions: { used: state.executionsToday, limit: state.dailyLimit } }; }
+export function getDemoServerlessQuota() { const state = getDemoServerlessState(); return { count: { used: state.functions.filter(fn => !fn.teamId).length, limit: 3 }, daily_executions: { used: state.executionsToday, limit: state.dailyLimit } }; }
 
 export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger[]): DemoServerlessTrigger['type'] | undefined {
   if (!triggers.some(trigger => trigger.type === 'HTTP')) return 'HTTP';

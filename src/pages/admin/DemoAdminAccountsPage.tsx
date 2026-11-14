@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getDemoProfile, updateDemoProfile } from '../../entities/profile';
 import { AccountDialog, DialogCopy } from '../../features/settings/demo-account';
-import { getDemoAccounts, saveDemoAccounts, type DemoAccount } from '../../entities/demo-workflows';
+import { getDemoAccountRecords, getDemoAccounts, saveDemoAccounts, type DemoAccount } from '../../entities/demo-workflows';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Card, CardHeader, Heading, Hint, Muted, PageStack, SectionTitle, Table, TableWrap, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
@@ -28,7 +28,7 @@ export default function DemoAdminAccountsPage() {
     const profile = getDemoProfile();
     const saved = profile?.email === account.email
       ? Boolean(updateDemoProfile(provider === 'github' ? { github: null } : { discordConnected: false }))
-      : saveDemoAccounts(getDemoAccounts().map(item => item.id === account.id ? { ...item, [provider]: '연결 안 됨' } : item));
+      : saveDemoAccounts(getDemoAccountRecords().map(item => item.id === account.id ? { ...item, [provider]: '연결 안 됨' } : item));
     if (!saved) {
       setFailed(true);
       return;

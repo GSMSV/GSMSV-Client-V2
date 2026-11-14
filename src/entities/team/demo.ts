@@ -1,4 +1,5 @@
 import type { TeamDetail, TeamSummary } from './model/types';
+import { getSessionUser } from '../session';
 import { isDemoMode, readDemoState, writeDemoState } from '../../shared/demo';
 
 export interface DemoTeamInvitation {
@@ -106,7 +107,11 @@ function resolveDemoTeamId(teamId: string) {
 export function getDemoTeam(teamId: string): DemoTeamDetail | undefined {
   if (!isDemoMode()) return undefined;
   const resolvedTeamId = resolveDemoTeamId(teamId);
-  return getState().teams.find(team => team.id === resolvedTeamId);
+  const team = getState().teams.find(item => item.id === resolvedTeamId);
+  // A former member must not regain access through a stale direct URL. Admin
+  // workflows still need to inspect teams for approved disband requests.
+  if (team?.my_role === null && getSessionUser()?.role !== 'admin') return undefined;
+  return team;
 }
 
 export function createDemoTeam(name: string): TeamSummary {
@@ -220,10 +225,11 @@ export function leaveDemoTeamsForWithdrawal(): boolean {
       return {
         ...team,
         my_role: null,
+        permissions: { invite_member: false, remove_member: false, grant_devops: false, transfer_leader: false, disband_team: false, leave_team: false, resubmit_team: false },
         members: members.map(member => member.member_id === successor.member_id ? { ...member, role: 'leader' as const } : member),
       };
     }
-    return { ...team, my_role: null, members };
+    return { ...team, my_role: null, members, permissions: { invite_member: false, remove_member: false, grant_devops: false, transfer_leader: false, disband_team: false, leave_team: false, resubmit_team: false } };
   });
 
   return saveState({ ...state, teams });

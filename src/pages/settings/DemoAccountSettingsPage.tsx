@@ -195,13 +195,13 @@ export default function DemoAccountSettingsPage() {
             </Fields>
           </Panel>
         </Columns>
-        <Banner title="계정 정보는 DataGSM에서 수정돼요" description="이름·학년·반·번호·전공·학교 이메일은 DataGSM에서 변경할 수 있습니다." tone="neutral" icon={<Octicon name="info" size={20} />} />
+        <Banner title="계정 정보는 DataGSM에서 수정됩니다" description="변경한 학생 정보는 다음 로그인 때 반영됩니다. 이 화면에서는 프로필 사진을 관리할 수 있습니다." tone="neutral" icon={<Octicon name="info" size={20} />} />
         <Panel aria-labelledby="team-feature-title">
           <FeatureIcon aria-hidden="true"><Octicon name="organization" size={20} /></FeatureIcon>
           <FeatureTitle id="team-feature-title">팀으로 함께 관리하기</FeatureTitle>
           <ActionRow><Description>팀을 만들고 친구를 초대하면 팀 VM을 함께 관리할 수 있습니다. 팀 VM은 팀 할당량을 사용합니다.<br />팀은 관리자 승인 후 VM을 만들 수 있습니다.</Description><Button icon={<Octicon name="arrow-right" />} onClick={() => navigate('/teams/new')}>팀 만들기</Button></ActionRow>
         </Panel>
-        <NotificationSettingsPanel showChannelBanner onUnsavedInputChange={setNotificationUnsaved} demoDiscordConnected={profile.discordConnected} />
+        <NotificationSettingsPanel onUnsavedInputChange={setNotificationUnsaved} demoDiscordConnected={profile.discordConnected} />
         <Panel aria-labelledby="linked-accounts-title">
           <PanelTitle id="linked-accounts-title">연결된 계정·기기</PanelTitle>
           <DemoAccountConnections profile={profile} onSave={save} onLogout={goToLogin} />

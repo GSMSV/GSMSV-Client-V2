@@ -13,6 +13,7 @@ export default function AdminTeamApprovalsDemoPage() {
   const [confirmDisband, setConfirmDisband] = useState<DemoTeamDetail | null>(null);
   const disbandResources = confirmDisband ? getDemoDisbandResources(confirmDisband.id) : null;
   const [disbandFailed, setDisbandFailed] = useState(false);
+  const [disbandBusy, setDisbandBusy] = useState(false);
   const [requests, setRequests] = useState(() => getDemoTeamRequests());
   const [selectedId, setSelectedId] = useState(() => getDemoTeamRequests().find((item) => item.status === '검토 중')?.id ?? getDemoTeamRequests()[0]?.id ?? '');
   const [filter, setFilter] = useState<'pending' | 'done'>('pending');
@@ -70,14 +71,17 @@ export default function AdminTeamApprovalsDemoPage() {
       </CardHeader>)}
     </Card>}
     {confirmDisband && disbandResources && <AccountDialog title={`${confirmDisband.name} 팀 해체를 승인하시겠습니까?`} icon="alert"
-      description={`· 팀원 ${confirmDisband.members.length}명 · VM ${disbandResources.vms.length}개 · Database ${disbandResources.databaseCount}개 · 앱 ${disbandResources.appCount}개\n· 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다.\n· 팀원 전원에게 알림이 갑니다.`}
+      description={`· 팀원 ${confirmDisband.members.length}명 · VM ${disbandResources.vms.length}개 · Database ${disbandResources.databaseCount}개 · 함수 ${disbandResources.functionCount}개 · 앱 ${disbandResources.appCount}개\n· 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다.\n· 팀원 전원에게 알림이 갑니다.`}
       onDismiss={() => setConfirmDisband(null)} actions={<>
         <Button variant="secondary" onClick={() => setConfirmDisband(null)}>취소</Button>
-        <Button variant="danger" onClick={() => {
-          if (!approveDemoTeamDisband(confirmDisband.id)) { setDisbandFailed(true); return; }
-          setConfirmDisband(null);
-          setDisbandRequests(listDemoDisbandRequests());
-        }}>해체 승인</Button>
+        <Button variant="danger" disabled={disbandBusy} onClick={() => {
+          setDisbandBusy(true);
+          void approveDemoTeamDisband(confirmDisband.id).then(success => {
+            if (!success) { setDisbandFailed(true); return; }
+            setConfirmDisband(null);
+            setDisbandRequests(listDemoDisbandRequests());
+          }).finally(() => setDisbandBusy(false));
+        }}>{disbandBusy ? '처리 중…' : '해체 승인'}</Button>
       </>}>{disbandFailed && <DialogCopy role="alert">해체를 승인하지 못했습니다.</DialogCopy>}</AccountDialog>}
     <Stats><Stat>팀 룸 사용<strong>38%</strong><Muted>vCPU 36 / 96 할당</Muted></Stat><Stat>승인된 팀<strong>9개</strong><Muted>해체 요청 {disbandRequests.length}건</Muted></Stat><Stat>할당량 늘리기 요청<strong>2건</strong><Muted>확인이 필요합니다</Muted></Stat></Stats>
     <Muted>할당량 등급 기준 · 소형 4/8/60 · 팀원 5명 이하 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</Muted>

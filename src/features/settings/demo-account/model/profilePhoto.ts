@@ -13,7 +13,7 @@ export type PhotoRejection = {
   sizeMb: string;
 };
 
-export type PhotoSelection = { image: HTMLImageElement; url: string } | { error: PhotoRejection };
+export type PhotoSelection = { image: HTMLImageElement; url: string; filename: string; sizeMb: string } | { error: PhotoRejection };
 export type CropPosition = { x: number; y: number };
 
 function readPhoto(file: File, mimeType: string): Promise<string> {
@@ -48,7 +48,7 @@ export async function selectPhoto(file: File): Promise<PhotoSelection> {
       const image = new Image();
       image.src = url;
       await image.decode();
-      return { image, url };
+      return { image, url, filename: file.name, sizeMb: details.sizeMb };
     }
   } catch {
     // A matching header still needs to decode to a valid image.

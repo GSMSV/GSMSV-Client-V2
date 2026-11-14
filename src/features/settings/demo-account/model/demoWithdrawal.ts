@@ -3,7 +3,7 @@ import { listDemoDatabases, removeDemoDatabasesByOwner } from '../../../../entit
 import { getDemoAccounts } from '../../../../entities/demo-workflows';
 import { getDemoHomeState, saveDemoHomeState } from '../../../../entities/home';
 import { getDemoProfile, updateDemoProfile } from '../../../../entities/profile';
-import { getDemoServerlessState, saveDemoServerlessState } from '../../../../entities/serverless';
+import { clearDemoServerlessFunctions, getDemoServerlessFunctions } from '../../../../entities/serverless';
 import { getSessionUser } from '../../../../entities/session';
 import { leaveDemoTeamsForWithdrawal, listDemoTeams } from '../../../../entities/team/demo';
 import type { TeamSummary } from '../../../../entities/team';
@@ -29,7 +29,7 @@ export function getWithdrawalStep(allowAutomaticHandoff = false): WithdrawalStep
 export function getWithdrawalItems() {
   const vms = getDemoVmState().vms.filter(vm => vm.owner === 'personal').map(vm => vm.name);
   const databases = listDemoDatabases().map(database => database.name);
-  const fnCount = getDemoServerlessState().functions.length;
+  const fnCount = getDemoServerlessFunctions().length;
   const apps = getDemoApps().filter(app => app.owner?.type === 'user' && app.owner.id === 'demo-student').map(app => app.name);
   return [
     `· VM ${vms.length}개${vms.length ? ` · ${vms.join(', ')}` : ''}`,
@@ -39,26 +39,30 @@ export function getWithdrawalItems() {
   ].join('\n');
 }
 
-export function withdrawDemoAccount(email: string, allowAutomaticHandoff: boolean): boolean {
+export async function withdrawDemoAccount(email: string, allowAutomaticHandoff: boolean): Promise<boolean> {
   const profile = getDemoProfile();
   if (!profile || profile.accountDeleted || email !== profile.email || getWithdrawalStep(allowAutomaticHandoff).kind !== 'confirm') {
     return false;
   }
 
   const vmState = getDemoVmState();
-  const serverless = getDemoServerlessState();
   const apps = getDemoApps();
   const home = getDemoHomeState();
   // Apply from the account's local repositories. Replacement writes are idempotent on retry.
   if (!saveDemoVmState({
     ...vmState,
     vms: vmState.vms.filter(vm => vm.owner === 'team'),
-  }) || !saveDemoServerlessState({ ...serverless, functions: [], executionsToday: 0 })
-    || !saveDemoApps(apps.filter(app => app.owner?.type !== 'user' || app.owner.id !== 'demo-student'))
-    || !removeDemoDatabasesByOwner('user', 'demo-student')
+  }) || !saveDemoApps(apps.filter(app => app.owner?.type !== 'user' || app.owner.id !== 'demo-student'))
+    || !removeDemoDatabasesByOwner('user', 'demo-student', ['quota-locked-db'])
     || (home && !saveDemoHomeState({ ...home, firstVisit: true, functions: [] }))
     || !writeDemoState('notifications', null)
     || !leaveDemoTeamsForWithdrawal()) return false;
+
+  try {
+    await clearDemoServerlessFunctions();
+  } catch {
+    return false;
+  }
 
   return Boolean(updateDemoProfile({
     accountDeleted: true,

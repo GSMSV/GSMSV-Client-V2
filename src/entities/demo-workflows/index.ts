@@ -1,5 +1,6 @@
 export {
   getDemoAccounts,
+  getDemoAccountRecords,
   getDemoAdminVms,
   getDemoCliRequest,
   getDemoDbRequests,

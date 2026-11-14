@@ -138,7 +138,7 @@ export function saveDemoDbRequests(items: DedicatedDatabaseRequest[]): boolean {
 export function getDemoTeamRequests(): TeamRequest[] { return localState('admin.teamRequests', demoTeamRequests); }
 export function saveDemoTeamRequests(items: TeamRequest[]): boolean { return saveState('admin.teamRequests', items); }
 export function getDemoAccounts(): DemoAccount[] {
-  const accounts = localState('admin.accounts', demoAccounts);
+  const accounts = getDemoAccountRecords();
   const profile = getDemoProfile();
   if (!profile) return accounts;
 
@@ -152,6 +152,7 @@ export function getDemoAccounts(): DemoAccount[] {
     }];
   });
 }
+export function getDemoAccountRecords(): DemoAccount[] { return localState('admin.accounts', demoAccounts); }
 export function saveDemoAccounts(items: DemoAccount[]): boolean { return saveState('admin.accounts', items); }
 export function getDemoAdminVms(): DemoAdminVm[] { return localState('admin.vms', demoAdminVms); }
 export function saveDemoAdminVms(items: DemoAdminVm[]): boolean { return saveState('admin.vms', items); }

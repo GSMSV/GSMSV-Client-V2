@@ -157,6 +157,7 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
     const original = settings.items[index];
     return !original || original.email !== item.email || original.discord !== item.discord;
   }));
+  const discordConnected = demoDiscordConnected ?? settings?.channels.discord.connected ?? false;
 
   useEffect(() => {
     onUnsavedInputChange?.(hasChanges);
@@ -221,7 +222,7 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
                   {item.locked && <LockedHint>{demoDiscordConnected === undefined ? '필수 알림 · 해제할 수 없습니다' : '자원이 삭제되기 전에 알리기 위해 끌 수 없습니다.'}</LockedHint>}
                 </RowLabel>
                 <ToggleCell><ChannelSwitch label={`${item.group} 이메일 수신`} checked={item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
-                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={item.locked && demoDiscordConnected === true ? true : item.discord} disabled={disabled || item.locked || saving || demoDiscordConnected === false} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
+                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={discordConnected && (item.locked || item.discord)} disabled={disabled || item.locked || saving || !discordConnected} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
               </Row>)}
               {draft.length === 0 && <GroupHint>설정할 알림 그룹이 없습니다.</GroupHint>}
             </Rows>
