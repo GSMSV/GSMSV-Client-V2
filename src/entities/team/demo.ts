@@ -11,6 +11,16 @@ export interface DemoTeamInvitation {
   teamId?: string;
 }
 
+export interface DemoTeamQuotaRequest {
+  id: string;
+  teamId: string;
+  teamName: string;
+  tier: '소형' | '중형' | '대형';
+  reason: string;
+  requestedAt: string;
+  status: '검토 중';
+}
+
 export interface DemoTeamDetail extends TeamDetail {
   demoDisbandPending?: boolean;
 }
@@ -19,6 +29,7 @@ interface DemoTeamState {
   schemaVersion?: number;
   teams: DemoTeamDetail[];
   invitations: DemoTeamInvitation[];
+  quotaRequests?: DemoTeamQuotaRequest[];
   nextTeamNumber: number;
 }
 
@@ -39,6 +50,7 @@ const seedState: DemoTeamState = {
     permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
   }],
   invitations: [{ id: 'demo-invite-token', token: 'demo-invite-token', teamId: 'demo-team', email: 'student@example.com', sent_at: '2026-11-12T09:00:00.000Z', expires_at: '2026-11-19T09:00:00.000Z' }],
+  quotaRequests: [],
   nextTeamNumber: 1,
 };
 
@@ -47,7 +59,7 @@ function getState(): DemoTeamState {
   if (!state || typeof state !== 'object') return seedState;
   const candidate = state as Partial<DemoTeamState>;
   if (!Array.isArray(candidate.teams) || !Array.isArray(candidate.invitations) || !Number.isInteger(candidate.nextTeamNumber)) return seedState;
-  if ((candidate.schemaVersion ?? 0) >= 1) return candidate as DemoTeamState;
+  if ((candidate.schemaVersion ?? 0) >= 1) return { ...candidate, quotaRequests: candidate.quotaRequests ?? [] } as DemoTeamState;
 
   const previousSeedMembers = [
     { member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader' },
@@ -239,6 +251,25 @@ export function setDemoDisbandRequest(teamId: string, pending: boolean): boolean
   const id = resolveDemoTeamId(teamId);
   if (!state.teams.some(team => team.id === id && team.my_role === 'leader' && team.permissions.disband_team)) return false;
   return saveState({ ...state, teams: state.teams.map(team => team.id === id ? { ...team, demoDisbandPending: pending } : team) });
+}
+
+export function listDemoTeamQuotaRequests(teamId: string): DemoTeamQuotaRequest[] {
+  return isDemoMode() ? (getState().quotaRequests ?? []).filter(request => request.teamId === resolveDemoTeamId(teamId)) : [];
+}
+
+export function createDemoTeamQuotaRequest(teamId: string, tier: DemoTeamQuotaRequest['tier'], reason: string): DemoTeamQuotaRequest | undefined {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  const team = state.teams.find(item => item.id === id);
+  const trimmedReason = reason.trim();
+  if (!isDemoMode() || !team || team.status !== 'approved' ||
+    (team.my_role !== 'leader' && team.my_role !== 'devops') || !trimmedReason || trimmedReason.length > 500) return undefined;
+  const request: DemoTeamQuotaRequest = {
+    id: crypto.randomUUID(), teamId: id, teamName: team.name, tier,
+    reason: trimmedReason, requestedAt: new Date().toISOString(), status: '검토 중',
+  };
+  if (!saveState({ ...state, quotaRequests: [...(state.quotaRequests ?? []), request] })) return undefined;
+  return request;
 }
 
 export function approveDemoDisbandRequest(teamId: string): boolean {
