@@ -5,6 +5,7 @@ import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
 import { StudentTopbar } from './StudentTopbar';
 import { getDemoProfile } from '../../../entities/profile';
 import { isDemoMode } from '../../../shared/demo';
+import { UnsavedChangesDialog } from '../../../shared/ui/feedback';
 
 const Layout = styled.div`
   display: flex;
@@ -76,19 +77,29 @@ export function StudentShell({
 }: StudentShellProps) {
   const navigate = useNavigate();
   const [logoutPending, setLogoutPending] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+
+  const requestNavigation = (action: () => void) => {
+    if (logoutPending) return;
+    if (hasUnsavedInput) {
+      setPendingNavigation(() => action);
+      return;
+    }
+    action();
+  };
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'serverless') {
-      void navigate('/serverless');
-      return;
-    }
-    if (item !== 'docs') {
+    requestNavigation(() => {
+      if (item === 'serverless') {
+        void navigate('/serverless');
+        return;
+      }
+      if (item === 'docs') {
+        void navigate('/help');
+        return;
+      }
       onNavigate(item);
-      return;
-    }
-    if (logoutPending) return;
-    if (hasUnsavedInput && !window.confirm('저장하지 않은 내용이 있습니다. 저장하지 않고 Docs로 이동할까요?')) return;
-    void navigate('/help');
+    });
   };
 
   const handleLogoutPendingChange = (pending: boolean) => {
@@ -101,8 +112,8 @@ export function StudentShell({
       <StudentSidebar
         activeItem={activeItem}
         onNavigate={handleNavigate}
-        onCreateTeam={onCreateTeam}
-        onOpenStatus={onOpenStatus}
+        onCreateTeam={() => requestNavigation(onCreateTeam)}
+        onOpenStatus={() => requestNavigation(onOpenStatus)}
         disabledItems={disabledNavigationItems}
         actionsAtBottom={sidebarActionsAtBottom}
       />
@@ -119,13 +130,23 @@ export function StudentShell({
           onSelectScope={onSelectScope}
           onSearch={onSearch}
           onOpenNotifications={onOpenNotifications}
-          hasUnsavedInput={hasUnsavedInput}
+          onRequestNavigation={requestNavigation}
           onLogoutPendingChange={handleLogoutPendingChange}
           onLogoutRequest={onLogoutRequest}
           showBottomBorder={showTopbarDivider}
         />
         <PageContent>{children}</PageContent>
       </MainColumn>
+      {pendingNavigation && (
+        <UnsavedChangesDialog
+          onLeave={() => {
+            const action = pendingNavigation;
+            setPendingNavigation(null);
+            action();
+          }}
+          onStay={() => setPendingNavigation(null)}
+        />
+      )}
     </Layout>
   );
 }
