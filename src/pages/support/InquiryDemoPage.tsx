@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { getDemoInquiries, saveDemoInquiries, type Inquiry } from '../../entities/demo-workflows';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
@@ -6,9 +7,15 @@ import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Breadcrumb, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
 export default function InquiryDemoPage() {
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState(() => getDemoInquiries());
   const [vmName, setVmName] = useState('portfolio-api');
-  const [content, setContent] = useState('SSH 기본 포트를 복원했지만 연결이 되지 않습니다. VM은 실행 중이며 터미널에서 연결 시간 초과가 발생합니다.');
+  const article = searchParams.get('article')?.trim().slice(0, 120);
+  const rawArticleUrl = searchParams.get('articleUrl');
+  const articleUrl = rawArticleUrl?.startsWith('/docs#') && !rawArticleUrl.startsWith('//') ? rawArticleUrl : undefined;
+  const [content, setContent] = useState(() => article
+    ? `문서 "${article}"을 확인했지만 해결되지 않았습니다.\n관련 문서: ${articleUrl ?? '/docs'}\n\n문제가 발생한 상황과 시도한 방법을 입력해 주세요.`
+    : 'SSH 기본 포트를 복원했지만 연결이 되지 않습니다. VM은 실행 중이며 터미널에서 연결 시간 초과가 발생합니다.');
   const [notice, setNotice] = useState('');
   const myItems = items.filter((item) => item.isMine);
 
@@ -16,18 +23,18 @@ export default function InquiryDemoPage() {
     if (!isDemoMode()) return;
     const text = content.trim();
     if (!text || text.length > 500) { setNotice('문의 내용은 1~500자로 입력해 주세요.'); return; }
-    const next: Inquiry = { id: `inquiry-${Date.now()}`, title: text.length > 48 ? `${text.slice(0, 48)}…` : text, author: '김지민', studentId: '2107', createdAt: '2026.11.14 12:00', vmName, content: text, reply: '', status: '대기 중', isMine: true };
+    const next: Inquiry = { id: `inquiry-${crypto.randomUUID()}`, title: text.length > 48 ? `${text.slice(0, 48)}…` : text, author: '김지민', studentId: '2107', createdAt: '2026.11.14 12:00', vmName, content: text, ...(article ? { source: { title: article, ...(articleUrl ? { url: articleUrl } : {}) } } : {}), reply: '', status: '대기 중', isMine: true };
     const updated = [next, ...items];
+    if (!saveDemoInquiries(updated)) { setNotice('질문을 등록하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
-    saveDemoInquiries(updated);
     setNotice('질문을 등록했습니다. 관리자가 답변하면 알림으로 안내해 드립니다.');
     setContent('');
   }
 
   function remove(id: string) {
     const updated = items.filter((item) => item.id !== id);
+    if (!saveDemoInquiries(updated)) { setNotice('질문을 삭제하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
-    saveDemoInquiries(updated);
     setNotice('질문을 삭제했습니다.');
   }
 

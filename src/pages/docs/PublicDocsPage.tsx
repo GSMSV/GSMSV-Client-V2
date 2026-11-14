@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
 import { Button } from '../../shared/ui/controls';
@@ -180,6 +181,7 @@ const sections = [
 ];
 
 export default function PublicDocsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
   const [activeSection, setActiveSection] = useState(() => window.location.hash.slice(1) || 'overview');
@@ -262,9 +264,14 @@ export default function PublicDocsPage() {
               <Card id="feedback">
                 <FeedbackHead><CardTitle>도움이 됐습니까?</CardTitle><FeedbackButtons>
                   <Button variant="secondary" aria-pressed={feedback === 'yes'} onClick={() => setFeedback('yes')} icon={<Octicon name="check" size={16} />}>예</Button>
-                  <Button variant="secondary" aria-pressed={feedback === 'no'} onClick={() => setFeedback('no')} icon={<Octicon name="x" size={16} />}>아니요</Button>
+                  <Button variant="secondary" aria-pressed={feedback === 'no'} onClick={() => {
+                    setFeedback('no');
+                    if (!import.meta.env.DEV) return;
+                    const context = new URLSearchParams({ article: 'VM 사용 기간과 연장', articleUrl: '/docs#expiration' });
+                    navigate(`/support/inquiries?demo=1&${context.toString()}`);
+                  }} icon={<Octicon name="x" size={16} />}>아니요</Button>
                 </FeedbackButtons></FeedbackHead>
-                <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : feedback === 'no' ? '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.'}</FeedbackHint>
+                <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : feedback === 'no' ? (import.meta.env.DEV ? '문의 작성으로 이동합니다.' : '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.') : (import.meta.env.DEV ? '「아니요」를 누르면 이 문서와 관련한 문의를 작성할 수 있습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.')}</FeedbackHint>
               </Card>
             </MobileArticle>
             <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
