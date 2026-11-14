@@ -627,11 +627,13 @@ export default function AdminInfrastructurePage() {
           {navItems.map((item, index) => {
             const href = index === 0 ? '/admin/infra'
               : index === 1 ? (import.meta.env.DEV && isDemoMode() ? '/admin/team-approvals' : undefined)
-                : index === 2 ? (import.meta.env.DEV && isDemoMode() ? '/admin/vms/demo-vm-1' : '/admin/vms')
+                : index === 2 ? '/admin/vms'
                   : index === 3 ? (import.meta.env.DEV && isDemoMode() ? '/admin/inquiries' : undefined)
                     : index === 4 ? (import.meta.env.DEV && isDemoMode() ? '/admin/accounts' : undefined)
                       : undefined;
-            const active = href ? Boolean(matchPath(href, location.pathname)) : false;
+            const active = index === 2
+              ? Boolean(matchPath('/admin/vms', location.pathname) || matchPath('/admin/vms/:vmId', location.pathname))
+              : href ? Boolean(matchPath(href, location.pathname)) : false;
             return (
               <NavigationItem
                 key={item.label}
