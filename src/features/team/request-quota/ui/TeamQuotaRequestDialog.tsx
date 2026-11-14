@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
-import { Button, SelectField, TextField } from '../../../../shared/ui/controls';
+import { Button, SelectField, TextareaField } from '../../../../shared/ui/controls';
 import { ModalSurface } from '../../../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../../../shared/ui/icons';
 
@@ -43,12 +43,6 @@ const FieldStack = styled.form`
   gap: ${({ theme }) => theme.space[16]}px;
 `;
 
-const Help = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme: { typography: { caption } } }) => `${caption.weight} ${caption.size}px/${caption.lineHeight}px ${caption.family}`}, sans-serif;
-`;
-
 const Error = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.danger};
@@ -61,8 +55,7 @@ const tiers = [
   { value: '대형', label: '대형 · vCPU 16 · RAM 32GB · SSD 240GB' },
 ];
 
-export function TeamQuotaRequestDialog({ teamName, onDismiss, onSubmit }: {
-  teamName: string;
+export function TeamQuotaRequestDialog({ onDismiss, onSubmit }: {
   onDismiss: () => void;
   onSubmit: (tier: '소형' | '중형' | '대형', reason: string) => boolean | Promise<boolean>;
 }) {
@@ -92,13 +85,12 @@ export function TeamQuotaRequestDialog({ teamName, onDismiss, onSubmit }: {
   return <ModalSurface labelledBy={titleId} onDismiss={onDismiss}>
     <Panel>
       <Header><Octicon name="graph" size={24} aria-hidden="true" /><Title id={titleId}>할당량 늘리기 요청</Title></Header>
-      <Copy>관리자가 승인하면 {teamName} 팀원 전원에게 알립니다.</Copy>
+      <Copy>· 관리자가 승인하면 팀원 전원에게 알립니다.</Copy>
       <FieldStack onSubmit={submit}>
         <SelectField label="요청 등급" value={tier} options={tiers} onChange={value => {
           if (value === '소형' || value === '중형' || value === '대형') setTier(value);
         }} disabled={busy} />
-        <TextField label="사유" value={reason} onChange={event => { setReason(event.currentTarget.value); setError(''); }} placeholder="DB 서버를 분리해 상시 운영하려고 합니다." maxLength={500} disabled={busy} />
-        <Help>요청할 자원 등급과 필요한 이유를 입력해 주세요.</Help>
+        <TextareaField label="사유" value={reason} onChange={event => { setReason(event.currentTarget.value); setError(''); }} placeholder="DB 서버를 분리해 상시 운영하려고 합니다." maxLength={500} disabled={busy} />
         {error && <Error role="alert">{error}</Error>}
         <Actions>
           <Button type="button" variant="secondary" onClick={onDismiss} disabled={busy}>취소</Button>

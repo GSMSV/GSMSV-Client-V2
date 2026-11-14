@@ -449,7 +449,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
             onSave={() => { setShowDisband(false); refresh(); }} />
         </Suspense>}
-        {demoMode && showQuotaRequest && <TeamQuotaRequestDialog teamName={team.name}
+        {demoMode && showQuotaRequest && <TeamQuotaRequestDialog
           onDismiss={() => setShowQuotaRequest(false)} onSubmit={submitQuotaRequest} />}
         {demoMode && showLeave && LeaveDemoTeam && <Suspense fallback={null}>
           <LeaveDemoTeam team={team} onDismiss={() => setShowLeave(false)}
