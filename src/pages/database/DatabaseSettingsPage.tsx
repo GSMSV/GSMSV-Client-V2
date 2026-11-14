@@ -146,6 +146,15 @@ export default function DatabaseSettingsPage(){
     return()=>controller.abort();
   },[]);
   useEffect(()=>{
+    if(!(import.meta.env.DEV&&isDemoMode())||deleteOperation?.operation.status!=='queued')return;
+    const timer=window.setTimeout(()=>{
+      setDeleteOperation(current=>current?{...current,operation:{...current.operation,status:'completed'}}:current);
+      const current=detail.value;
+      navigate(current?databaseListPath(current):'/databases');
+    },4_000);
+    return()=>window.clearTimeout(timer);
+  },[deleteOperation,navigate,detail.value]);
+  useEffect(()=>{
     if(!showRotationDialog&&!rotationResult&&!showDeleteDialog)return;
     const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!rotating&&!deleting){setShowRotationDialog(false);setRotationResult(null);setShowDeleteDialog(false);}};
     window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);
