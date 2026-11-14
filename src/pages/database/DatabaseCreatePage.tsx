@@ -361,14 +361,22 @@ export default function DatabaseCreatePage() {
 
     setSubmitting(true);
     if (import.meta.env.DEV && isDemoMode()) {
+      let createdGrn: string;
       try {
         const { createDemoDatabase, getDemoDatabaseCredentials } = await import('../../entities/database/demo');
         const owner = teamId ? { id: teamId, name: team.value?.name ?? 'GSM Connect' } : undefined;
         const created = createDemoDatabase(trimmedName, engine, owner);
         if (!getDemoDatabaseCredentials(created.grn)) throw new Error('DEMO_DATABASE_CREDENTIALS_UNAVAILABLE');
-        navigate(`/databases/${encodeURIComponent(created.grn)}`);
+        createdGrn = created.grn;
       } catch {
         setDialog('failure');
+        setSubmitting(false);
+        return;
+      }
+      try {
+        await navigate(`/databases/${encodeURIComponent(createdGrn)}`);
+      } catch {
+        setDialog('accepted');
       } finally {
         setSubmitting(false);
       }
