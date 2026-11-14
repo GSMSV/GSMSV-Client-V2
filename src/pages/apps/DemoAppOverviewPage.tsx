@@ -567,6 +567,11 @@ export function DemoAppSettingsPage() {
   const user = getSessionUser();
   const [notice, setNotice] = useState("");
   const [deleteName, setDeleteName] = useState<string>();
+  const [addingEnvironment, setAddingEnvironment] = useState(false);
+  const [environmentName, setEnvironmentName] = useState("preview");
+  const [environmentError, setEnvironmentError] = useState("");
+  const [editingEnvironment, setEditingEnvironment] = useState<string>();
+  const [branchDraft, setBranchDraft] = useState("");
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
   const go = (item: Exclude<StudentNavigationKey, "none">) => {
@@ -607,19 +612,28 @@ export function DemoAppSettingsPage() {
       setNotice(saveDemoApps(apps) ? "변경사항을 저장했습니다." : "변경사항을 저장하지 못했습니다.");
     }
   };
-  const addEnvironment = () => {
+  const addEnvironment = (event: React.FormEvent) => {
+    event.preventDefault();
     const apps = getDemoApps();
     const current = apps.find((item) => item.id === appId);
     if (!current || !canManage || current.environments.length >= 3) return;
-    const name = window.prompt("환경 이름", "preview");
-    if (!name?.trim() || current.environments.some(environment => environment.name === name.trim())) return;
+    const name = environmentName.trim();
+    if (!name || current.environments.some(environment => environment.name === name)) {
+      setEnvironmentError("환경 이름을 입력해 주세요. 이미 있는 이름은 쓸 수 없습니다.");
+      return;
+    }
     current.environments.push({
-      name: name.trim(),
+      name,
       branch: "develop",
       autoDeploy: true,
       waitForCi: false,
     });
-    setNotice(saveDemoApps(apps) ? "환경을 추가했습니다." : "환경을 저장하지 못했습니다.");
+    if (saveDemoApps(apps)) {
+      setNotice("환경을 추가했습니다.");
+      setAddingEnvironment(false);
+      setEnvironmentName("preview");
+      setEnvironmentError("");
+    } else setEnvironmentError("환경을 저장하지 못했습니다.");
   };
   const extendUsage = () => {
     setNotice(renewDemoApp(appId) ? "사용 기간을 연장했습니다." : "사용 기간을 연장하지 못했습니다.");
@@ -671,7 +685,12 @@ export function DemoAppSettingsPage() {
             <CardTitle>환경 · {app.environments.length} / 3</CardTitle>
             <Button
               variant="secondary"
-              onClick={addEnvironment}
+              onClick={() => {
+                setNotice("");
+                setEnvironmentName("preview");
+                setEnvironmentError("");
+                setAddingEnvironment(true);
+              }}
               disabled={!canManage || app.environments.length >= 3}
             >
               환경 추가
@@ -688,7 +707,18 @@ export function DemoAppSettingsPage() {
             {app.environments.map((env) => (
               <EnvSettingsRow key={env.name}>
                 <span>{env.name}</span>
-                <span>{env.branch}</span>
+                <span>
+                  {editingEnvironment === env.name ? (
+                    <Field>
+                      브랜치
+                      <input
+                        aria-label={`${env.name} 브랜치`}
+                        value={branchDraft}
+                        onChange={event => setBranchDraft(event.currentTarget.value)}
+                      />
+                    </Field>
+                  ) : env.branch}
+                </span>
                 <span>{env.autoDeploy ? "켜짐" : "꺼짐"}</span>
                 <span>{env.waitForCi ? "켜짐" : "꺼짐"}</span>
                 <span>
@@ -696,12 +726,27 @@ export function DemoAppSettingsPage() {
                     variant="ghost"
                     disabled={!canManage}
                     onClick={() => {
-                      const branch = window.prompt("배포 브랜치", env.branch);
-                      if (branch) update(env.name, { branch });
+                      if (editingEnvironment === env.name) {
+                        const branch = branchDraft.trim();
+                        if (!branch) {
+                          setNotice("배포 브랜치를 입력해 주세요.");
+                          return;
+                        }
+                        update(env.name, { branch });
+                        setEditingEnvironment(undefined);
+                      } else {
+                        setNotice("");
+                        setEditingEnvironment(env.name);
+                        setBranchDraft(env.branch);
+                      }
                     }}
                   >
-                    편집
+                    {editingEnvironment === env.name ? "저장" : "편집"}
                   </Button>
+                  {editingEnvironment === env.name && <Button
+                    variant="ghost"
+                    onClick={() => setEditingEnvironment(undefined)}
+                  >취소</Button>}
                 </span>
               </EnvSettingsRow>
             ))}
@@ -804,6 +849,29 @@ export function DemoAppSettingsPage() {
             이름을 입력해 확인합니다.
           </Subtitle>
         </Card>
+        {addingEnvironment && <Modal onClose={() => setAddingEnvironment(false)}>
+          <CardTitle id="demo-app-dialog-title">환경 추가</CardTitle>
+          <form onSubmit={addEnvironment}>
+            <Field>
+              환경 이름
+              <input
+                autoFocus
+                maxLength={40}
+                value={environmentName}
+                onChange={event => {
+                  setEnvironmentName(event.currentTarget.value);
+                  setEnvironmentError("");
+                }}
+              />
+            </Field>
+            <Subtitle>환경은 3개까지 만들 수 있습니다.</Subtitle>
+            {environmentError && <Subtitle role="alert">{environmentError}</Subtitle>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <Button type="button" variant="secondary" onClick={() => setAddingEnvironment(false)}>취소</Button>
+              <Button type="submit">환경 추가</Button>
+            </div>
+          </form>
+        </Modal>}
         {deleteName !== undefined && <Modal onClose={() => setDeleteName(undefined)} titleId="delete-confirm-title">
           <DeletePanel open title={`${app.name}을 삭제하시겠습니까?`}
             description="아래 항목이 모두 지워집니다. 지운 앱은 되살릴 수 없습니다."
