@@ -27,6 +27,8 @@ export interface DemoVm {
   cpu: number;
   memory: number;
   disk: number;
+  /** Demo-only quota consumption for Figma fixtures; never populated from production/API records. */
+  demoQuotaDisk?: number;
   os: 'Linux Ubuntu 22.04 LTS' | 'Ubuntu Server';
   nodeType: string;
   createdAt: string;
@@ -68,6 +70,7 @@ export interface VmDraft {
 }
 
 const stateKey = 'vm-resources';
+const personalCreateFlowStateKey = 'vm-personal-create-flow';
 const personalDraftKey = 'vm-personal-create-draft';
 const teamDraftKey = 'vm-team-create-draft';
 // The team VM Figma states use 2026-10-26 00:00 KST as their reference time.
@@ -95,7 +98,7 @@ export function canExtendDemoTeamVm(vm: Pick<DemoVm, 'expiresAt' | 'status'>): b
 }
 
 const initialVmState: DemoVmState = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   vms: [
     {
       id: 'portfolio-api',
@@ -109,6 +112,7 @@ const initialVmState: DemoVmState = {
       cpu: 2,
       memory: 4,
       disk: 20,
+      demoQuotaDisk: 10,
       os: 'Linux Ubuntu 22.04 LTS',
       nodeType: '일반 Node',
       createdAt: '2026.09.26 14:00 (KST)',
@@ -134,7 +138,8 @@ const initialVmState: DemoVmState = {
       status: 'queued',
       cpu: 2,
       memory: 4,
-      disk: 10,
+      disk: 20,
+      demoQuotaDisk: 20,
       os: 'Linux Ubuntu 22.04 LTS',
       nodeType: '자원이 많이 남은 Node에 자동 배분',
       createdAt: '요청 접수 · 대기 2건',
@@ -205,13 +210,28 @@ const initialVmState: DemoVmState = {
   sequence: 1,
 };
 
+// The create-flow Figma frames are a separate snapshot from the populated home fixture.
+// Their 2/4/20 request and 4/8/30 post-request quota imply 2/4/10 already allocated.
+const initialPersonalCreateFlowState: DemoVmState = {
+  schemaVersion: 4,
+  vms: [{
+    ...initialVmState.vms[0],
+    disk: 10,
+    demoQuotaDisk: 10,
+  }],
+  personalQuota: { cpu: 2, memory: 4, disk: 10, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
+  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  teamQuotas: { 'demo-team': { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
+  sequence: 1,
+};
+
 const personalDraft: VmDraft = {
   cpu: 2,
   memory: 4,
-  disk: 10,
+  disk: 20,
   os: 'Linux Ubuntu 22.04 LTS',
-  name: 'portfolio-batch',
-  purpose: '포트폴리오 프로젝트의 배치 작업 서버 운영',
+  name: 'portfolio-worker',
+  purpose: '포트폴리오 프로젝트의 백그라운드 작업 서버 운영',
 };
 
 const teamDraft: VmDraft = {
@@ -226,7 +246,24 @@ const teamDraft: VmDraft = {
 export function getDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
   if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
-  if ((stored.schemaVersion ?? 0) >= 3) return stored;
+  if ((stored.schemaVersion ?? 0) >= 4) return stored;
+
+  if ((stored.schemaVersion ?? 0) >= 3) {
+    const vms = stored.vms.map(vm => {
+      if (vm.id === 'portfolio-api' && vm.owner === 'personal' && vm.disk === 20) {
+        return { ...vm, demoQuotaDisk: 10 };
+      }
+      if (vm.id === 'portfolio-worker' && vm.owner === 'personal' && vm.status === 'queued'
+        && vm.cpu === 2 && vm.memory === 4 && vm.disk === 10
+        && vm.createdAt === '요청 접수 · 대기 2건') {
+        return { ...vm, disk: 20, demoQuotaDisk: 20 };
+      }
+      return vm;
+    });
+    const migrated = { ...stored, schemaVersion: 4, vms };
+    saveDemoVmState(migrated);
+    return readDemoState<DemoVmState | null>(stateKey, migrated) ?? migrated;
+  }
 
   const legacySeedVms = initialVmState.vms
     .filter(vm => vm.id === 'portfolio-api' || vm.id === 'connect-api')
@@ -273,7 +310,7 @@ export function getDemoVmState(): DemoVmState {
     teamQuotas[id] = {
       cpu: teamVms.reduce((sum, vm) => sum + vm.cpu, 0),
       memory: teamVms.reduce((sum, vm) => sum + vm.memory, 0),
-      disk: teamVms.reduce((sum, vm) => sum + vm.disk, 0),
+      disk: teamVms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
       cpuLimit: previous?.cpuLimit ?? 4,
       memoryLimit: previous?.memoryLimit ?? 8,
       diskLimit: previous?.diskLimit ?? 60,
@@ -285,12 +322,12 @@ export function getDemoVmState(): DemoVmState {
     ...stored.personalQuota,
     cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
     memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
-    disk: personalVms.reduce((sum, vm) => sum + vm.disk, 0),
+    disk: personalVms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
   };
 
   const migratedState: DemoVmState = {
     ...stored,
-    schemaVersion: 3,
+    schemaVersion: 4,
     vms,
     personalQuota,
     teamQuotas,
@@ -298,6 +335,53 @@ export function getDemoVmState(): DemoVmState {
   };
   saveDemoVmState(migratedState);
   return migratedState;
+}
+
+export function getDemoVmCreateState(owner: VmOwner): DemoVmState {
+  if (owner === 'team') return getDemoVmState();
+  const stored = readDemoState<DemoVmState | null>(personalCreateFlowStateKey, null);
+  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) {
+    return initialPersonalCreateFlowState;
+  }
+  return stored;
+}
+
+export function saveDemoVmCreateState(owner: VmOwner, state: DemoVmState): boolean {
+  if (owner === 'team') return saveDemoVmState(state);
+  const personalVms = state.vms.filter(vm => vm.owner === 'personal');
+  return writeDemoState(personalCreateFlowStateKey, {
+    ...state,
+    schemaVersion: 4,
+    personalQuota: {
+      ...state.personalQuota,
+      cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
+      memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
+      disk: personalVms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
+    },
+  });
+}
+
+/** Saves the create-flow snapshot and upserts personal requests into the shared VM collection. */
+export function saveDemoVmCreateRequest(owner: VmOwner, state: DemoVmState, vm: DemoVm): boolean {
+  if (owner === 'team') return saveDemoVmState(state);
+
+  const current = getDemoVmState();
+  const existing = current.vms.find(item => item.owner === 'personal' && item.id === 'portfolio-worker');
+  const sharedVm = existing
+    ? { ...existing, ...vm, id: existing.id, grn: existing.grn }
+    : vm;
+  const sharedState = {
+    ...current,
+    vms: existing
+      ? current.vms.map(item => item.id === existing.id ? sharedVm : item)
+      : [...current.vms, sharedVm],
+    sequence: Math.max(current.sequence, state.sequence),
+  };
+
+  if (!saveDemoVmState(sharedState)) return false;
+  if (saveDemoVmCreateState(owner, state)) return true;
+  saveDemoVmState(current);
+  return false;
 }
 
 export function saveDemoVmState(state: DemoVmState): boolean {
@@ -315,7 +399,7 @@ export function saveDemoVmState(state: DemoVmState): boolean {
     return [teamId, {
       cpu: vms.reduce((sum, vm) => sum + vm.cpu, 0),
       memory: vms.reduce((sum, vm) => sum + vm.memory, 0),
-      disk: vms.reduce((sum, vm) => sum + vm.disk, 0),
+      disk: vms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
       cpuLimit: previous?.cpuLimit ?? 4,
       memoryLimit: previous?.memoryLimit ?? 8,
       diskLimit: previous?.diskLimit ?? 60,
@@ -323,12 +407,12 @@ export function saveDemoVmState(state: DemoVmState): boolean {
   }));
   return writeDemoState(stateKey, {
     ...state,
-    schemaVersion: 3,
+    schemaVersion: 4,
     personalQuota: {
       ...state.personalQuota,
       cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
       memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
-      disk: personalVms.reduce((sum, vm) => sum + vm.disk, 0),
+      disk: personalVms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
     },
     teamQuotas,
     teamQuota: teamQuotas['demo-team'],
@@ -339,8 +423,19 @@ function teamQuotaScenario(vm: DemoVm): 'member-view' | 'leader-create' {
   return vm.teamScenario ?? (vm.role === 'member' ? 'member-view' : 'leader-create');
 }
 
+function quotaDisk(vm: DemoVm): number {
+  return vm.demoQuotaDisk ?? vm.disk;
+}
+
 export function getDemoVmDraft(owner: VmOwner): VmDraft {
-  return readDemoState(owner === 'team' ? teamDraftKey : personalDraftKey, owner === 'team' ? teamDraft : personalDraft);
+  const draft = readDemoState<VmDraft | null>(owner === 'team' ? teamDraftKey : personalDraftKey, null);
+  if (!draft) return owner === 'team' ? teamDraft : personalDraft;
+  const isPreviousPersonalSeed = owner === 'personal'
+    && draft.cpu === 2 && draft.memory === 4 && draft.disk === 10
+    && draft.os === 'Linux Ubuntu 22.04 LTS'
+    && draft.name === 'portfolio-batch'
+    && draft.purpose === '포트폴리오 프로젝트의 배치 작업 서버 운영';
+  return isPreviousPersonalSeed ? personalDraft : draft;
 }
 
 export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft): void {
@@ -401,7 +496,7 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
         [teamId]: { ...getDemoVmQuota(state, teamId), cpu: getDemoVmQuota(state, teamId).cpu + vm.cpu, memory: getDemoVmQuota(state, teamId).memory + vm.memory, disk: getDemoVmQuota(state, teamId).disk + vm.disk },
       },
     } : {
-      personalQuota: { ...state.personalQuota, cpu: state.personalQuota.cpu + vm.cpu, memory: state.personalQuota.memory + vm.memory, disk: state.personalQuota.disk + vm.disk },
+      personalQuota: { ...state.personalQuota, cpu: state.personalQuota.cpu + vm.cpu, memory: state.personalQuota.memory + vm.memory, disk: state.personalQuota.disk + quotaDisk(vm) },
     }),
   };
   return { state: next, vm };
