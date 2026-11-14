@@ -32,7 +32,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'welcome_db', username: 'welcome_user', tls: true },
       storage: { used_gb: 0.3, owner_total_used_gb: 0.3, owner_limit_gb: 1 }, max_connections: 10,
       created_by: { name: '김민수' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-01T04:00:00.000Z', expires_at: '2026-10-06T14:59:59.000Z',
-      permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
       grn: lockedGrn, id: 'quota-locked-db', name: 'quota-locked-db',
@@ -41,7 +41,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'quota_locked_db', username: 'student_user', tls: true },
       storage: { used_gb: 0.9, owner_total_used_gb: 1.2, owner_limit_gb: 1 }, max_connections: 10,
       created_by: { name: '김민수' }, created_at: '2026-10-05T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
-      permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
       grn: suspendedGrn, id: 'suspended-welcome-db', name: 'welcome-db',
@@ -50,7 +50,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'welcome_db', username: 'welcome_user', tls: true },
       storage: { used_gb: 0.3, owner_total_used_gb: 0.3, owner_limit_gb: 1 }, max_connections: 10,
       created_by: { name: '김민수' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-06T05:00:00.000Z', expires_at: '2026-10-06T05:00:00.000Z',
-      permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
       grn: teamGrn, id: 'connect-db', name: 'connect-db',
@@ -59,7 +59,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_db', username: 'connect_admin', tls: true },
       storage: { used_gb: 7.4, owner_total_used_gb: 7.4, owner_limit_gb: 60 }, max_connections: 100,
       created_by: { name: '김민수' }, created_at: '2026-10-03T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
-      permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
   ],
   deletedBackups: {},
@@ -187,6 +187,10 @@ export function getDemoDatabaseState(): DemoDatabaseState {
     changed = true;
   }
   for (const database of validState.databases) {
+    if (database.permissions && typeof database.permissions === 'object' && typeof database.permissions.view_credentials !== 'boolean') {
+      database.permissions.view_credentials = true;
+      changed = true;
+    }
     if ((database.grn === welcomeGrn || database.grn === lockedGrn) && database.max_connections === 30) {
       database.max_connections = 10;
       changed = true;
@@ -289,7 +293,7 @@ export function createDemoDatabase(name: string, engine: DatabaseEngine, owner?:
     created_at: now,
     updated_at: now,
     expires_at: new Date(Date.now() + (owner ? 30 : 7) * 86_400_000).toISOString(),
-    permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+    permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
   };
   state.databases.unshift(database);
   state.backups[database.grn] = [];
