@@ -9,8 +9,10 @@ export {
   listFirewallRules,
   listPortForwards,
   restoreDefaultPortForwards,
+  setFirewallEnabled,
   updateDomain,
 } from './api/networkApi';
+export { getDemoDomainValidationError, getDemoNetworkState } from './model/demoNetworkStore';
 export type {
   CreateFirewallRuleRequest,
   Domain,

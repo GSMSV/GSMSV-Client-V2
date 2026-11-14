@@ -9,6 +9,8 @@ export interface DemoNetworkState {
   sequence: number;
 }
 
+const reservedSubdomains = new Set(['admin', 'api', 'www', 'status', 'app', 'mail', 'ftp', 'gsmsv']);
+
 const stateKey = (vmGrn: string) => `network-${vmGrn}`;
 const defaultHost = 'ssh.gsmsv.site';
 
@@ -39,8 +41,8 @@ export function getDemoNetworkState(vmGrn: string): DemoNetworkState {
     : seed(vmGrn);
 }
 
-export function saveDemoNetworkState(vmGrn: string, state: DemoNetworkState): void {
-  writeDemoState(stateKey(vmGrn), state);
+export function saveDemoNetworkState(vmGrn: string, state: DemoNetworkState): boolean {
+  return writeDemoState(stateKey(vmGrn), state);
 }
 
 export function demoPortList(vmGrn: string): PortForwardList {
@@ -49,6 +51,30 @@ export function demoPortList(vmGrn: string): PortForwardList {
 
 export function demoDomainList(vmGrn: string): DomainList {
   return { items: getDemoNetworkState(vmGrn).domains, limits: { per_vm: 2 } };
+}
+
+export function getDemoDomainValidationError(
+  vmGrn: string,
+  subdomain: string,
+  internalPort: number,
+  otherSubdomains: readonly string[] = [],
+): string | null {
+  if (!/^[a-z0-9-]{1,63}$/.test(subdomain)) return '서브도메인은 영문 소문자, 숫자, 하이픈으로 1~63자 입력해 주세요.';
+  if (reservedSubdomains.has(subdomain.toLowerCase())) return '이 서브도메인은 예약되어 있어 사용할 수 없습니다.';
+
+  const state = getDemoNetworkState(vmGrn);
+  if (state.domains.length >= 2) return 'VM 하나에는 HTTPS Domain을 2개까지만 연결할 수 있습니다.';
+  if ([...state.domains.map(domain => domain.subdomain), ...otherSubdomains]
+    .some(existing => existing.toLowerCase() === subdomain.toLowerCase())) {
+    return '이미 사용 중인 서브도메인입니다.';
+  }
+  if (!Number.isInteger(internalPort) || internalPort < 1 || internalPort > 65535) {
+    return '내부 포트는 1부터 65535 사이의 숫자여야 합니다.';
+  }
+  if (!state.ports.some(port => port.kind !== 'ssh' && port.internal_port === internalPort)) {
+    return '실행 중인 서비스의 내부 포트를 입력해 주세요.';
+  }
+  return null;
 }
 
 export function demoFirewallList(vmGrn: string): FirewallRulePage {
@@ -83,10 +109,14 @@ export function demoRestorePorts(vmGrn: string) {
 }
 
 export function demoCreateDomain(vmGrn: string, input: { subdomain: string; internal_port: number }) {
+  const validationError = getDemoDomainValidationError(vmGrn, input.subdomain, input.internal_port);
+  if (validationError) throw new Error(validationError);
   const state = getDemoNetworkState(vmGrn);
   const id = `${vmGrn}-domain-${state.sequence}`;
   const domain = { id, subdomain: input.subdomain, url: `https://${input.subdomain}.gsmsv.site`, internal_port: input.internal_port, sync_status: 'synced' as const };
-  saveDemoNetworkState(vmGrn, { ...state, sequence: state.sequence + 1, domains: [...state.domains, domain] });
+  if (!saveDemoNetworkState(vmGrn, { ...state, sequence: state.sequence + 1, domains: [...state.domains, domain] })) {
+    throw new Error('HTTPS Domain 정보를 저장하지 못했습니다.');
+  }
   return { id, url: domain.url, sync_status: domain.sync_status };
 }
 
@@ -116,7 +146,7 @@ export function demoDeleteFirewallRule(vmGrn: string, ruleId: string): void {
   saveDemoNetworkState(vmGrn, { ...state, rules: state.rules.filter(rule => rule.id !== ruleId) });
 }
 
-export function demoSetFirewallEnabled(vmGrn: string, enabled: boolean): void {
+export function demoSetFirewallEnabled(vmGrn: string, enabled: boolean): boolean {
   const state = getDemoNetworkState(vmGrn);
-  saveDemoNetworkState(vmGrn, { ...state, firewallEnabled: enabled });
+  return saveDemoNetworkState(vmGrn, { ...state, firewallEnabled: enabled });
 }
