@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
@@ -10,7 +10,10 @@ import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
-import DemoAccountSettingsPage from './DemoAccountSettingsPage';
+
+const DemoAccountSettingsPage = import.meta.env.DEV
+  ? lazy(() => import('./DemoAccountSettingsPage'))
+  : null;
 
 const Content = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border};
@@ -360,5 +363,8 @@ function ProductionAccountSettingsPage() {
 }
 
 export default function AccountSettingsPage() {
-  return isDemoMode() ? <DemoAccountSettingsPage /> : <ProductionAccountSettingsPage />;
+  if (import.meta.env.DEV && isDemoMode() && DemoAccountSettingsPage) {
+    return <Suspense fallback={null}><DemoAccountSettingsPage /></Suspense>;
+  }
+  return <ProductionAccountSettingsPage />;
 }
