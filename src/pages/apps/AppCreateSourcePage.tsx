@@ -8,6 +8,7 @@ import { Button } from '../../shared/ui/controls';
 import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { isDemoMode } from '../../shared/demo';
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -202,19 +203,23 @@ type DialogKind = 'unsupported-source' | null;
 export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const { draft, update, hasUnsavedInput } = useAppSourceDraft();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
+  const [archiveName, setArchiveName] = useState('');
 
   useEffect(() => {
+    if (demoMode) { setTeams([]); return; }
     const controller = new AbortController();
     void listMyTeams(controller.signal)
       .then(value => { if (!controller.signal.aborted) setTeams(value); })
       .catch(() => { if (!controller.signal.aborted) setTeams([]); });
     return () => controller.abort();
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
+    if (demoMode) { setCurrentTeam(teamId ? { id: teamId, name: 'Demo 팀', status: 'approved', rejection_reason: null, my_role: 'leader', members: [], quota: null, permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false } } : null); return; }
     if (!teamId) {
       setCurrentTeam(null);
       return;
@@ -225,7 +230,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       .then(value => { if (!controller.signal.aborted) setCurrentTeam(value); })
       .catch(() => { if (!controller.signal.aborted) setCurrentTeam(null); });
     return () => controller.abort();
-  }, [teamId]);
+  }, [demoMode, teamId]);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const sourceTypeLabels: Record<AppSourceType, string> = {
     github: 'GitHub 저장소',
@@ -258,11 +263,11 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   }, [currentTeam, navigate, teamId, teams]);
 
   const handleContinue = () => {
-    if (draft.sourceType !== 'github') return;
+    if (!demoMode && draft.sourceType !== 'github') return;
     const name = draft.name.trim();
     if (name.length < 1 || name.length > 30) return;
     const draftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
-    sessionStorage.setItem(draftKey, JSON.stringify({ name }));
+    sessionStorage.setItem(draftKey, JSON.stringify({ name, repository: draft.repository, branch: draft.branch, folder: draft.folder, watchPaths: draft.watchPaths }));
     navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps/new/service` : '/apps/new/service');
   };
 
@@ -289,7 +294,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
             <StepLine role="presentation" />
             <StepIndicator number={2} label="서비스" />
           </Steps>
-          <Button variant="primary" icon={<Octicon name="arrow-right" size={16} />} iconPosition="end" onClick={handleContinue} disabled={draft.sourceType !== 'github' || !draft.name.trim() || draft.name.trim().length > 30}>
+          <Button variant="primary" icon={<Octicon name="arrow-right" size={16} />} iconPosition="end" onClick={handleContinue} disabled={(!demoMode && draft.sourceType !== 'github') || !draft.name.trim() || draft.name.trim().length > 30}>
             다음: 서비스
           </Button>
         </StepRow>
@@ -300,7 +305,8 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
             {(Object.keys(sourceTypeLabels) as AppSourceType[]).map(type => (
               <Segment key={type} type="button" $selected={draft.sourceType === type} aria-pressed={draft.sourceType === type} onClick={() => {
                 if (type !== 'github') {
-                  setDialog('unsupported-source');
+                  if (demoMode) update('sourceType', type);
+                  else setDialog('unsupported-source');
                   return;
                 }
                 update('sourceType', type);
@@ -317,7 +323,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
               <IconSlot aria-hidden="true"><Octicon name="link" size={16} /></IconSlot>
               <AccountText>
                 <Caption>GitHub 계정</Caption>
-                <Body>GitHub 연결 정보를 확인할 API가 준비되지 않았습니다.</Body>
+              <Body>{import.meta.env.DEV && demoMode ? '@gsm-jimin · 연결됨' : 'GitHub 연결 정보를 확인할 API가 준비되지 않았습니다.'}</Body>
               </AccountText>
             </AccountRow>
             <AccountRow>
@@ -326,20 +332,20 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                 <Caption>GSMSV GitHub 앱</Caption>
                 <Body>앱을 설치한 저장소만 고를 수 있습니다.</Body>
               </AccountText>
-              <Button variant="ghost" icon={<Octicon name="gear" size={16} />} disabled>
+              <Button variant="ghost" icon={<Octicon name="gear" size={16} />} disabled={!import.meta.env.DEV || !demoMode} onClick={() => { if (import.meta.env.DEV && demoMode) update('repository', 'gsm-jimin/portfolio-web'); }}>
                 설치 저장소 바꾸기
               </Button>
             </AccountRow>
-            <SourceUnavailable role="status">
+            {!demoMode && <SourceUnavailable role="status">
               <Octicon name="info" size={18} />
               GitHub 연결 API가 없어 저장소는 연결되지 않습니다. 다음 단계에서 앱 이름만 저장하는 앱을 만들 수 있고, 소스 설정은 전송하지 않습니다.
-            </SourceUnavailable>
+            </SourceUnavailable>}
               <SelectField
                 label="저장소"
                 value={draft.repository}
                 placeholder="저장소 선택"
-                disabled
-                options={[]}
+                disabled={!import.meta.env.DEV || !demoMode}
+                options={import.meta.env.DEV && demoMode ? [{ value: 'gsm-jimin/portfolio-web', label: 'gsm-jimin/portfolio-web' }, { value: 'gsm-jimin/study-log', label: 'gsm-jimin/study-log' }] : []}
                 onChange={value => {
                   update('repository', value);
                   update('branch', '');
@@ -350,14 +356,14 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                   label="브랜치"
                   value={draft.branch}
                   placeholder="브랜치 선택"
-                  disabled
-                  options={[]}
+                  disabled={!import.meta.env.DEV || !demoMode}
+                  options={import.meta.env.DEV && demoMode ? [{ value: 'main', label: 'main' }, { value: 'develop', label: 'develop' }] : []}
                   onChange={value => update('branch', value)}
                 />
                 <TextField
                   label="폴더"
                   value={draft.folder}
-                  disabled
+                  disabled={!import.meta.env.DEV || !demoMode}
                   onChange={event => update('folder', event.currentTarget.value)}
                   hint="저장소 안에서 이 앱의 코드가 있는 폴더입니다."
                 />
@@ -365,11 +371,26 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
               <TextField
                 label="감시 경로"
                 value={draft.watchPaths}
-                disabled
+                disabled={!import.meta.env.DEV || !demoMode}
                 onChange={event => update('watchPaths', event.currentTarget.value)}
                 hint="이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를 배포합니다."
               />
 
+          </> : demoMode && draft.sourceType === 'container' ? <>
+            <TextField label="컨테이너 이미지" value={draft.repository} placeholder="ghcr.io/{사용자}/{이미지}:태그" onChange={event => update('repository', event.currentTarget.value)} hint="로컬 미리보기에서 이미지 주소만 저장합니다." />
+            <TextField label="앱 이름" value={draft.name} maxLength={30} onChange={event => update('name', event.currentTarget.value)} />
+          </> : demoMode && draft.sourceType === 'archive' ? <>
+            <TextField label="앱 이름" value={draft.name} maxLength={30} onChange={event => update('name', event.currentTarget.value)} />
+            <TextField label="압축 파일" value={archiveName} placeholder="ZIP 파일 선택" disabled />
+            <Button variant="secondary" onClick={() => document.getElementById('demo-app-archive')?.click()}>압축 파일 선택</Button>
+            <input id="demo-app-archive" type="file" accept=".zip,.tar,.gz" hidden onChange={event => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) return;
+              if (file.size > 100 * 1024 * 1024) { setArchiveName('100 MB보다 작은 파일을 선택해 주세요.'); return; }
+              setArchiveName(file.name);
+              update('repository', file.name);
+            }} />
+            <Body>압축 파일은 100 MB까지 올릴 수 있습니다. 이 미리보기는 파일 내용을 업로드하지 않고 파일 이름만 저장합니다.</Body>
           </> : <SourceUnavailable role="status">
             <Octicon name="info" size={18} />
             이 소스 방식은 현재 앱 API 계약에 정의되어 있지 않습니다.
