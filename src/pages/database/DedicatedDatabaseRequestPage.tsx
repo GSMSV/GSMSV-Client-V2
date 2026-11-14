@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { getDemoTeam } from '../../entities/team/demo';
@@ -35,6 +35,7 @@ export default function DedicatedDatabaseRequestPage() {
   const teamScopeId = routeTeamId ?? 'demo-team';
   const team = getDemoTeam(teamScopeId);
   const teamName = team?.name ?? 'GSM Connect';
+  const canRequestDedicatedDatabase = team?.my_role === 'leader' || team?.my_role === 'devops';
   const [engine, setEngine] = useState<'MySQL' | 'PostgreSQL'>('MySQL');
   const [reason, setReason] = useState('다른 학생의 부하와 성능을 떼어 놓아야 합니다');
   const [description, setDescription] = useState('실시간 매칭 기능 때문에 쿼리가 많습니다. 공유 서버의 다른 학생 Database에 영향을 주지 않도록 따로 쓰고 싶습니다.');
@@ -45,7 +46,7 @@ export default function DedicatedDatabaseRequestPage() {
   const pending = [...teamRequests].reverse().find((request) => request.status === '대기 중' || request.status === '검토 중');
 
   function submitRequest() {
-    if (!isDemoMode()) return;
+    if (!isDemoMode() || !canRequestDedicatedDatabase) return;
     if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
     if (pending) {
       const updated = { ...pending, teamId: teamScopeId, engine, reason, description: description.trim(), status: '대기 중' as const, rejectReason: '', databaseGrn: undefined, databaseName: undefined, requestedAt: '2026.11.14' };
@@ -69,6 +70,10 @@ export default function DedicatedDatabaseRequestPage() {
     }
     setRequests(nextRequests);
     setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
+  }
+
+  if (isDemoMode() && !canRequestDedicatedDatabase) {
+    return <Navigate to={`/teams/${encodeURIComponent(teamScopeId)}`} replace />;
   }
 
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
