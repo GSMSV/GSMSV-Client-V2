@@ -252,13 +252,14 @@ export default function DatabaseBackupsPage() {
       if (import.meta.env.DEV && isDemoMode()) {
         const demo = await import('../../entities/database/demo');
         const preRestoreId = `pre-restore-${crypto.randomUUID()}`;
-        demo.addDemoPreRestoreBackup(databaseGrn, {
+        const savedPreRestoreBackup = demo.addDemoPreRestoreBackup(databaseGrn, {
           id: preRestoreId,
           kind: 'pre_restore',
           created_at: new Date().toISOString(),
           size_mb: detail.value.storage.used_gb * 128,
           expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         });
+        if (!savedPreRestoreBackup) throw new Error('Pre-restore backup could not be saved');
         result = {
           operation: { id: `demo-op-${crypto.randomUUID()}`, type: 'restore', status: 'queued' },
           resource: { grn: detail.value.grn },
