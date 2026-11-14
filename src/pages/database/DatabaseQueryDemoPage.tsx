@@ -203,9 +203,10 @@ export default function DatabaseQueryDemoPage() {
       <Button variant="ghost" onClick={() => navigate(`/databases/${databaseId}/settings`)}>설정</Button>
     </nav>
     {database?.status === 'suspended' && <Banner title="Database가 정지되어 쿼리를 실행하지 않았습니다" description="사용 기간을 연장한 뒤 다시 실행해 주세요." tone="danger" icon={<Octicon name="clock" size={20} />} />}
-    {database?.write_locked && outcome === 'write-locked' && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
+    {database?.write_locked && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
     {outcome === 'timeout' && <Banner title="쿼리가 45초를 넘어 멈췄습니다" description="조건을 좁히거나 LIMIT을 넣어 다시 실행해 주세요." tone="danger" icon={<Octicon name="alert" size={20} />} />}
-    {(outcome === 'row-cap' || outcome === 'byte-cap') && <Banner title="결과를 1,000행까지만 보여 줍니다" description="전체 결과가 더 많습니다. LIMIT으로 범위를 줄이거나 백업을 내려받아 확인하세요." tone="neutral" icon={<Octicon name="info" size={20} />} />}
+    {outcome === 'row-cap' && <Banner title="결과를 1,000행까지만 보여 줍니다" description="전체 결과가 더 많습니다. LIMIT으로 범위를 줄이거나 백업을 내려받아 확인하세요." tone="neutral" icon={<Octicon name="info" size={20} />} />}
+    {outcome === 'byte-cap' && <Banner title="결과는 1,000행 또는 1 MB까지 보입니다" description="전체 결과가 더 많습니다. LIMIT으로 범위를 줄이거나 백업을 내려받아 확인하세요." tone="neutral" icon={<Octicon name="info" size={20} />} />}
     <Card>
       <EditorHeader><Octicon name="code" size={16} /><SectionTitle>쿼리</SectionTitle></EditorHeader>
       <Editor aria-label="SQL 쿼리" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} />

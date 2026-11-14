@@ -7,11 +7,14 @@ export interface DemoDatabaseState {
   databases: DatabaseDetail[];
   backups: Record<string, DatabaseBackup[]>;
   passwords: Record<string, string>;
+  lockedFixtureInitialized?: boolean;
 }
 
 const personalGrn = 'grn:gsmsv:database:demo-student:student-db';
+const lockedGrn = 'grn:gsmsv:database:demo-student:quota-locked-db';
 const teamGrn = 'grn:gsmsv:database:demo-team:connect-db';
 const demoDatabaseSeed: DemoDatabaseState = {
+  lockedFixtureInitialized: true,
   databases: [
     {
       grn: personalGrn, id: 'student-db', name: 'student-db',
@@ -20,6 +23,15 @@ const demoDatabaseSeed: DemoDatabaseState = {
       connection: { host: 'db-demo.gs-msv.local', port: 5432, database: 'student_db', username: 'student_user', tls: true },
       storage: { used_gb: 3.2, owner_total_used_gb: 3.2, owner_limit_gb: 10 }, max_connections: 30,
       created_by: { name: '김민수' }, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
+      permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+    },
+    {
+      grn: lockedGrn, id: 'quota-locked-db', name: 'quota-locked-db',
+      owner: { type: 'user', id: 'demo-student', name: '김민수' },
+      engine: 'mysql', isolation: 'shared', status: 'active', write_locked: true,
+      connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'quota_locked_db', username: 'student_user', tls: true },
+      storage: { used_gb: 7.2, owner_total_used_gb: 10.4, owner_limit_gb: 10 }, max_connections: 30,
+      created_by: { name: '김민수' }, created_at: '2026-10-05T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
       permissions: { view: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
@@ -37,11 +49,12 @@ const demoDatabaseSeed: DemoDatabaseState = {
       { id: 'student-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 428, expires_at: '2026-11-21T00:00:00.000Z' },
       { id: 'student-db-daily-20261113', kind: 'daily', created_at: '2026-11-13T00:00:00.000Z', size_mb: 412, expires_at: '2026-11-20T00:00:00.000Z' },
     ],
+    [lockedGrn]: [],
     [teamGrn]: [
       { id: 'connect-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 936, expires_at: '2026-11-21T00:00:00.000Z' },
     ],
   },
-  passwords: { [personalGrn]: 'demo-local-pass-student', [teamGrn]: 'demo-local-pass-team' },
+  passwords: { [personalGrn]: 'demo-local-pass-student', [lockedGrn]: 'demo-local-pass-locked', [teamGrn]: 'demo-local-pass-team' },
 };
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -72,7 +85,19 @@ export function getDemoDatabaseState(): DemoDatabaseState {
     return clone(demoDatabaseSeed);
   }
   const validState = state as DemoDatabaseState;
-  if (settleDemoDatabaseTransitions(validState, Date.now())) saveDemoDatabaseState(validState);
+  let changed = false;
+  if (!validState.lockedFixtureInitialized) {
+    const lockedDatabase = demoDatabaseSeed.databases.find(database => database.grn === lockedGrn);
+    if (lockedDatabase && !validState.databases.some(database => database.grn === lockedGrn)) {
+      validState.databases.push(clone(lockedDatabase));
+    }
+    validState.backups[lockedGrn] ??= [];
+    validState.passwords[lockedGrn] ??= 'demo-local-pass-locked';
+    validState.lockedFixtureInitialized = true;
+    changed = true;
+  }
+  if (settleDemoDatabaseTransitions(validState, Date.now())) changed = true;
+  if (changed) saveDemoDatabaseState(validState);
   return validState;
 }
 
