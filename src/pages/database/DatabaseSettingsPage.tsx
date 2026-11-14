@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { deleteDatabase, getDatabase, renameDatabase, rotateDatabasePassword } from '../../entities/database';
 import type { DatabaseDetail, DatabaseOperation, DatabasePasswordRotation } from '../../entities/database';
+import { getDemoDatabaseConnectedFunctions } from '../../entities/database/demo';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { isDemoMode } from '../../shared/demo';
@@ -180,6 +181,7 @@ export default function DatabaseSettingsPage(){
     if(item==='team')navigate(current?.owner.type==='team'?teamPath(current):'/teams');
   };
   const value=detail.value;
+  const connectedFunctions=value&&import.meta.env.DEV&&isDemoMode()?getDemoDatabaseConnectedFunctions(value.grn):[];
   const trimmedName=name.trim();
   const nameValid=trimmedName.length>=1&&trimmedName.length<=30;
   const nameDirty=Boolean(value&&trimmedName!==value.name);
@@ -210,7 +212,7 @@ export default function DatabaseSettingsPage(){
         const demo=await import('../../entities/database/demo');
         const password=`demo-${crypto.randomUUID().slice(0,18)}`;
         demo.setDemoDatabasePassword(value.grn,password);
-        setRotationResult({password,rotated_at:new Date().toISOString(),reconnected:{functions:1,app_cells:1}});
+        setRotationResult({password,rotated_at:new Date().toISOString(),reconnected:{functions:connectedFunctions.length,app_cells:0}});
         setShowRotationDialog(false);return;
       }
       const result=await rotateDatabasePassword(value.grn);setRotationResult(result);setShowRotationDialog(false);
@@ -263,7 +265,7 @@ export default function DatabaseSettingsPage(){
         </Card>
         <Card>
           <CardHeader><CardTitle>비밀번호 교체</CardTitle>{value.permissions.rotate_password&&<Button variant="secondary" icon={<Octicon name="sync" size={16}/>} disabled={Boolean(deleteOperation)} onClick={()=>{setRotationError(false);setShowRotationDialog(true);}}>비밀번호 교체</Button>}</CardHeader>
-          <InfoRow><InfoIcon><Octicon name="link" size={16}/></InfoIcon><InfoText><InfoTitle>연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다</InfoTitle><InfoDescription>실제 연결 대상 목록은 Database 상세 API에서 제공되지 않습니다. 교체하면 기존 DB 접속이 끊기며 새 비밀번호를 접속 정보 탭에서 확인할 수 있습니다.</InfoDescription></InfoText></InfoRow>
+          <InfoRow><InfoIcon><Octicon name="link" size={16}/></InfoIcon><InfoText><InfoTitle>{connectedFunctions.length?'연결된 곳':'연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다'}</InfoTitle><InfoDescription>{connectedFunctions.length?`${connectedFunctions.join(', ')} 함수 · 다음 실행부터 새 비밀번호를 받습니다.`:'실제 연결 대상 목록은 Database 상세 API에서 제공되지 않습니다. 교체하면 기존 DB 접속이 끊기며 새 비밀번호를 접속 정보 탭에서 확인할 수 있습니다.'}</InfoDescription></InfoText></InfoRow>
           {rotationError&&<FormError role="alert">비밀번호를 교체하지 못했습니다. 다시 시도해 주세요.</FormError>}
         </Card>
         <Card>
@@ -277,14 +279,14 @@ export default function DatabaseSettingsPage(){
     {showRotationDialog&&value&&<Overlay onMouseDown={event=>{if(event.target===event.currentTarget&&!rotating)setShowRotationDialog(false);}}>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="rotate-dialog-title">
         <DialogHeader><DialogIcon $tone="warning"><Octicon name="sync" size={24}/></DialogIcon><DialogTitle id="rotate-dialog-title">비밀번호를 교체하시겠습니까?</DialogTitle></DialogHeader>
-        <DialogCopy><span>지금 이 비밀번호로 붙어 있는 앱과 접속이 바로 끊깁니다.</span><span>· 연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다.</span><span>· 새 비밀번호는 접속 정보 탭에서 다시 볼 수 있습니다.</span>{rotationError&&<FormError role="alert">교체에 실패했습니다. 다시 시도해 주세요.</FormError>}</DialogCopy>
+        <DialogCopy><span>지금 이 비밀번호로 붙어 있는 앱과 접속이 바로 끊깁니다.</span><span>· {connectedFunctions.length?`${connectedFunctions.join(', ')} 함수는 다음 실행부터 새 비밀번호를 씁니다.`:'연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다.'}</span><span>· 새 비밀번호는 접속 정보 탭에서 다시 볼 수 있습니다.</span>{rotationError&&<FormError role="alert">교체에 실패했습니다. 다시 시도해 주세요.</FormError>}</DialogCopy>
         <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16}/>} disabled={rotating} onClick={()=>setShowRotationDialog(false)}>취소</Button><Button variant="danger" icon={<Octicon name="sync" size={16}/>} disabled={rotating} onClick={()=>void rotatePassword()}>{rotating?'교체 중':'교체'}</Button></DialogActions>
       </Dialog>
     </Overlay>}
     {rotationResult&&<Overlay onMouseDown={event=>{if(event.target===event.currentTarget)setRotationResult(null);}}>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="rotation-result-title">
         <DialogHeader><DialogIcon $tone="success"><Octicon name="check-circle" size={24}/></DialogIcon><DialogTitle id="rotation-result-title">새 비밀번호를 만들었습니다</DialogTitle></DialogHeader>
-        <DialogCopy><span>이전 비밀번호로 연결되어 있던 기존 접속은 끊겼습니다.</span><ResultLine>연결 갱신: 함수 {rotationResult.reconnected.functions}개 · 앱 {rotationResult.reconnected.app_cells}개</ResultLine><ResultLine>교체 시각: {new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(rotationResult.rotated_at))}</ResultLine></DialogCopy>
+        <DialogCopy><span>이전 비밀번호로 연결되어 있던 기존 접속은 끊겼습니다.</span>{connectedFunctions.length?<ResultLine>{connectedFunctions.join(', ')} 함수는 다음 실행부터 새 비밀번호를 씁니다.</ResultLine>:<ResultLine>연결 갱신: 함수 {rotationResult.reconnected.functions}개 · 앱 {rotationResult.reconnected.app_cells}개</ResultLine>}<ResultLine>교체 시각: {new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(rotationResult.rotated_at))}</ResultLine></DialogCopy>
         <RevealableSecret label="새 비밀번호" value={rotationResult.password} initiallyShown/>
         <DialogActions><Button variant="secondary" onClick={()=>setRotationResult(null)}>닫기</Button></DialogActions>
       </Dialog>

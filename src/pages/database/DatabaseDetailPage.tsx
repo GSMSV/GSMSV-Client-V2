@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { extendDatabase, getDatabase, getDatabaseCredentials, listDatabaseBackups } from '../../entities/database';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail } from '../../entities/database';
+import { getDemoDatabaseCurrentConnections, getDemoDatabaseSuspensionInfo } from '../../entities/database/demo';
 import { getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -190,6 +191,9 @@ export default function DatabaseDetailPage() {
     return latest;
   }, null) ?? null, [backups.value]);
   const daysLeft = detail.value ? remainingDays(detail.value.expires_at) : null;
+  const demoMode = import.meta.env.DEV && isDemoMode();
+  const currentConnections = detail.value && demoMode ? getDemoDatabaseCurrentConnections(detail.value.grn) : null;
+  const suspensionInfo = detail.value && demoMode ? getDemoDatabaseSuspensionInfo(detail.value.grn) : null;
   const databaseSql = detail.value ? sqlExample(detail.value) : null;
   const databaseListPath = (database: DatabaseDetail) => database.owner.type === 'team'
     ? `/databases?owner=${encodeURIComponent(database.owner.id)}`
@@ -274,10 +278,11 @@ export default function DatabaseDetailPage() {
       if (import.meta.env.DEV && isDemoMode()) {
         const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
         const demo = await import('../../entities/database/demo');
-        const result = demo.updateDemoDatabase(databaseGrn, { expires_at: expiresAt });
+        const status = detail.value?.status === 'suspended' ? 'active' : detail.value?.status;
+        const result = demo.updateDemoDatabase(databaseGrn, { expires_at: expiresAt, ...(status ? { status } : {}) });
         if (!result) throw new Error('Database not found');
         setExtendedUntil(expiresAt);
-        setDetail(current => current.value ? { ...current, value: { ...current.value, expires_at: expiresAt } } : current);
+        setDetail(current => current.value ? { ...current, value: { ...current.value, expires_at: expiresAt, ...(status ? { status } : {}) } } : current);
       } else {
         const result = await extendDatabase(databaseGrn);
         setExtendedUntil(result.expires_at);
@@ -318,13 +323,13 @@ export default function DatabaseDetailPage() {
               <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>설정</Tab>
             </Tabs>
             {detail.value.write_locked && <Banner title="용량을 넘어 쓰기가 막혔습니다" description={`소유자 전체 사용량 ${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB입니다. 읽기 및 삭제는 데이터베이스에서 허용됩니다.`} tone="danger" icon={<Octicon name="alert" size={20} />} />}
-            {detail.value.status === 'suspended' && <Banner title="Database가 정지됐습니다" description={`만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
+            {detail.value.status === 'suspended' && <Banner title={suspensionInfo ? `정지됐습니다 · ${suspensionInfo.deleteInDays}일 뒤 삭제됩니다` : 'Database가 정지됐습니다'} description={suspensionInfo ? `${dateTime(detail.value.expires_at)}에 만료돼 접속이 막혔습니다. ${dateTime(suspensionInfo.deleteAt)} 전에 연장하면 다시 쓸 수 있습니다.` : `만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
             {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && detail.value.status !== 'suspended' && <Banner title={`만료까지 ${daysLeft}일 남았습니다`} description={`만료 시각은 ${dateTime(detail.value.expires_at)}입니다.`} tone="primary" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="primary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
             {extendedUntil && <Banner title="사용 기간을 연장했습니다" description={`${dateTime(extendedUntil)}까지 사용할 수 있습니다.`} tone="primary" icon={<Octicon name="check-circle" size={20} />} />}
             {extendError && <ErrorCard size="compact" onRetry={() => void extend()} />}
             <Summary aria-label="Database 요약">
               <FlexibleUsageCard label="사용 용량" icon={<Octicon name="graph" size={16} />} value={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB`} caption="내 Database를 모두 합해 세요" meter={{ value: detail.value.storage.owner_limit_gb > 0 ? Math.min(100, detail.value.storage.owner_total_used_gb / detail.value.storage.owner_limit_gb * 100) : 0, tone: detail.value.write_locked ? 'danger' : 'primary', label: 'Database 전체 용량 사용량' }} />
-              <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`— / ${formatNumber(detail.value.max_connections)}`} caption="현재 연결 수는 API에서 제공하지 않습니다" />
+              <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`${currentConnections ?? '—'} / ${formatNumber(detail.value.max_connections)}`} caption={currentConnections !== null ? `계정당 ${formatNumber(detail.value.max_connections)}개까지 · 넘으면 거절됩니다` : '현재 연결 수는 API에서 제공하지 않습니다'} />
               <FlexibleUsageCard label="최근 백업" icon={<Octicon name="history" size={16} />} value={backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : latestBackup ? dateTime(latestBackup.created_at) : '백업 없음'} caption={latestBackup ? `자동 백업 · ${formatNumber(latestBackup.size_mb)} MB · 7일 보관` : backups.error ? '백업 목록을 불러오지 못했습니다' : '매일 자동 백업 · 7일 보관'} />
             </Summary>
             <Section>
