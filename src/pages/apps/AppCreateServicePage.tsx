@@ -9,11 +9,11 @@ import { ApiRequestError } from '../../shared/api';
 import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-import { isDemoMode, readDemoState } from '../../shared/demo';
+import { isDemoMode } from '../../shared/demo';
 import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
 import { getDemoProfile } from '../../entities/profile';
 import { addDemoApp, demoPersonalAppOwner, getDemoAppQuota, isDemoAppSubdomainAvailable } from '../../entities/app/demo';
-import { isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
+import { getDemoInstalledRepositories, isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -342,7 +342,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         if (!source) { navigate(sourcePath); return; }
         if (teamId && (!currentTeam || currentTeam.status !== 'approved' || currentTeam.my_role === 'member')) return;
         if (source.sourceType === 'github' && (!getDemoProfile()?.github ||
-          !isDemoRepositoryAccessible(source.repository, readDemoState('apps.installed-repository', '')))) {
+          !isDemoRepositoryAccessible(source.repository, getDemoInstalledRepositories()))) {
           navigate(sourcePath);
           return;
         }

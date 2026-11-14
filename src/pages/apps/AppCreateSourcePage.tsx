@@ -8,11 +8,11 @@ import { Button } from '../../shared/ui/controls';
 import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-import { isDemoMode, readDemoState, writeDemoState } from '../../shared/demo';
+import { isDemoMode } from '../../shared/demo';
 import { getDemoProfile } from '../../entities/profile';
 import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
 import { demoPersonalAppOwner, getDemoAppQuota } from '../../entities/app/demo';
-import { defaultDemoAppSourceDraft, isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
+import { defaultDemoAppSourceDraft, getDemoInstalledRepositories, installDemoRepository, isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -219,7 +219,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     else update(key, value);
   };
   const installRepository = () => {
-    if (import.meta.env.DEV && github && form.repository === 'gsm-jimin/study-log' && writeDemoState('apps.installed-repository', form.repository)) setDialog(null);
+    if (import.meta.env.DEV && github && installDemoRepository(form.repository)) setDialog(null);
   };
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
@@ -284,15 +284,15 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     if (import.meta.env.DEV && demoMode) {
       const quota = getDemoAppQuota(teamId ? { type: 'team', id: teamId } : demoPersonalAppOwner);
       if (quota.count >= quota.limit) { setDialog('quota'); return; }
+      if (form.sourceType === 'github' && !isDemoRepositoryAccessible(form.repository, getDemoInstalledRepositories())) {
+        setDialog('repository-inaccessible');
+        return;
+      }
       if (currentTeam?.status === 'pending') {
         if (saveDemoAppDraft(teamId, { ...form, name })) navigate(`/teams/${encodeURIComponent(currentTeam.id)}/apps/new/service`);
         return;
       }
       if (form.sourceType === 'github' && !github) { setDialog('github-disconnected'); return; }
-      if (form.sourceType === 'github' && !isDemoRepositoryAccessible(form.repository, readDemoState('apps.installed-repository', ''))) {
-        setDialog('repository-inaccessible');
-        return;
-      }
       if (!form.repository.trim() || (form.sourceType === 'github' && !form.branch)) return;
       if (!saveDemoAppDraft(teamId, { ...form, name })) return;
     } else {
