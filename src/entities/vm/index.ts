@@ -1,5 +1,9 @@
 export {
+  canExtendDemoTeamVm,
+  demoTeamReferenceTime,
   getDemoVmDraft,
+  getDemoVmDaysRemaining,
+  getDemoVmExpiryTime,
   getDemoVmQuota,
   getDemoVmState,
   listDemoTeamVms,

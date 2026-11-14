@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canExtendDemoTeamVm, getDemoVmDaysRemaining, getDemoVmState, saveDemoVmState } from '../../entities/vm';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -77,13 +77,8 @@ export function VmOverviewPage() {
   const vmRecord = vm;
 
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
-  const teamExpiryDate = vmRecord.expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
-  const teamExpiryAt = teamExpiryDate
-    ? Date.UTC(Number(teamExpiryDate[1]), Number(teamExpiryDate[2]) - 1, Number(teamExpiryDate[3]), 5)
-    : undefined;
-  const teamExtensionWindowOpensAt = teamExpiryAt === undefined ? undefined : teamExpiryAt - 7 * 24 * 60 * 60 * 1000;
-  const canExtendTeamVm = vmRecord.owner !== 'team'
-    || (vmRecord.status !== 'queued' && teamExtensionWindowOpensAt !== undefined && Date.now() >= teamExtensionWindowOpensAt && Date.now() < teamExpiryAt!);
+  const teamDaysRemaining = vmRecord.owner === 'team' ? getDemoVmDaysRemaining(vmRecord.expiresAt) : undefined;
+  const canExtendTeamVm = vmRecord.owner !== 'team' || canExtendDemoTeamVm(vmRecord);
   const vmRoute = vmRecord.owner === 'team' && vmRecord.teamId
     ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms/${encodeURIComponent(vmRecord.id)}`
     : `/vms/${encodeURIComponent(vmRecord.id)}`;
@@ -115,8 +110,8 @@ export function VmOverviewPage() {
     const match = vmRecord.expiresAt.match(/(\d{4})\.(\d{2})\.(\d{2})/);
     let expiresAt = vmRecord.expiresAt;
     if (match) {
-      const nextDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14);
-      expiresAt = `${nextDate.getFullYear()}.${String(nextDate.getMonth() + 1).padStart(2, '0')}.${String(nextDate.getDate()).padStart(2, '0')} 14:00 (KST)`;
+      const nextDate = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14));
+      expiresAt = `${nextDate.getUTCFullYear()}.${String(nextDate.getUTCMonth() + 1).padStart(2, '0')}.${String(nextDate.getUTCDate()).padStart(2, '0')} 14:00 (KST)`;
     }
     persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, expiresAt } : item) }));
     setNotice('사용 기간을 14일 연장했습니다.');
@@ -141,7 +136,7 @@ export function VmOverviewPage() {
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
 
       {memberReadOnly && <Banner><Octicon name="shield" size={20} /><BannerCopy><strong>일반 팀원으로 보고 있습니다</strong><span>조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있습니다. 전원 제어와 설정 변경은 팀장(김지민) 또는 DevOps(한도윤)가 할 수 있습니다.</span></BannerCopy></Banner>}
-      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={extend} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
+      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : vmRecord.owner === 'team' && teamDaysRemaining !== undefined ? `만료까지 ${teamDaysRemaining}일 남았습니다` : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={extend} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
       <Facts>
         <MetricCard><Row><MetricLabel><Octicon name="cpu" size={16} />　CPU</MetricLabel></Row><MetricValue>{vm.cpu} vCPU</MetricValue><Hint>{vm.nodeType}</Hint></MetricCard>
         <MetricCard><MetricLabel>메모리</MetricLabel><MetricValue>{vm.memory} GB</MetricValue><Hint>할당 메모리</Hint></MetricCard>

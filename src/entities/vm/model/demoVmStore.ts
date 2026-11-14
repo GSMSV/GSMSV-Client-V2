@@ -67,6 +67,29 @@ export interface VmDraft {
 const stateKey = 'vm-resources';
 const personalDraftKey = 'vm-personal-create-draft';
 const teamDraftKey = 'vm-team-create-draft';
+// The team VM Figma states use 2026-10-26 14:00 KST as their reference time.
+// Keep the demo gate deterministic instead of tying the Figma interaction to the visitor's clock.
+export const demoTeamReferenceTime = Date.UTC(2026, 9, 26, 5);
+
+export function getDemoVmExpiryTime(expiresAt: string): number | undefined {
+  const match = expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (!match) return undefined;
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 5);
+}
+
+export function getDemoVmDaysRemaining(expiresAt: string, referenceTime = demoTeamReferenceTime): number | undefined {
+  const expiryTime = getDemoVmExpiryTime(expiresAt);
+  if (expiryTime === undefined) return undefined;
+  return Math.max(0, Math.ceil((expiryTime - referenceTime) / (24 * 60 * 60 * 1000)));
+}
+
+export function canExtendDemoTeamVm(vm: Pick<DemoVm, 'expiresAt' | 'status'>): boolean {
+  const expiryTime = getDemoVmExpiryTime(vm.expiresAt);
+  return vm.status !== 'queued'
+    && expiryTime !== undefined
+    && demoTeamReferenceTime >= expiryTime - 7 * 24 * 60 * 60 * 1000
+    && demoTeamReferenceTime < expiryTime;
+}
 
 const initialVmState: DemoVmState = {
   schemaVersion: 2,
