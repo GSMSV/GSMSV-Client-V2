@@ -205,6 +205,44 @@ const ResourceTableRow = styled.div`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
+const WorkPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  padding: 16px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+`;
+
+const WorkRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const WorkCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const WorkDetails = styled.div`
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 16px;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
 const ResourceLink = styled.button`
   width: fit-content;
   padding: 0;
@@ -344,6 +382,7 @@ export default function PersonalResourcesPage() {
   const user = getSessionUser();
   const [demoHome, setDemoHome] = useState<DemoHomeState | null>(null);
   const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
+  const [personalExtensionNotice, setPersonalExtensionNotice] = useState('');
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
@@ -483,6 +522,36 @@ export default function PersonalResourcesPage() {
     else if (item === 'settings') navigate('/settings');
   };
 
+  const personalVmQuota = quota.value?.vm;
+  const personalVmCreateReason = !personalVmQuota
+    ? quota.loading ? '개인 VM 할당량을 확인하고 있습니다.' : '개인 VM 할당량 정보를 확인할 수 없습니다.'
+    : personalVmQuota.vcpu.limit !== null && personalVmQuota.vcpu.used + 1 > personalVmQuota.vcpu.limit
+      ? '개인 vCPU 할당량이 부족합니다.'
+      : personalVmQuota.ram_gb.limit !== null && personalVmQuota.ram_gb.used + 1 > personalVmQuota.ram_gb.limit
+        ? '개인 RAM 할당량이 부족합니다.'
+        : personalVmQuota.ssd_gb.limit !== null && personalVmQuota.ssd_gb.used + 10 > personalVmQuota.ssd_gb.limit
+          ? '개인 SSD 할당량이 부족합니다.'
+          : undefined;
+  const personalVmCreateDisabled = !demoMode || Boolean(personalVmCreateReason);
+  const queuedPersonalVms = demoVms.filter(vm => vm.status === 'queued');
+  const activePersonalVms = demoVms.filter(vm => vm.status !== 'queued');
+  const expiringPersonalVm = demoVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued');
+
+  async function extendPersonalVm(vmId: string) {
+    if (!(import.meta.env.DEV && demoMode)) return;
+    const repository = await import('../../entities/vm');
+    const state = repository.getDemoVmState();
+    const vm = state.vms.find(item => item.id === vmId && item.owner === 'personal');
+    const match = vm?.expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+    if (!vm || !match) return;
+    const nextDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14);
+    const expiresAt = `${nextDate.getFullYear()}.${String(nextDate.getMonth() + 1).padStart(2, '0')}.${String(nextDate.getDate()).padStart(2, '0')} 14:00 (KST)`;
+    const nextState = { ...state, vms: state.vms.map(item => item.id === vm.id ? { ...item, expiresAt } : item) };
+    repository.saveDemoVmState(nextState);
+    setDemoVms(current => current.map(item => item.id === vm.id ? { ...item, expiresAt } : item));
+    setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`);
+  }
+
   return (
     <StudentShell
       activeItem="home"
@@ -500,7 +569,7 @@ export default function PersonalResourcesPage() {
         <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
         <Heading>
           <Title>{demoMode && demoHome?.firstVisit ? '첫 프로젝트를 시작해 보시겠습니까?' : '내 Resources'}</Title>
-          {!(demoMode && demoHome?.firstVisit) && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={!demoMode} title={demoMode ? undefined : 'VM API 계약이 확인된 뒤 사용할 수 있습니다'} onClick={() => navigate('/vms/new')}>VM 만들기</Button>}
+          {!(demoMode && demoHome?.firstVisit) && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={personalVmCreateDisabled} title={personalVmCreateReason ?? (!demoMode ? 'VM API 계약이 확인된 뒤 사용할 수 있습니다' : undefined)} onClick={() => navigate('/vms/new')}>VM 만들기</Button>}
         </Heading>
 
         {!demoMode && <Notice role="note">
@@ -518,6 +587,15 @@ export default function PersonalResourcesPage() {
           />
         </div>}
 
+        {demoMode && !demoHome?.firstVisit && expiringPersonalVm && <Banner
+          title={personalExtensionNotice || 'portfolio-api · 만료까지 4일'}
+          description={personalExtensionNotice ? `${expiringPersonalVm.expiresAt}까지 사용할 수 있습니다.` : '10월 3일 14:00에 만료됩니다. 지금 연장하면 10월 17일까지 사용할 수 있습니다.'}
+          tone="primary"
+          icon={<Octicon name="clock" size={20} />}
+          secondaryAction={<Button variant="secondary" onClick={() => navigate(`/vms/${encodeURIComponent(expiringPersonalVm.id)}`)}>VM 관리</Button>}
+          action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => void extendPersonalVm(expiringPersonalVm.id)}>{personalExtensionNotice ? '연장 완료' : '14일 연장'}</Button>}
+        />}
+
         {demoMode && demoHome?.firstVisit ? <>
           <Notice role="note">
             <Octicon name="info" size={16} aria-hidden="true" />
@@ -529,7 +607,7 @@ export default function PersonalResourcesPage() {
               <FirstVisitTitle>VM에서 자유롭게 개발하기</FirstVisitTitle>
               <CardDescription>Linux Ubuntu 22.04 LTS·Ubuntu Server 환경을 만들고 SSH로 접속하세요.</CardDescription>
               <FirstVisitQuota>개인 할당량 vCPU 4 · RAM 8GB · SSD 30GB · 아직 모두 남아 있습니다</FirstVisitQuota>
-              <FirstVisitActions><Button variant="primary" onClick={() => navigate('/vms/new')}>첫 VM 만들기</Button></FirstVisitActions>
+              <FirstVisitActions><Button variant="primary" disabled={personalVmCreateDisabled} title={personalVmCreateReason} onClick={() => navigate('/vms/new')}>첫 VM 만들기</Button></FirstVisitActions>
             </FirstVisitCard>
             <FirstVisitCard>
               <CardActions><IconBox><Octicon name="code" size={20} /></IconBox><FirstVisitLead>Serverless</FirstVisitLead></CardActions>
@@ -553,12 +631,21 @@ export default function PersonalResourcesPage() {
             </DocsRow>
           </DocsPanel>
         </> : <Sections>
+          {demoMode && queuedPersonalVms.length > 0 && <Section>
+            <SectionTitle>진행 중인 작업 · {queuedPersonalVms.length}</SectionTitle>
+            <WorkPanel>
+              {queuedPersonalVms.map(vm => <WorkRow key={vm.id}>
+                <WorkCopy><strong>{vm.name}</strong><span>앞에 2건이 있습니다. 차례가 오면 생성을 시작합니다.</span></WorkCopy>
+                <WorkDetails><span>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</span><State>대기 중</State></WorkDetails>
+              </WorkRow>)}
+            </WorkPanel>
+          </Section>}
           <Section>
             <SectionTitle>VM</SectionTitle>
             <QuotaPanel>
               <CardActions>
                 <CardName>개인 할당량</CardName>
-                <Button variant="primary" disabled={!demoMode} title={demoMode ? undefined : 'VM 생성 API 계약이 아직 없습니다'} onClick={() => navigate('/vms/new')}>VM 만들기</Button>
+                <Button variant="primary" disabled={personalVmCreateDisabled} title={personalVmCreateReason ?? (!demoMode ? 'VM 생성 API 계약이 아직 없습니다' : undefined)} onClick={() => navigate('/vms/new')}>VM 만들기</Button>
               </CardActions>
               {quota.value ? <QuotaMetrics>
                 <QuotaMetric><QuotaLabel>vCPU</QuotaLabel><QuotaValue>{formatQuota(quota.value.vm.vcpu)}</QuotaValue><CardDescription>최대 생성 {quota.value.vm.max_creatable.vcpu ?? '—'} vCPU · 잔여 {formatRemaining(quota.value.vm.vcpu)}</CardDescription></QuotaMetric>
@@ -568,7 +655,7 @@ export default function PersonalResourcesPage() {
             </QuotaPanel>
             <ResourceTable aria-label="내 VM 목록">
               <ResourceTableHeader><span>이름</span><span>상태</span><span>자원</span><span>만료일</span></ResourceTableHeader>
-              {demoMode && demoVms.length ? demoVms.map(vm => <ResourceTableRow key={vm.id}>
+              {demoMode && activePersonalVms.length ? activePersonalVms.map(vm => <ResourceTableRow key={vm.id}>
                 <ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink>
                 <State $tone={vm.status === 'running' ? 'primary' : undefined}>{vm.status === 'running' ? '실행 중' : '중지됨'}</State>
                 <span>{vm.cpu} vCPU · {vm.memory} GB RAM · {vm.disk} GB SSD</span>

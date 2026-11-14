@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmDraft, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmDraft, saveDemoVmState, type VmDraft, type VmOwner } from '../../entities/vm';
+import { getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmDraft, saveDemoVmState, type VmDraft, type VmOwner } from '../../entities/vm';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { SliderField, StepConnector, StepIndicator } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -122,12 +123,16 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   const [state, setState] = useState(() => getDemoVmState());
   const [error, setError] = useState('');
   const isTeam = owner === 'team';
-  const teamId = routeTeamId || 'gsm-connect';
-  const prefix = isTeam ? `/teams/${teamId}/vms/new` : '/vms/new';
+  const teamId = routeTeamId || 'demo-team';
+  const prefix = isTeam ? `/teams/${encodeURIComponent(teamId)}/vms/new` : '/vms/new';
+  const team = isTeam ? getDemoTeam(teamId) : undefined;
+  const teamName = team?.name ?? 'GSM Connect';
+  const creatorName = team?.members.find(member => member.role === team.my_role)?.name ?? team?.members[0]?.name ?? '김지민';
+  const canCreateInTeam = Boolean(team?.status === 'approved' && (team.my_role === null || team.my_role === 'leader' || team.my_role === 'devops'));
 
   useEffect(() => saveDemoVmDraft(owner, draft), [draft, owner]);
 
-  const quota = isTeam ? state.teamQuota : state.personalQuota;
+  const quota = isTeam ? getDemoVmQuota(state, teamId) : state.personalQuota;
   const available = useMemo(() => ({
     cpu: quota.cpuLimit - quota.cpu,
     memory: quota.memoryLimit - quota.memory,
@@ -136,6 +141,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   const included = { cpu: quota.cpu + draft.cpu, memory: quota.memory + draft.memory, disk: quota.disk + draft.disk };
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
+  if (isTeam && !canCreateInTeam) return <Navigate to={`/teams/${encodeURIComponent(teamId)}`} replace />;
 
   function changeDraft(updates: Partial<VmDraft>) {
     setDraft(current => ({ ...current, ...updates }));
@@ -151,7 +157,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       setError('VM 이름은 영문·숫자로 시작하며 영문, 숫자, 하이픈, 밑줄만 사용할 수 있습니다.');
       return false;
     }
-    const duplicate = state.vms.some(vm => vm.owner === owner && (isTeam ? vm.teamId === 'gsm-connect' : true) && vm.name.toLowerCase() === draft.name.trim().toLowerCase());
+    const duplicate = state.vms.some(vm => vm.owner === owner && (isTeam ? vm.teamId === teamId : true) && vm.name.toLowerCase() === draft.name.trim().toLowerCase());
     if (draft.name.trim() && duplicate) {
       setError('같은 소유자 안에서 VM 이름을 중복해서 사용할 수 없습니다.');
       return false;
@@ -169,16 +175,16 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   }
 
   function back() {
-    navigate(step === 'review' ? `${prefix}/details` : step === 'details' ? prefix : (isTeam ? '/teams/gsm-connect' : '/'));
+    navigate(step === 'review' ? `${prefix}/details` : step === 'details' ? prefix : (isTeam ? `/teams/${encodeURIComponent(teamId)}` : '/'));
   }
 
   function createRequest() {
     if (!validDraft()) return;
-    const { state: nextState, vm } = makeDemoVm(state, draft, owner, teamId);
+    const { state: nextState, vm } = makeDemoVm(state, draft, owner, teamId, teamName, creatorName);
     saveDemoVmState(nextState);
     setState(nextState);
     resetDemoVmDraft(owner);
-    navigate(isTeam ? `/teams/${vm.teamId}/vms/${vm.id}` : `/vms/${vm.id}`);
+    navigate(isTeam ? `/teams/${encodeURIComponent(vm.teamId ?? teamId)}/vms/${encodeURIComponent(vm.id)}` : `/vms/${encodeURIComponent(vm.id)}`);
   }
 
   const heading = step === 'spec'
@@ -187,9 +193,9 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       ? (isTeam ? '팀 VM의 이름과 목적을 알려주세요' : 'VM에 이름과 목적을 알려주세요')
       : (isTeam ? '이 설정으로 팀 VM을 만드시겠습니까?' : '이 설정으로 VM을 만드시겠습니까?');
 
-  return <DemoShell activeItem="vm-create" scopeLabel={isTeam ? 'GSM Connect · 팀장' : '내 Resources'} userName={isTeam ? '김지민' : '김지민'} hasUnsavedInput={step === 'details'}>
+  return <DemoShell activeItem="vm-create" scopeLabel={isTeam ? `${teamName} · ${team?.my_role === 'devops' ? 'DevOps 엔지니어' : '팀장'}` : '내 Resources'} userName={isTeam ? creatorName : '김지민'} hasUnsavedInput={step === 'details'}>
     <DemoPage>
-      <Breadcrumb>{isTeam ? 'GSM Connect / 팀 VM 만들기' : 'VM 생성'}</Breadcrumb>
+      <Breadcrumb>{isTeam ? `${teamName} / 팀 VM 만들기` : 'VM 생성'}</Breadcrumb>
       <StepHead>
         <SelectionTitle as="h1">{heading}</SelectionTitle>
         <TopActions>
@@ -237,7 +243,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
         {isTeam && <Surface>
           <SurfaceTitle>선택한 환경</SurfaceTitle>
           <DataRows>
-            <InlineFact label="소유자" icon="organization" value="GSM Connect · 팀장 김지민" />
+            <InlineFact label="소유자" icon="organization" value={`${teamName} · ${team?.my_role === 'devops' ? 'DevOps' : '팀장'} ${creatorName}`} />
             <InlineFact label="사양 · 운영체제" icon="cpu" value={<>{draft.cpu} vCPU · RAM {draft.memory} GB · SSD {draft.disk} GB<br />{draft.os} · 자원이 많이 남은 Node에 자동 배분</>} />
             <InlineFact label="요청 후 팀 사용량" icon="organization" value={`${included.cpu}/${quota.cpuLimit} vCPU · RAM ${included.memory}/${quota.memoryLimit} GB · SSD ${included.disk}/${quota.diskLimit} GB · 남은 할당량 vCPU ${available.cpu - draft.cpu} · RAM ${available.memory - draft.memory} GB · SSD ${available.disk - draft.disk} GB`} />
             <InlineFact label="사용 기간" icon="calendar" value="생성부터 30일 · 만료 7일 전부터 +14일 연장" />
@@ -265,10 +271,10 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       {step === 'review' && <>
         <Surface>
           <SelectionTitle>{draft.name.trim() || `${isTeam ? 'team-vm' : 'vm'}-${String(state.sequence).padStart(3, '0')}`}</SelectionTitle>
-          <Accent>{isTeam ? 'GSM Connect · 팀 VM / 요청자 김지민(팀장)' : '소유자　나 · 김지민　/　개인 VM'}</Accent>
+          <Accent>{isTeam ? `${teamName} · 팀 VM / 요청자 ${creatorName}(${team?.my_role === 'devops' ? 'DevOps' : '팀장'})` : '소유자　나 · 김지민　/　개인 VM'}</Accent>
           <DataRows>
             <InlineFact label="사용 목적" value={draft.purpose} />
-            {isTeam && <InlineFact label="소유자" value="GSM Connect · 팀 VM / 요청자 김지민(팀장)" />}
+            {isTeam && <InlineFact label="소유자" value={`${teamName} · 팀 VM / 요청자 ${creatorName}(${team?.my_role === 'devops' ? 'DevOps' : '팀장'})`} />}
             {!isTeam && <InlineFact label="사양" value={`${draft.cpu} vCPU · RAM ${draft.memory} GB · SSD ${draft.disk} GB`} />}
             <InlineFact label="운영체제 · Node" value={`${draft.os} · 자원이 많이 남은 Node에 자동 배분`} />
             <InlineFact label={isTeam ? '첫 만료' : '만료 예정일'} value={`생성 완료 시각부터 ${isTeam ? '30일' : '7일'} · 정확한 만료일은 생성 후 확정`} />

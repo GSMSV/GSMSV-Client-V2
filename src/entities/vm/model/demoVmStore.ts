@@ -36,10 +36,22 @@ export interface DemoVm {
   snapshots: DemoSnapshot[];
 }
 
+export interface DemoVmQuota {
+  cpu: number;
+  memory: number;
+  disk: number;
+  cpuLimit: number;
+  memoryLimit: number;
+  diskLimit: number;
+}
+
 export interface DemoVmState {
+  schemaVersion?: number;
   vms: DemoVm[];
-  personalQuota: { cpu: number; memory: number; disk: number; cpuLimit: number; memoryLimit: number; diskLimit: number };
-  teamQuota: { cpu: number; memory: number; disk: number; cpuLimit: number; memoryLimit: number; diskLimit: number };
+  personalQuota: DemoVmQuota;
+  /** Legacy default-team quota retained for callers and stored demos created before per-team quotas. */
+  teamQuota: DemoVmQuota;
+  teamQuotas?: Record<string, DemoVmQuota>;
   sequence: number;
 }
 
@@ -57,6 +69,7 @@ const personalDraftKey = 'vm-personal-create-draft';
 const teamDraftKey = 'vm-team-create-draft';
 
 const initialVmState: DemoVmState = {
+  schemaVersion: 2,
   vms: [
     {
       id: 'portfolio-api',
@@ -85,12 +98,35 @@ const initialVmState: DemoVmState = {
       ],
     },
     {
+      id: 'portfolio-worker',
+      grn: 'vm-portfolio-worker',
+      name: 'portfolio-worker',
+      purpose: '포트폴리오 프로젝트의 백그라운드 작업 서버 운영',
+      owner: 'personal',
+      creator: '김지민',
+      role: 'leader',
+      status: 'queued',
+      cpu: 2,
+      memory: 4,
+      disk: 10,
+      os: 'Linux Ubuntu 22.04 LTS',
+      nodeType: '자원이 많이 남은 Node에 자동 배분',
+      createdAt: '요청 접수 · 대기 2건',
+      expiresAt: '생성 완료 후 7일',
+      internalIp: '배정 대기 중',
+      sshPort: 0,
+      sshUser: 'ubuntu',
+      password: '대기 중',
+      autoSnapshots: false,
+      snapshots: [],
+    },
+    {
       id: 'connect-api',
       grn: 'team-vm-connect-api',
       name: 'connect-api',
       purpose: 'GSM Connect 서비스 API 서버 운영',
       owner: 'team',
-      teamId: 'gsm-connect',
+      teamId: 'demo-team',
       teamName: 'GSM Connect',
       creator: '김지민',
       role: 'member',
@@ -109,9 +145,35 @@ const initialVmState: DemoVmState = {
       autoSnapshots: true,
       snapshots: [],
     },
+    {
+      id: 'connect-db',
+      grn: 'team-vm-connect-db',
+      name: 'connect-db',
+      purpose: 'GSM Connect 서비스 Database 운영',
+      owner: 'team',
+      teamId: 'demo-team',
+      teamName: 'GSM Connect',
+      creator: '한도윤',
+      role: 'member',
+      status: 'stopped',
+      cpu: 2,
+      memory: 2,
+      disk: 30,
+      os: 'Linux Ubuntu 22.04 LTS',
+      nodeType: '일반 Node',
+      createdAt: '2026.10.02 14:00 (KST)',
+      expiresAt: '2026.10.31 14:00 (KST)',
+      internalIp: '10.20.0.118',
+      sshPort: 32118,
+      sshUser: 'ubuntu',
+      password: 'gsvm-demo-team-database-password',
+      autoSnapshots: true,
+      snapshots: [],
+    },
   ],
-  personalQuota: { cpu: 2, memory: 4, disk: 20, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
-  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  personalQuota: { cpu: 4, memory: 8, disk: 30, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
+  teamQuota: { cpu: 4, memory: 6, disk: 50, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  teamQuotas: { 'demo-team': { cpu: 4, memory: 6, disk: 50, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
   sequence: 1,
 };
 
@@ -120,8 +182,8 @@ const personalDraft: VmDraft = {
   memory: 4,
   disk: 10,
   os: 'Linux Ubuntu 22.04 LTS',
-  name: 'portfolio-worker',
-  purpose: '포트폴리오 프로젝트의 백그라운드 작업 서버 운영',
+  name: 'portfolio-batch',
+  purpose: '포트폴리오 프로젝트의 배치 작업 서버 운영',
 };
 
 const teamDraft: VmDraft = {
@@ -135,11 +197,99 @@ const teamDraft: VmDraft = {
 
 export function getDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
-  return stored && Array.isArray(stored.vms) && stored.personalQuota && stored.teamQuota ? stored : initialVmState;
+  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
+  if ((stored.schemaVersion ?? 0) >= 2) return stored;
+
+  let vms = stored.vms.map(vm => vm.owner === 'team' && vm.teamId === 'gsm-connect'
+    ? { ...vm, teamId: 'demo-team', teamName: vm.teamName || 'GSM Connect' }
+    : vm);
+  // First-visit previews intentionally clear all personal VMs and quotas. Preserve
+  // that state while upgrading older previews that already contain personal data.
+  const hasExistingPersonalVm = vms.some(vm => vm.owner === 'personal');
+  if (hasExistingPersonalVm && !vms.some(vm => vm.owner === 'personal' && vm.id === 'portfolio-worker')) {
+    const seededWorker = initialVmState.vms.find(vm => vm.id === 'portfolio-worker');
+    if (seededWorker) vms = [...vms, seededWorker];
+  }
+  const existingTeamQuotas = stored.teamQuotas && typeof stored.teamQuotas === 'object' ? stored.teamQuotas : {};
+  const teamIds = new Set(vms.filter(vm => vm.owner === 'team').map(vm => vm.teamId || 'demo-team'));
+  teamIds.add('demo-team');
+  const teamQuotas: Record<string, DemoVmQuota> = {};
+
+  for (const id of teamIds) {
+    const previous = existingTeamQuotas[id] ?? (id === 'demo-team' ? stored.teamQuota : undefined);
+    const teamVms = vms.filter(vm => vm.owner === 'team' && (vm.teamId || 'demo-team') === id);
+    teamQuotas[id] = {
+      cpu: teamVms.reduce((sum, vm) => sum + vm.cpu, 0),
+      memory: teamVms.reduce((sum, vm) => sum + vm.memory, 0),
+      disk: teamVms.reduce((sum, vm) => sum + vm.disk, 0),
+      cpuLimit: previous?.cpuLimit ?? 4,
+      memoryLimit: previous?.memoryLimit ?? 8,
+      diskLimit: previous?.diskLimit ?? 60,
+    };
+  }
+
+  // Older local previews only seeded connect-api. Add the second Figma row without
+  // replacing or discarding any VM records a user already created.
+  if (!vms.some(vm => vm.owner === 'team' && vm.teamId === 'demo-team' && vm.id === 'connect-db')) {
+    const seededDatabaseVm = initialVmState.vms.find(vm => vm.id === 'connect-db');
+    if (seededDatabaseVm) {
+      vms = [...vms, seededDatabaseVm];
+      const quota = teamQuotas['demo-team'];
+      teamQuotas['demo-team'] = { ...quota, cpu: quota.cpu + seededDatabaseVm.cpu, memory: quota.memory + seededDatabaseVm.memory, disk: quota.disk + seededDatabaseVm.disk };
+    }
+  }
+
+  const personalVms = vms.filter(vm => vm.owner === 'personal');
+  const personalQuota = {
+    ...stored.personalQuota,
+    cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
+    memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
+    disk: personalVms.reduce((sum, vm) => sum + vm.disk, 0),
+  };
+
+  const migratedState: DemoVmState = {
+    ...stored,
+    schemaVersion: 2,
+    vms,
+    personalQuota,
+    teamQuotas,
+    teamQuota: teamQuotas['demo-team'],
+  };
+  saveDemoVmState(migratedState);
+  return migratedState;
 }
 
 export function saveDemoVmState(state: DemoVmState): void {
-  writeDemoState(stateKey, state);
+  const personalVms = state.vms.filter(vm => vm.owner === 'personal');
+  const teamIds = new Set([
+    'demo-team',
+    ...Object.keys(state.teamQuotas ?? {}),
+    ...state.vms.filter(vm => vm.owner === 'team').map(vm => vm.teamId || 'demo-team'),
+  ]);
+  const teamQuotas = Object.fromEntries([...teamIds].map(teamId => {
+    const previous = state.teamQuotas?.[teamId] ?? (teamId === 'demo-team' ? state.teamQuota : undefined);
+    const vms = state.vms.filter(vm => vm.owner === 'team' && (vm.teamId || 'demo-team') === teamId);
+    return [teamId, {
+      cpu: vms.reduce((sum, vm) => sum + vm.cpu, 0),
+      memory: vms.reduce((sum, vm) => sum + vm.memory, 0),
+      disk: vms.reduce((sum, vm) => sum + vm.disk, 0),
+      cpuLimit: previous?.cpuLimit ?? 4,
+      memoryLimit: previous?.memoryLimit ?? 8,
+      diskLimit: previous?.diskLimit ?? 60,
+    } satisfies DemoVmQuota];
+  }));
+  writeDemoState(stateKey, {
+    ...state,
+    schemaVersion: 2,
+    personalQuota: {
+      ...state.personalQuota,
+      cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
+      memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
+      disk: personalVms.reduce((sum, vm) => sum + vm.disk, 0),
+    },
+    teamQuotas,
+    teamQuota: teamQuotas['demo-team'],
+  });
 }
 
 export function getDemoVmDraft(owner: VmOwner): VmDraft {
@@ -154,10 +304,18 @@ export function resetDemoVmDraft(owner: VmOwner): void {
   saveDemoVmDraft(owner, owner === 'team' ? teamDraft : personalDraft);
 }
 
-export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, teamId = 'gsm-connect'): { state: DemoVmState; vm: DemoVm } {
+export function getDemoVmQuota(state: DemoVmState, teamId: string): DemoVmQuota {
+  if (teamId === 'demo-team') return state.teamQuota;
+  return state.teamQuotas?.[teamId] ?? { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 };
+}
+
+export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {
+  return state.vms.filter(vm => vm.owner === 'team' && (vm.teamId || 'demo-team') === teamId);
+}
+
+export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, teamId = 'demo-team', teamName = 'GSM Connect', creatorName = '김지민'): { state: DemoVmState; vm: DemoVm } {
   const sequence = state.sequence;
   const team = owner === 'team';
-  const ownerLabel = team ? 'GSM Connect · 팀장' : '나 · 김지민';
   const suffix = String(sequence).padStart(3, '0');
   const id = `${team ? 'team-' : ''}${draft.name.trim() || `${team ? 'team-vm' : 'vm'}-${suffix}`}`;
   const vm: DemoVm = {
@@ -166,8 +324,8 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     name: draft.name.trim() || `${team ? 'team-vm' : 'vm'}-${suffix}`,
     purpose: draft.purpose.trim(),
     owner,
-    ...(team ? { teamId, teamName: 'GSM Connect' } : {}),
-    creator: team ? ownerLabel : '김지민',
+    ...(team ? { teamId, teamName } : {}),
+    creator: team ? creatorName : '김지민',
     role: team ? 'leader' : 'leader',
     status: 'queued',
     cpu: draft.cpu,
@@ -189,7 +347,11 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     vms: [...state.vms, vm],
     sequence: sequence + 1,
     ...(team ? {
-      teamQuota: { ...state.teamQuota, cpu: state.teamQuota.cpu + vm.cpu, memory: state.teamQuota.memory + vm.memory, disk: state.teamQuota.disk + vm.disk },
+      teamQuota: teamId === 'demo-team' ? { ...getDemoVmQuota(state, teamId), cpu: state.teamQuota.cpu + vm.cpu, memory: state.teamQuota.memory + vm.memory, disk: state.teamQuota.disk + vm.disk } : state.teamQuota,
+      teamQuotas: {
+        ...state.teamQuotas,
+        [teamId]: { ...getDemoVmQuota(state, teamId), cpu: getDemoVmQuota(state, teamId).cpu + vm.cpu, memory: getDemoVmQuota(state, teamId).memory + vm.memory, disk: getDemoVmQuota(state, teamId).disk + vm.disk },
+      },
     } : {
       personalQuota: { ...state.personalQuota, cpu: state.personalQuota.cpu + vm.cpu, memory: state.personalQuota.memory + vm.memory, disk: state.personalQuota.disk + vm.disk },
     }),

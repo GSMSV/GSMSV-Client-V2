@@ -65,7 +65,7 @@ const NumberLine = styled.div`
 `;
 
 export function VmOverviewPage() {
-  const { vmId } = useParams<{ vmId: string }>();
+  const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const navigate = useNavigate();
   const [state, setState] = useState(() => getDemoVmState());
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -73,10 +73,20 @@ export function VmOverviewPage() {
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to={window.location.pathname.startsWith('/teams/') ? '/teams/gsm-connect/vms' : '/'} replace />;
+  if (!vm) return <Navigate to={window.location.pathname.startsWith('/teams/') ? `/teams/${encodeURIComponent(routeTeamId ?? 'demo-team')}/vms` : '/'} replace />;
   const vmRecord = vm;
 
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
+  const teamExpiryDate = vmRecord.expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  const teamExpiryAt = teamExpiryDate
+    ? Date.UTC(Number(teamExpiryDate[1]), Number(teamExpiryDate[2]) - 1, Number(teamExpiryDate[3]), 5)
+    : undefined;
+  const teamExtensionWindowOpensAt = teamExpiryAt === undefined ? undefined : teamExpiryAt - 7 * 24 * 60 * 60 * 1000;
+  const canExtendTeamVm = vmRecord.owner !== 'team'
+    || (vmRecord.status !== 'queued' && teamExtensionWindowOpensAt !== undefined && Date.now() >= teamExtensionWindowOpensAt && Date.now() < teamExpiryAt!);
+  const vmRoute = vmRecord.owner === 'team' && vmRecord.teamId
+    ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms/${encodeURIComponent(vmRecord.id)}`
+    : `/vms/${encodeURIComponent(vmRecord.id)}`;
   const title = vmRecord.name;
   const subtitle = vmRecord.status === 'queued'
     ? '요청 대기 중 · 생성 진행은 홈에서 확인할 수 있습니다'
@@ -101,7 +111,7 @@ export function VmOverviewPage() {
   }
 
   function extend() {
-    if (vmRecord.status === 'queued') return;
+    if (vmRecord.status === 'queued' || (vmRecord.owner === 'team' && !canExtendTeamVm)) return;
     const match = vmRecord.expiresAt.match(/(\d{4})\.(\d{2})\.(\d{2})/);
     let expiresAt = vmRecord.expiresAt;
     if (match) {
@@ -118,7 +128,7 @@ export function VmOverviewPage() {
 
   const sshCommand = `ssh ${vmRecord.sshUser}@ssh.gsmsv.site -p ${vmRecord.sshPort || '배정 대기'}`;
 
-  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? 'GSM Connect · 일반 팀원' : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
+  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${vm.teamName ?? '팀'} · 일반 팀원` : '내 Resources'} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? 'GSM Connect / 팀 Resources' : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{title}</Title><StatusLine>{subtitle}</StatusLine></div><PowerActions>
@@ -131,7 +141,7 @@ export function VmOverviewPage() {
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
 
       {memberReadOnly && <Banner><Octicon name="shield" size={20} /><BannerCopy><strong>일반 팀원으로 보고 있습니다</strong><span>조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있습니다. 전원 제어와 설정 변경은 팀장(김지민) 또는 DevOps(한도윤)가 할 수 있습니다.</span></BannerCopy></Banner>}
-      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button onClick={extend} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
+      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={extend} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
       <Facts>
         <MetricCard><Row><MetricLabel><Octicon name="cpu" size={16} />　CPU</MetricLabel></Row><MetricValue>{vm.cpu} vCPU</MetricValue><Hint>{vm.nodeType}</Hint></MetricCard>
         <MetricCard><MetricLabel>메모리</MetricLabel><MetricValue>{vm.memory} GB</MetricValue><Hint>할당 메모리</Hint></MetricCard>
@@ -142,7 +152,7 @@ export function VmOverviewPage() {
           <Fact><FactLabel>사용 목적</FactLabel><FactValue>{vm.purpose}</FactValue></Fact>
           <Fact><FactLabel>자동 Snapshot</FactLabel><FactValue>{vm.autoSnapshots ? '켜짐 · 최신 1개 보관' : '꺼짐 · 다음 자정부터 저장하지 않음'}</FactValue></Fact>
           <Fact><FactLabel>Network</FactLabel><FactValue>외부 포트 3/30 · HTTPS Domain 1/2</FactValue></Fact>
-        </KVPairs><Row><Button variant="ghost" icon={<Octicon name="pencil" />} onClick={() => navigate(`/vms/${vm.id}/settings`)}>수정</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`/vms/${vm.id}/snapshots`)}>Snapshot 관리</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`/vms/${vm.grn}/network`)}>Network 관리</Button></Row></Surface>
+        </KVPairs><Row><Button variant="ghost" icon={<Octicon name="pencil" />} onClick={() => navigate(`${vmRoute}/settings`)}>수정</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`${vmRoute}/snapshots`)}>Snapshot 관리</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`${vmRecord.owner === 'team' && vmRecord.teamId ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms` : '/vms'}/${encodeURIComponent(vm.grn)}/network`)}>Network 관리</Button></Row></Surface>
         <Surface><SurfaceTitle>사용 기간</SurfaceTitle><KVPairs>
           <Fact><FactLabel>생성일</FactLabel><FactValue>{vm.createdAt}</FactValue></Fact>
           <Fact><FactLabel>만료일</FactLabel><FactValue>{vm.expiresAt}</FactValue></Fact>
@@ -162,7 +172,7 @@ export function VmOverviewPage() {
         <NumberLine><span>1</span><SSHLine>{sshCommand}</SSHLine></NumberLine>
         <Row><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : '실제 SSH 매핑: 외부 32104 → 내부 22 · 터미널에 붙여넣어 접속하세요.'}</Hint><Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어')}>명령어 복사</Button></Row>
       </Surface>
-      {vm.owner === 'team' && <Surface><SurfaceTitle>팀 정보</SurfaceTitle><KVPairs><Fact><FactLabel>소유</FactLabel><FactValue>팀 {vm.teamName} · 만든 사람 김지민</FactValue></Fact><Fact><FactLabel>내 역할</FactLabel><FactValue>일반 팀원 · 팀장이 DevOps 역할을 주면 전원과 설정을 관리할 수 있습니다</FactValue></Fact></KVPairs></Surface>}
+      {vm.owner === 'team' && <Surface><SurfaceTitle>팀 정보</SurfaceTitle><KVPairs><Fact><FactLabel>소유</FactLabel><FactValue>팀 {vm.teamName} · 만든 사람 {vm.creator}</FactValue></Fact><Fact><FactLabel>내 역할</FactLabel><FactValue>일반 팀원 · 팀장이 DevOps 역할을 주면 전원과 설정을 관리할 수 있습니다</FactValue></Fact></KVPairs></Surface>}
       {notice && <Hint role="status">{notice}</Hint>}
     </DemoPage>
   </DemoShell>;
