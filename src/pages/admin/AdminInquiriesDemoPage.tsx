@@ -26,8 +26,8 @@ export default function AdminInquiriesDemoPage() {
     if (!selected) return;
     if (!reply.trim()) { setNotice('답변 내용을 입력해 주세요.'); return; }
     const updated = items.map((item) => item.id === selected.id ? { ...item, reply: reply.trim(), status: '답변 완료' as const } : item);
+    if (!saveDemoInquiries(updated)) { setNotice('답변을 저장하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
-    saveDemoInquiries(updated);
     setNotice('답변을 등록했습니다. 로컬 미리보기에서 답변 완료 상태로 표시됩니다.');
   }
   function cancelReply() { setReply(selected?.reply ?? ''); setNotice('답변 수정을 취소했습니다.'); }
@@ -35,7 +35,7 @@ export default function AdminInquiriesDemoPage() {
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="문의 답변"><PageStack>
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 문의 답변</p>
     <Heading><TitleGroup><Title>문의 답변</Title><Muted>대기 중인 문의부터 확인하고 답변을 등록하세요.</Muted></TitleGroup></Heading>
-    {notice && <Alert $tone={notice.includes('입력') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
+    {notice && <Alert $tone={notice.includes('입력') || notice.includes('저장하지 못') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}><div style={{ display: 'flex', gap: 8 }}>{(['전체', '대기 중', '답변 완료'] as const).map((item) => <Button key={item} variant={filter === item ? 'primary' : 'ghost'} onClick={() => { setFilter(item); setPage(1); }}>{item} <Badge $tone="success">{item === '전체' ? items.length : items.filter((entry) => entry.status === item).length}</Badge></Button>)}</div><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setItems(getDemoInquiries()); setNotice('문의 목록을 새로고침했습니다.'); }}>새로고침</Button></div>
     <Card><CardHeader><SectionTitle>최근 문의 · 대기 중 우선</SectionTitle></CardHeader><TableWrap><Table><thead><tr><th>문의</th><th>작성자</th><th>작성일</th><th>상태</th></tr></thead><tbody>{pageItems.map((item) => <tr key={item.id} aria-selected={item.id === selected?.id} onClick={() => select(item)}><td>{item.title}</td><td>{item.author} · {item.studentId}</td><td>{item.createdAt}</td><td><Badge $tone={item.status === '답변 완료' ? 'success' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></Table></TableWrap><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}><Hint>{items.length}개 중 {visible.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, visible.length)}</Hint><div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Button variant="ghost" disabled={page <= 1} aria-label="이전 페이지" icon={<Octicon name="arrow-left" size={16} />} onClick={() => setPage((value) => Math.max(1, value - 1))} />{Array.from({ length: pageCount }, (_, index) => index + 1).map((value) => <Button key={value} variant={page === value ? 'primary' : 'ghost'} onClick={() => setPage(value)}>{value}</Button>)}<Button variant="ghost" disabled={page >= pageCount} aria-label="다음 페이지" icon={<Octicon name="arrow-right" size={16} />} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} /></div></div></Card>
     {selected && <>

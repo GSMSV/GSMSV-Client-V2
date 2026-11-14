@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoCliRequest, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
@@ -112,16 +112,39 @@ export default function CliLoginApprovalDemoPage() {
   const [searchParams] = useSearchParams();
   const [request, setRequest] = useState(() => getDemoCliRequest());
   const [notice, setNotice] = useState('');
+  const [now, setNow] = useState(() => Date.now());
   const user = getSessionUser();
   const email = user?.id === 'demo-admin' ? 'admin@example.com' : 'jimin@example.com';
   const requestedCode = searchParams.get('code');
   const codeMatches = !requestedCode || requestedCode.toUpperCase() === request.code;
-  const active = isDemoMode() && codeMatches && request.status === '확인 대기';
+  const expired = request.status === '만료됨' || (request.status === '확인 대기' && now >= (request.expiresAtMs ?? 0));
+  const active = isDemoMode() && codeMatches && request.status === '확인 대기' && !expired;
+  const expiresAtLabel = expired
+    ? '만료됨'
+    : `${Math.max(1, Math.ceil(((request.expiresAtMs ?? now) - now) / 60_000))}분 남음`;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!expired || request.status !== '확인 대기') return;
+    const updated = { ...request, status: '만료됨' as const };
+    if (!saveDemoCliRequest(updated)) setNotice('만료 상태를 저장하지 못했습니다. 이 요청은 계속 승인할 수 없습니다.');
+    setRequest(updated);
+  }, [expired, request]);
 
   function decide(status: CliLoginRequest['status']) {
-    if (!active) return;
+    if (!active) {
+      if (expired && request.status === '확인 대기') setRequest({ ...request, status: '만료됨' });
+      return;
+    }
     const updated = { ...request, status };
-    saveDemoCliRequest(updated);
+    if (!saveDemoCliRequest(updated)) {
+      setNotice('요청을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setRequest(updated);
     setNotice(status === '승인 완료' ? 'CLI 로그인을 승인했습니다. 이 기기는 로컬 미리보기에서 연결된 것으로 표시됩니다.' : 'CLI 로그인 요청을 거부했습니다.');
   }
@@ -130,8 +153,8 @@ export default function CliLoginApprovalDemoPage() {
     {!isDemoMode() ? <><Title>로컬 미리보기 전용</Title><Description>?demo=1 모드에서만 목데이터 승인 흐름을 확인할 수 있습니다.</Description></> : <>
       <Title>{request.status === '확인 대기' ? 'CLI 로그인을 승인하시겠습니까?' : `CLI 로그인 ${request.status}`}</Title>
       <Description>터미널에 표시된 코드와 같은지 확인하세요.</Description>
-      <CodeCard><CodeText>{request.code}</CodeText><Description style={{ margin: 0, fontSize: 12 }}>코드는 요청 후 10분 동안 쓸 수 있습니다 · {request.expiresAt}</Description></CodeCard>
-      {!codeMatches && <Warning role="alert"><Octicon name="alert" size={18} />요청이 만료되었거나 코드가 일치하지 않습니다. 터미널에서 새 코드를 요청하세요.</Warning>}
+      <CodeCard><CodeText>{request.code}</CodeText><Description style={{ margin: 0, fontSize: 12 }}>코드는 요청 후 10분 동안 쓸 수 있습니다 · {expiresAtLabel}</Description></CodeCard>
+      {(!codeMatches || expired) && <Warning role="alert"><Octicon name="alert" size={18} />요청이 만료되었거나 코드가 일치하지 않습니다. 터미널에서 새 코드를 요청하세요.</Warning>}
       <Warning><Octicon name="alert" size={20} /><span><strong>직접 실행한 요청이 아니면 거부하세요</strong><br />승인하면 이 기기에서 내 계정으로 VM과 함수를 다룰 수 있고, 로그인은 30일 동안 유지됩니다. 계정 설정 · 연결된 CLI 기기에서 언제든 해제할 수 있습니다.</span></Warning>
       <InfoLine><Octicon name="terminal" size={16} /><span><Label>기기</Label><Value>{request.device}</Value></span></InfoLine>
       <InfoLine><Octicon name="clock" size={16} /><span><Label>요청 시각</Label><Value>{request.requestedAt} · 방금</Value></span></InfoLine>
