@@ -23,7 +23,7 @@ import { DeleteConfirmDialog } from "../../shared/ui/feedback";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
-import { Button, SegmentedControl } from "../../shared/ui/controls";
+import { Button, SegmentedControl, Switch } from "../../shared/ui/controls";
 import { Octicon } from "../../shared/ui/icons";
 import {
   StudentShell,
@@ -319,17 +319,11 @@ const Field = styled.label`
 const EnvSettingsRow = styled(TableRow)`
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
 `;
-const Toggle = styled.label`
+const Toggle = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  color: ${({ theme }) => theme.colors.text};
-  input {
-    width: 44px;
-    height: 24px;
-    accent-color: ${({ theme }) => theme.colors.primary};
-  }
   small {
     display: block;
     margin-top: 4px;
@@ -569,13 +563,22 @@ export function DemoAppSettingsPage() {
   const { appId = "demo-portfolio-web" } = useParams<{ appId: string }>();
   const app = getDemoApp(appId);
   const user = getSessionUser();
+  const [draft, setDraft] = useState(() => app ? structuredClone(app) : undefined);
   const [notice, setNotice] = useState("");
   const [deleteName, setDeleteName] = useState<string>();
   const [addingEnvironment, setAddingEnvironment] = useState(false);
   const [environmentName, setEnvironmentName] = useState("preview");
   const [environmentError, setEnvironmentError] = useState("");
   const [editingEnvironment, setEditingEnvironment] = useState<string>();
+  const [editingEnvironmentSnapshot, setEditingEnvironmentSnapshot] = useState<DemoEnvironment>();
   const [branchDraft, setBranchDraft] = useState("");
+  useEffect(() => {
+    const current = getDemoApp(appId);
+    setDraft(current ? structuredClone(current) : undefined);
+    setEditingEnvironment(undefined);
+    setEditingEnvironmentSnapshot(undefined);
+    setNotice("");
+  }, [appId]);
   const teamPath = app?.owner?.type === "team" ? `/teams/${encodeURIComponent(app.owner.id)}` : "";
   const listPath = `${teamPath}/apps`;
   const scopeOptions = demoAppScopeOptions(app?.owner, navigate);
@@ -608,38 +611,74 @@ export function DemoAppSettingsPage() {
       </StudentShell>
     );
   const canManage = canManageDemoApp(app);
-  const update = (name: string, patch: Partial<DemoEnvironment>) => {
+  const updateDraftEnvironment = (name: string, patch: Partial<DemoEnvironment>) => {
+    if (!canManage) return;
+    setDraft(current => current ? {
+      ...current,
+      environments: current.environments.map(environment => environment.name === name
+        ? { ...environment, ...patch }
+        : environment),
+    } : current);
+    setNotice("");
+  };
+  const saveSettings = () => {
+    if (!canManage || !draft) return;
     const apps = getDemoApps();
-    const target = apps
-      .find((item) => item.id === appId)
-      ?.environments.find((env) => env.name === name);
-    if (target && canManage) {
-      Object.assign(target, patch);
-      setNotice(saveDemoApps(apps) ? "변경사항을 저장했습니다." : "변경사항을 저장하지 못했습니다.");
+    const current = apps.find((item) => item.id === appId);
+    if (!current) {
+      setNotice("앱 설정을 찾을 수 없습니다.");
+      return;
     }
+    let settingsDraft = draft;
+    if (editingEnvironment) {
+      const branch = branchDraft.trim();
+      if (!branch) {
+        setNotice("배포 브랜치를 입력해 주세요.");
+        return;
+      }
+      settingsDraft = {
+        ...draft,
+        environments: draft.environments.map(environment => environment.name === editingEnvironment
+          ? { ...environment, branch }
+          : environment),
+      };
+      setDraft(settingsDraft);
+      setEditingEnvironment(undefined);
+      setEditingEnvironmentSnapshot(undefined);
+    }
+    current.environments = structuredClone(settingsDraft.environments);
+    const draftService = settingsDraft.services[0];
+    current.services = current.services.map((service, index) => index === 0 && draftService
+      ? {
+          ...service,
+          prPreviews: draftService.prPreviews,
+          previewEnvironment: draftService.previewEnvironment,
+          previewBots: draftService.previewBots,
+        }
+      : service);
+    if (!saveDemoApps(apps)) {
+      setNotice("설정 변경사항을 저장하지 못했습니다. 다시 시도해 주세요.");
+      return;
+    }
+    setDraft(structuredClone(current));
+    setNotice("설정 변경사항을 로컬 미리보기에 저장했습니다.");
   };
   const addEnvironment = (event: React.FormEvent) => {
     event.preventDefault();
-    const apps = getDemoApps();
-    const current = apps.find((item) => item.id === appId);
-    if (!current || !canManage || current.environments.length >= 3) return;
+    if (!draft || !canManage || draft.environments.length >= 3) return;
     const name = environmentName.trim();
-    if (!name || current.environments.some(environment => environment.name === name)) {
+    if (!name || draft.environments.some(environment => environment.name.toLowerCase() === name.toLowerCase())) {
       setEnvironmentError("환경 이름을 입력해 주세요. 이미 있는 이름은 쓸 수 없습니다.");
       return;
     }
-    current.environments.push({
-      name,
-      branch: "develop",
-      autoDeploy: true,
-      waitForCi: false,
-    });
-    if (saveDemoApps(apps)) {
-      setNotice("환경을 추가했습니다.");
-      setAddingEnvironment(false);
-      setEnvironmentName("preview");
-      setEnvironmentError("");
-    } else setEnvironmentError("환경을 저장하지 못했습니다.");
+    setDraft(current => current ? {
+      ...current,
+      environments: [...current.environments, { name, branch: "develop", autoDeploy: true, waitForCi: false }],
+    } : current);
+    setNotice("환경을 추가했습니다. 변경사항을 적용하려면 설정 저장을 눌러 주세요.");
+    setAddingEnvironment(false);
+    setEnvironmentName("preview");
+    setEnvironmentError("");
   };
   const extendUsage = () => {
     setNotice(renewDemoApp(appId) ? "사용 기간을 연장했습니다." : "사용 기간을 연장하지 못했습니다.");
@@ -679,17 +718,13 @@ export function DemoAppSettingsPage() {
             개요
           </Tab>
           <Tab $active>설정</Tab>
-          <Button
-            onClick={() =>
-              setNotice("설정 변경사항을 로컬 미리보기에 저장했습니다.")
-            }
-          >
+          <Button icon={<Octicon name="check" size={16} />} onClick={saveSettings} disabled={!canManage}>
             설정 저장
           </Button>
         </Tabs>
         <Card>
           <ServicesHeading>
-            <CardTitle>환경 · {app.environments.length} / 3</CardTitle>
+            <CardTitle>환경 · {draft?.environments.length ?? 0} / 3</CardTitle>
             <Button
               variant="secondary"
               onClick={() => {
@@ -698,7 +733,7 @@ export function DemoAppSettingsPage() {
                 setEnvironmentError("");
                 setAddingEnvironment(true);
               }}
-              disabled={!canManage || app.environments.length >= 3}
+              disabled={!canManage || (draft?.environments.length ?? 0) >= 3}
             >
               환경 추가
             </Button>
@@ -711,7 +746,7 @@ export function DemoAppSettingsPage() {
               <span>CI 기다리기</span>
               <span>작업</span>
             </TableHeader>
-            {app.environments.map((env) => (
+            {(draft?.environments ?? []).map((env) => (
               <EnvSettingsRow key={env.name}>
                 <span>{env.name}</span>
                 <span>
@@ -726,8 +761,12 @@ export function DemoAppSettingsPage() {
                     </Field>
                   ) : env.branch}
                 </span>
-                <span>{env.autoDeploy ? "켜짐" : "꺼짐"}</span>
-                <span>{env.waitForCi ? "켜짐" : "꺼짐"}</span>
+                <span>{editingEnvironment === env.name
+                  ? <Switch label="" ariaLabel={`${env.name} 자동 재배포`} checked={env.autoDeploy} disabled={!canManage} onChange={autoDeploy => updateDraftEnvironment(env.name, { autoDeploy })} />
+                  : env.autoDeploy ? "켜짐" : "꺼짐"}</span>
+                <span>{editingEnvironment === env.name
+                  ? <Switch label="" ariaLabel={`${env.name} CI 기다리기`} checked={env.waitForCi} disabled={!canManage} onChange={waitForCi => updateDraftEnvironment(env.name, { waitForCi })} />
+                  : env.waitForCi ? "켜짐" : "꺼짐"}</span>
                 <span>
                   <Button
                     variant="ghost"
@@ -739,11 +778,13 @@ export function DemoAppSettingsPage() {
                           setNotice("배포 브랜치를 입력해 주세요.");
                           return;
                         }
-                        update(env.name, { branch });
+                        updateDraftEnvironment(env.name, { branch });
                         setEditingEnvironment(undefined);
+                        setEditingEnvironmentSnapshot(undefined);
                       } else {
                         setNotice("");
                         setEditingEnvironment(env.name);
+                        setEditingEnvironmentSnapshot(structuredClone(env));
                         setBranchDraft(env.branch);
                       }
                     }}
@@ -752,7 +793,15 @@ export function DemoAppSettingsPage() {
                   </Button>
                   {editingEnvironment === env.name && <Button
                     variant="ghost"
-                    onClick={() => setEditingEnvironment(undefined)}
+                    onClick={() => {
+                      const snapshot = editingEnvironmentSnapshot;
+                      if (snapshot) setDraft(current => current ? {
+                        ...current,
+                        environments: current.environments.map(environment => environment.name === snapshot.name ? snapshot : environment),
+                      } : current);
+                      setEditingEnvironment(undefined);
+                      setEditingEnvironmentSnapshot(undefined);
+                    }}
                   >취소</Button>}
                 </span>
               </EnvSettingsRow>
@@ -772,16 +821,19 @@ export function DemoAppSettingsPage() {
                 저장소에 PR이 열리면 기준 환경 설정으로 미리보기를 만듭니다.
               </small>
             </span>
-            <input
-              type="checkbox"
+            <Switch
+              label=""
+              ariaLabel="PR마다 미리보기 환경 만들기"
               disabled={!canManage}
-              checked={app.services[0]?.prPreviews ?? false}
-              onChange={(event) => {
-                const apps = getDemoApps();
-                const current = apps.find((item) => item.id === appId);
-                if (current?.services[0])
-                  current.services[0].prPreviews = event.currentTarget.checked;
-                setNotice(saveDemoApps(apps) ? "PR 미리보기 설정을 저장했습니다." : "PR 미리보기 설정을 저장하지 못했습니다.");
+              checked={draft?.services[0]?.prPreviews ?? false}
+              onChange={(checked) => {
+                setDraft(current => current ? {
+                  ...current,
+                  services: current.services.map((service, index) => index === 0
+                    ? { ...service, prPreviews: checked }
+                    : service),
+                } : current);
+                setNotice("");
               }}
             />
           </Toggle>
@@ -790,17 +842,19 @@ export function DemoAppSettingsPage() {
             <select
               aria-label="기준 환경"
               disabled={!canManage}
-              value={app.services[0]?.previewEnvironment ?? "production"}
+              value={draft?.services[0]?.previewEnvironment ?? "production"}
               onChange={(event) => {
-                const apps = getDemoApps();
-                const current = apps.find((item) => item.id === appId);
-                if (current?.services[0])
-                  current.services[0].previewEnvironment =
-                    event.currentTarget.value;
-                setNotice(saveDemoApps(apps) ? "기준 환경을 저장했습니다." : "기준 환경을 저장하지 못했습니다.");
+                const value = event.currentTarget.value;
+                setDraft(current => current ? {
+                  ...current,
+                  services: current.services.map((service, index) => index === 0
+                    ? { ...service, previewEnvironment: value }
+                    : service),
+                } : current);
+                setNotice("");
               }}
             >
-              {app.environments.map((env) => (
+              {(draft?.environments ?? []).map((env) => (
                 <option key={env.name}>{env.name}</option>
               ))}
             </select>
@@ -810,16 +864,19 @@ export function DemoAppSettingsPage() {
               봇이 연 PR도 미리보기
               <small>봇이 연 PR은 기본으로 미리보기를 만들지 않습니다.</small>
             </span>
-            <input
-              type="checkbox"
+            <Switch
+              label=""
+              ariaLabel="봇이 연 PR 미리보기"
               disabled={!canManage}
-              checked={app.services[0]?.previewBots ?? false}
-              onChange={(event) => {
-                const apps = getDemoApps();
-                const current = apps.find((item) => item.id === appId);
-                if (current?.services[0])
-                  current.services[0].previewBots = event.currentTarget.checked;
-                setNotice(saveDemoApps(apps) ? "봇 PR 미리보기 설정을 저장했습니다." : "봇 PR 미리보기 설정을 저장하지 못했습니다.");
+              checked={draft?.services[0]?.previewBots ?? false}
+              onChange={(checked) => {
+                setDraft(current => current ? {
+                  ...current,
+                  services: current.services.map((service, index) => index === 0
+                    ? { ...service, previewBots: checked }
+                    : service),
+                } : current);
+                setNotice("");
               }}
             />
           </Toggle>
