@@ -17,6 +17,7 @@ export type CronValidation =
 
 const SEOUL_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DEMO_CLOCK = new Date('2026-09-30T09:00:00+09:00');
+const adjacentDateCache = new Map<string, boolean>();
 const FIELD_RANGES = [
   [0, 59],
   [0, 23],
@@ -84,6 +85,12 @@ function parseCron(expression: string): ParsedCron | undefined {
 }
 
 function hasAdjacentMatchingDates(parsed: ParsedCron): boolean {
+  const cacheKey = [parsed.dayOfMonth, parsed.month, parsed.dayOfWeek]
+    .map(field => `${field.wildcard}:${[...field.values].sort((left, right) => left - right).join(',')}`)
+    .join('|');
+  const cachedResult = adjacentDateCache.get(cacheKey);
+  if (cachedResult !== undefined) return cachedResult;
+
   const cycleStart = Date.UTC(2000, 0, 1);
   const dayMilliseconds = 24 * 60 * 60 * 1000;
   const daysInGregorianCycle = 146_097;
@@ -93,11 +100,18 @@ function hasAdjacentMatchingDates(parsed: ParsedCron): boolean {
   for (let day = 0; day < daysInGregorianCycle; day += 1) {
     const matches = matchesCronDate(parsed, new Date(cycleStart + day * dayMilliseconds));
     if (day === 0) firstDateMatches = matches;
-    if (matches && previousDateMatches) return true;
+    if (matches && previousDateMatches) {
+      adjacentDateCache.set(cacheKey, true);
+      if (adjacentDateCache.size > 256) adjacentDateCache.clear();
+      return true;
+    }
     previousDateMatches = matches;
   }
 
-  return previousDateMatches && firstDateMatches;
+  const hasAdjacentDates = previousDateMatches && firstDateMatches;
+  adjacentDateCache.set(cacheKey, hasAdjacentDates);
+  if (adjacentDateCache.size > 256) adjacentDateCache.clear();
+  return hasAdjacentDates;
 }
 
 function getMinimumScheduleInterval(parsed: ParsedCron): number | null {
