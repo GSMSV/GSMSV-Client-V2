@@ -167,6 +167,7 @@ export interface StudentTopbarProps {
   onOpenNotifications: () => void;
   hasUnsavedInput: boolean;
   onLogoutPendingChange?: (pending: boolean) => void;
+  onLogoutRequest?: () => void;
   showBottomBorder?: boolean;
 }
 
@@ -184,6 +185,7 @@ export function StudentTopbar({
   onOpenNotifications,
   hasUnsavedInput,
   onLogoutPendingChange,
+  onLogoutRequest,
   showBottomBorder = false,
 }: StudentTopbarProps) {
   const navigate = useNavigate();
@@ -349,7 +351,8 @@ export function StudentTopbar({
             profilePhotoUrl={profilePhotoUrl}
             activeTeamId={routeTeamId ?? teamScopeId ?? selectedTeamId}
             hasUnsavedInput={hasUnsavedInput}
-          onLogoutPendingChange={onLogoutPendingChange}
+            onLogoutPendingChange={onLogoutPendingChange}
+            onLogoutRequest={onLogoutRequest}
             onOpen={() => {
               setNotificationsOpen(false);
               setSearchOpen(false);

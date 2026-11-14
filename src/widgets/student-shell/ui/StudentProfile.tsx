@@ -118,9 +118,10 @@ interface StudentProfileProps {
   hasUnsavedInput: boolean;
   onOpen: () => void;
   onLogoutPendingChange?: (pending: boolean) => void;
+  onLogoutRequest?: () => void;
 }
 
-export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange }: StudentProfileProps) {
+export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUnsavedInput, onOpen, onLogoutPendingChange, onLogoutRequest }: StudentProfileProps) {
   const navigate = useNavigate();
   const { key: locationKey, pathname } = useLocation();
   const panelId = useId();
@@ -213,6 +214,11 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, hasUns
 
   const handleLogout = async () => {
     if (loggingOut) return;
+    if (onLogoutRequest) {
+      setOpen(false);
+      onLogoutRequest();
+      return;
+    }
     if (!confirmNavigation('/login', '로그인 화면')) return;
     setLoggingOut(true);
     onLogoutPendingChange?.(true);

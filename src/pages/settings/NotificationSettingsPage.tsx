@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useBlocker, useLocation, useNavigate } from 'react-router';
+import { useBlocker, useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { getSessionUser } from '../../entities/session';
+import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { UnsavedChangesDialog } from '../../shared/ui/feedback';
+import { logout } from '../../features/auth/logout/api/logout';
 
 const Page = styled.div`
   display: flex;
@@ -52,11 +54,12 @@ const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
 
 export default function NotificationSettingsPage() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const user = getSessionUser();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
 
   useEffect(() => {
     if (import.meta.env.DEV && isDemoMode()) {
@@ -76,24 +79,13 @@ export default function NotificationSettingsPage() {
   }, []);
 
   const navigateWithUnsavedCheck = useCallback((path: string) => {
-    if (pathname !== path && hasChanges && !window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) return;
     void navigate(path);
-  }, [hasChanges, navigate, pathname]);
+  }, [navigate]);
 
-  const blocker = useBlocker(useCallback(({ historyAction, nextLocation }) => {
+  const blocker = useBlocker(useCallback(({ currentLocation, historyAction, nextLocation }) => {
     if (logoutPending && historyAction === 'REPLACE' && nextLocation.pathname === '/login') return false;
-    return logoutPending || (historyAction === 'POP' && hasChanges);
+    return logoutPending || (hasChanges && currentLocation.pathname !== nextLocation.pathname);
   }, [hasChanges, logoutPending]));
-
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    if (logoutPending) {
-      blocker.reset();
-      return;
-    }
-    if (window.confirm('저장하지 않은 알림 설정이 있습니다. 저장하지 않고 이동할까요?')) blocker.proceed();
-    else blocker.reset();
-  }, [blocker, logoutPending]);
 
   useEffect(() => {
     if (!hasChanges && !logoutPending) return;
@@ -120,6 +112,26 @@ export default function NotificationSettingsPage() {
     if (path) navigateWithUnsavedCheck(path);
   };
 
+  const performLogout = async () => {
+    if (logoutPending) return;
+    setLogoutPending(true);
+    setLogoutError(false);
+    try {
+      if (!(import.meta.env.DEV && isDemoMode())) await logout();
+      clearSessionUser();
+      void navigate('/login', { replace: true });
+    } catch {
+      setLogoutError(true);
+      setLogoutPending(false);
+    }
+  };
+
+  const requestLogout = () => {
+    if (logoutPending) return;
+    if (hasChanges) setLogoutConfirmationOpen(true);
+    else void performLogout();
+  };
+
   return (
     <StudentShell
       activeItem="settings"
@@ -132,8 +144,8 @@ export default function NotificationSettingsPage() {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      hasUnsavedInput={hasChanges}
-      onLogoutPendingChange={setLogoutPending}
+      hasUnsavedInput={false}
+      onLogoutRequest={requestLogout}
     >
       <Page>
         <Breadcrumb>설정 / 알림 설정</Breadcrumb>
@@ -142,6 +154,12 @@ export default function NotificationSettingsPage() {
           <Description>계약된 알림 그룹의 이메일 및 Discord 수신 여부를 관리합니다.</Description>
         </TitleBlock>
         <NotificationSettingsPanel showChannelBanner disabled={logoutPending} onUnsavedInputChange={setHasChanges} />
+        {logoutError && <Description role="alert">로그아웃하지 못했습니다. 다시 시도해 주세요.</Description>}
+        {blocker.state === 'blocked' && <UnsavedChangesDialog onLeave={blocker.proceed} onStay={blocker.reset} />}
+        {logoutConfirmationOpen && <UnsavedChangesDialog onLeave={() => {
+          setLogoutConfirmationOpen(false);
+          void performLogout();
+        }} onStay={() => setLogoutConfirmationOpen(false)} />}
       </Page>
     </StudentShell>
   );

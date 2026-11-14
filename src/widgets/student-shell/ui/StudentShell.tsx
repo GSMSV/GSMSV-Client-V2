@@ -44,6 +44,7 @@ export interface StudentShellProps {
   onOpenNotifications: () => void;
   hasUnsavedInput?: boolean;
   onLogoutPendingChange?: (pending: boolean) => void;
+  onLogoutRequest?: () => void;
   disabledNavigationItems?: readonly StudentNavigationKey[];
   sidebarActionsAtBottom?: boolean;
   showTopbarDivider?: boolean;
@@ -68,6 +69,7 @@ export function StudentShell({
   onOpenNotifications,
   hasUnsavedInput = false,
   onLogoutPendingChange,
+  onLogoutRequest,
   disabledNavigationItems,
   sidebarActionsAtBottom = true,
   showTopbarDivider = false,
@@ -119,6 +121,7 @@ export function StudentShell({
           onOpenNotifications={onOpenNotifications}
           hasUnsavedInput={hasUnsavedInput}
           onLogoutPendingChange={handleLogoutPendingChange}
+          onLogoutRequest={onLogoutRequest}
           showBottomBorder={showTopbarDivider}
         />
         <PageContent>{children}</PageContent>
