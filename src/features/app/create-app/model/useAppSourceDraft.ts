@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { isDemoMode } from '../../../../shared/demo';
 
 export type AppSourceType = 'github' | 'container' | 'archive';
 
@@ -13,16 +12,6 @@ export interface AppSourceDraft {
 }
 
 export function getInitialAppSourceDraft(): AppSourceDraft {
-  if (import.meta.env.DEV && isDemoMode()) {
-    return {
-      sourceType: 'github',
-      repository: 'gsm-jimin/portfolio-web',
-      branch: 'main',
-      folder: '/',
-      watchPaths: '',
-      name: 'portfolio-web',
-    };
-  }
   return {
     sourceType: 'github',
     repository: '',

@@ -1,14 +1,26 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { getSessionUser } from '../../../entities/session';
-import { listDemoTeams } from '../../../entities/team/demo';
+import type { TeamSummary } from '../../../entities/team';
+import { isDemoMode } from '../../../shared/demo';
 import type { StudentNavigationKey } from '../../student-shell';
 import { StudentShell } from '../../student-shell';
 
 export function ServerlessShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const teams = listDemoTeams();
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  useEffect(() => {
+    if (!(import.meta.env.DEV && isDemoMode())) {
+      setTeams([]);
+      return;
+    }
+    let cancelled = false;
+    void import('../../../entities/team/demo').then(({ listDemoTeams }) => {
+      if (!cancelled) setTeams(listDemoTeams());
+    });
+    return () => { cancelled = true; };
+  }, []);
   const scopeOptions = [
     { id: 'personal', label: '내 Resources', selected: true, onSelect: () => void navigate('/') },
     ...teams.map(team => ({

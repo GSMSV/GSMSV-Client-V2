@@ -9,10 +9,13 @@ import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls'
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
-import { getDemoProfile } from '../../entities/profile';
-import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
-import { demoPersonalAppOwner, getDemoAppQuota } from '../../entities/app/demo';
-import { defaultDemoAppSourceDraft, getDemoInstalledRepositories, installDemoRepository, isDemoRepositoryAccessible, readDemoAppDraft, saveDemoAppDraft } from '../../features/apps/createDemoAppDraft';
+
+type DemoCreateModules = {
+  profile: typeof import('../../entities/profile');
+  team: typeof import('../../entities/team/demo');
+  app: typeof import('../../entities/app/demo');
+  draft: typeof import('../../features/apps/createDemoAppDraft');
+};
 
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
@@ -211,22 +214,42 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   const location = useLocation();
   const { draft, update, hasUnsavedInput } = useAppSourceDraft();
   const [dialog, setDialog] = useState<DialogKind>(null);
-  const [demoDraft, setDemoDraft] = useState(() => import.meta.env.DEV && demoMode ? readDemoAppDraft(teamId) ?? defaultDemoAppSourceDraft : null);
-  const github = import.meta.env.DEV && demoMode ? getDemoProfile()?.github : null;
+  const [demoModules, setDemoModules] = useState<DemoCreateModules | null>(null);
+  const [demoDraft, setDemoDraft] = useState<ReturnType<DemoCreateModules['draft']['readDemoAppDraft']> | null>(null);
+  const github = demoMode ? demoModules?.profile.getDemoProfile()?.github : null;
   const form = demoDraft ?? draft;
   const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     if (demoDraft) setDemoDraft(current => current && ({ ...current, [key]: value }));
     else update(key, value);
   };
   const installRepository = () => {
-    if (import.meta.env.DEV && github && installDemoRepository(form.repository)) setDialog(null);
+    if (import.meta.env.DEV && github && demoModules?.draft.installDemoRepository(form.repository)) setDialog(null);
   };
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
   const [archiveError, setArchiveError] = useState('');
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) { setTeams(listDemoTeams()); return; }
+    if (!import.meta.env.DEV || !demoMode) { setDemoModules(null); setDemoDraft(null); return; }
+    let active = true;
+    void Promise.all([
+      import('../../entities/profile'),
+      import('../../entities/team/demo'),
+      import('../../entities/app/demo'),
+      import('../../features/apps/createDemoAppDraft'),
+    ]).then(([profile, team, app, draftModule]) => {
+      if (!active) return;
+      const modules = { profile, team, app, draft: draftModule };
+      setDemoModules(modules);
+      setDemoDraft(draftModule.readDemoAppDraft(teamId) ?? draftModule.defaultDemoAppSourceDraft);
+      setTeams(team.listDemoTeams());
+      setCurrentTeam(teamId ? team.getDemoTeam(teamId) ?? null : null);
+    });
+    return () => { active = false; };
+  }, [demoMode, teamId]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV && demoMode) return;
     const controller = new AbortController();
     void listMyTeams(controller.signal)
       .then(value => { if (!controller.signal.aborted) setTeams(value); })
@@ -235,7 +258,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   }, [demoMode]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) { setCurrentTeam(teamId ? getDemoTeam(teamId) ?? null : null); return; }
+    if (import.meta.env.DEV && demoMode) return;
     if (!teamId) {
       setCurrentTeam(null);
       return;
@@ -282,19 +305,20 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     const name = form.name.trim();
     if (name.length < 1 || name.length > 30) return;
     if (import.meta.env.DEV && demoMode) {
-      const quota = getDemoAppQuota(teamId ? { type: 'team', id: teamId } : demoPersonalAppOwner);
+      if (!demoModules) return;
+      const quota = demoModules.app.getDemoAppQuota(teamId ? { type: 'team', id: teamId } : demoModules.app.demoPersonalAppOwner);
       if (quota.count >= quota.limit) { setDialog('quota'); return; }
-      if (form.sourceType === 'github' && !isDemoRepositoryAccessible(form.repository, getDemoInstalledRepositories())) {
+      if (form.sourceType === 'github' && !demoModules.draft.isDemoRepositoryAccessible(form.repository, demoModules.draft.getDemoInstalledRepositories())) {
         setDialog('repository-inaccessible');
         return;
       }
       if (currentTeam?.status === 'pending') {
-        if (saveDemoAppDraft(teamId, { ...form, name })) navigate(`/teams/${encodeURIComponent(currentTeam.id)}/apps/new/service`);
+        if (demoModules.draft.saveDemoAppDraft(teamId, { ...form, name })) navigate(`/teams/${encodeURIComponent(currentTeam.id)}/apps/new/service`);
         return;
       }
       if (form.sourceType === 'github' && !github) { setDialog('github-disconnected'); return; }
       if (!form.repository.trim() || (form.sourceType === 'github' && !form.branch)) return;
-      if (!saveDemoAppDraft(teamId, { ...form, name })) return;
+      if (!demoModules.draft.saveDemoAppDraft(teamId, { ...form, name })) return;
     } else {
       const draftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
       sessionStorage.setItem(draftKey, JSON.stringify({ name, repository: draft.repository, branch: draft.branch, folder: draft.folder, watchPaths: draft.watchPaths }));
@@ -314,7 +338,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      hasUnsavedInput={demoDraft ? Object.keys(demoDraft).some(key => demoDraft[key as keyof typeof demoDraft] !== defaultDemoAppSourceDraft[key as keyof typeof demoDraft]) : hasUnsavedInput}
+      hasUnsavedInput={demoDraft && demoModules ? Object.keys(demoDraft).some(key => demoDraft[key as keyof typeof demoDraft] !== demoModules.draft.defaultDemoAppSourceDraft[key as keyof typeof demoDraft]) : hasUnsavedInput}
     >
       <Page>
         <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
@@ -340,7 +364,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                   else setDialog('unsupported-source');
                   return;
                 }
-                if (demoDraft && demoDraft.sourceType !== 'github') setDemoDraft({ ...demoDraft, sourceType: type, repository: defaultDemoAppSourceDraft.repository, branch: 'main' });
+                if (demoDraft && demoModules && demoDraft.sourceType !== 'github') setDemoDraft({ ...demoDraft, sourceType: type, repository: demoModules.draft.defaultDemoAppSourceDraft.repository, branch: 'main' });
                 else setField('sourceType', type);
               }}>{sourceTypeLabels[type]}</Segment>
             ))}
@@ -462,7 +486,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
               {!teamId && <Button onClick={() => navigate('/teams/new')}>팀 만들기</Button>}
             </> : dialog === 'github-disconnected' ? <>
               <Button variant="secondary" onClick={() => setDialog(null)}>취소</Button>
-              <Button onClick={() => { saveDemoAppDraft(teamId, form); navigate('/settings', { state: { returnTo: location.pathname } }); }}>계정 설정에서 연결</Button>
+              <Button onClick={() => { demoModules?.draft.saveDemoAppDraft(teamId, form); navigate('/settings', { state: { returnTo: location.pathname } }); }}>계정 설정에서 연결</Button>
             </> : <>
               <Button variant="secondary" onClick={handleContinue}>다시 확인</Button>
               <Button onClick={installRepository}>설치 저장소 바꾸기</Button>

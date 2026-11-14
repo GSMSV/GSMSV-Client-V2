@@ -8,8 +8,6 @@ import {
   deleteDomain,
   deleteFirewallRule,
   deletePortForward,
-  getDemoDomainValidationError,
-  getDemoNetworkState,
   listDomains,
   listFirewallRules,
   listPortForwards,
@@ -23,7 +21,7 @@ import {
   type NetworkProtocol,
   type PortForward,
 } from '../../entities/network';
-import { getDemoVmState } from '../../entities/vm';
+import type { DemoVm } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
@@ -407,7 +405,24 @@ export default function VMNetworkPage() {
   const { vmGrn, teamId: routeTeamId } = useParams<{ vmGrn: string; teamId?: string }>();
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoVm = isDemoMode() ? getDemoVmState().vms.find(vm => vm.grn === vmGrn) : undefined;
+  const demoMode = import.meta.env.DEV && isDemoMode();
+  const [demoVm, setDemoVm] = useState<DemoVm>();
+  const [demoVmResolved, setDemoVmResolved] = useState(false);
+  useEffect(() => {
+    if (!(import.meta.env.DEV && demoMode) || !vmGrn) {
+      setDemoVm(undefined);
+      setDemoVmResolved(true);
+      return;
+    }
+    let cancelled = false;
+    setDemoVmResolved(false);
+    void import('../../entities/vm').then(({ getDemoVmState }) => {
+      if (cancelled) return;
+      setDemoVm(getDemoVmState().vms.find(vm => vm.grn === vmGrn));
+      setDemoVmResolved(true);
+    });
+    return () => { cancelled = true; };
+  }, [demoMode, vmGrn]);
   const teamId = routeTeamId ?? (demoVm?.owner === 'team' ? demoVm.teamId : undefined);
   const resourceVmId = encodeURIComponent(demoVm?.id ?? vmGrn ?? '');
   const resourceBase = teamId
@@ -416,7 +431,7 @@ export default function VMNetworkPage() {
   const fallbackNetworkPath = teamId
     ? `/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(vmGrn ?? '')}/network`
     : `/vms/${encodeURIComponent(vmGrn ?? '')}/network`;
-  const demoNavigationAvailable = Boolean(isDemoMode() && demoVm && (demoVm.owner !== 'team' || demoVm.teamId === teamId));
+  const demoNavigationAvailable = Boolean(demoMode && demoVm && (demoVm.owner !== 'team' || demoVm.teamId === teamId));
   const [ports, setPorts] = useState<Loadable<Awaited<ReturnType<typeof listPortForwards>>>>(initial);
   const [rules, setRules] = useState<Loadable<Awaited<ReturnType<typeof listFirewallRules>>>>(initial);
   const [domains, setDomains] = useState<Loadable<Awaited<ReturnType<typeof listDomains>>>>(initial);
@@ -542,7 +557,7 @@ export default function VMNetworkPage() {
   }
 
   async function setFirewallState(enabled: boolean) {
-    if (!vmGrn || !isDemoMode()) return;
+    if (!vmGrn || !demoMode) return;
     setSubmitting(true);
     setError('');
     setAction(enabled ? 'firewall-enable-loading' : 'firewall-disable-loading');
@@ -560,7 +575,7 @@ export default function VMNetworkPage() {
   }
 
   function toggleFirewall() {
-    if (!isDemoMode() || !rules.value || submitting) return;
+    if (!demoMode || !rules.value || submitting) return;
     if (firewallEnabled) setAction('firewall-disable-confirm');
     else void setFirewallState(true);
   }
@@ -571,11 +586,15 @@ export default function VMNetworkPage() {
     const subdomain = domainForm.subdomain.trim();
     if (!/^[a-z0-9-]{1,63}$/.test(subdomain)) { setError('서브도메인은 영문 소문자, 숫자, 하이픈으로 1~63자 입력해 주세요.'); return; }
     if (!Number.isInteger(expectedInternalPort) || expectedInternalPort < 1 || expectedInternalPort > 65535) { setError('내부 포트는 1부터 65535 사이의 숫자여야 합니다.'); return; }
-    if (isDemoMode()) {
-      const otherSubdomains = getDemoVmState().vms
+    if (import.meta.env.DEV && demoMode) {
+      const [vmRepository, networkRepository] = await Promise.all([
+        import('../../entities/vm'),
+        import('../../entities/network/model/demoNetworkStore'),
+      ]);
+      const otherSubdomains = vmRepository.getDemoVmState().vms
         .filter(vm => vm.grn !== vmGrn)
-        .flatMap(vm => getDemoNetworkState(vm.grn).domains.map(domain => domain.subdomain));
-      const validationError = getDemoDomainValidationError(vmGrn, subdomain, expectedInternalPort, otherSubdomains);
+        .flatMap(vm => networkRepository.getDemoNetworkState(vm.grn).domains.map(domain => domain.subdomain));
+      const validationError = networkRepository.getDemoDomainValidationError(vmGrn, subdomain, expectedInternalPort, otherSubdomains);
       if (validationError) { setError(validationError); return; }
     }
     setSubmitting(true); setError('');
@@ -583,7 +602,7 @@ export default function VMNetworkPage() {
       await createDomain(vmGrn, { subdomain, internal_port: expectedInternalPort });
       setNotice('HTTPS Domain을 연결했습니다.'); finishAction(); reload();
     } catch (cause) {
-      if (isDemoMode() && cause instanceof Error) setError(cause.message);
+      if (demoMode && cause instanceof Error) setError(cause.message);
       else handleActionError(cause, 'Domain 추가');
       setSubmitting(false);
     }
@@ -616,10 +635,10 @@ export default function VMNetworkPage() {
   const publicHost = ports.value?.public_host;
   const userName = demoVm?.owner === 'team' ? '윤채원' : user?.name ?? '사용자';
 
-  if (isDemoMode() && routeTeamId && (!demoVm || demoVm.owner !== 'team' || demoVm.teamId !== routeTeamId)) {
+  if (demoMode && demoVmResolved && routeTeamId && (!demoVm || demoVm.owner !== 'team' || demoVm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}/vms`} replace />;
   }
-  if (isDemoMode() && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
+  if (demoMode && demoVmResolved && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
     return <Navigate to={`/teams/${encodeURIComponent(demoVm.teamId)}/vms/${encodeURIComponent(demoVm.id)}/network`} replace />;
   }
 
@@ -725,8 +744,8 @@ export default function VMNetworkPage() {
                 role="switch"
                 aria-checked={firewallEnabled}
                 aria-label="방화벽 사용 상태"
-                disabled={!isDemoMode() || !rules.value || busy}
-                title={!isDemoMode() ? '계약에 방화벽 켜기/끄기 API가 없습니다.' : undefined}
+                disabled={!demoMode || !rules.value || busy}
+                title={!demoMode ? '계약에 방화벽 켜기/끄기 API가 없습니다.' : undefined}
                 onClick={toggleFirewall}
               >
                 <SwitchTrack $enabled={firewallEnabled} aria-hidden="true"><SwitchThumb $enabled={firewallEnabled} /></SwitchTrack>

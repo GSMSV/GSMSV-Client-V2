@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { extendDatabase, getDatabase, getDatabaseCredentials, listDatabaseBackups } from '../../entities/database';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail } from '../../entities/database';
-import { getDemoDatabaseCurrentConnections, getDemoDatabaseSuspensionInfo } from '../../entities/database/demo';
 import { getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -130,6 +129,7 @@ export default function DatabaseDetailPage() {
   const [extendError, setExtendError] = useState(false);
   const [extendedUntil, setExtendedUntil] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [demoMetrics, setDemoMetrics] = useState<{ currentConnections: number | null; suspensionInfo: { deleteInDays: number; deleteAt: string } | null }>({ currentConnections: null, suspensionInfo: null });
 
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
@@ -170,6 +170,17 @@ export default function DatabaseDetailPage() {
   }, []);
 
   useEffect(() => {
+    const current = detail.value;
+    if (!import.meta.env.DEV || !isDemoMode() || !current) { setDemoMetrics({ currentConnections: null, suspensionInfo: null }); return; }
+    let active = true;
+    void import('../../entities/database/demo').then(demo => {
+      if (!active) return;
+      setDemoMetrics({ currentConnections: demo.getDemoDatabaseCurrentConnections(current.grn), suspensionInfo: demo.getDemoDatabaseSuspensionInfo(current.grn) });
+    });
+    return () => { active = false; };
+  }, [detail.value]);
+
+  useEffect(() => {
     if (import.meta.env.DEV && isDemoMode()) {
       let cancelled = false;
       void import('../../entities/home').then(({ demoHomeTeams }) => {
@@ -192,8 +203,8 @@ export default function DatabaseDetailPage() {
   }, null) ?? null, [backups.value]);
   const daysLeft = detail.value ? remainingDays(detail.value.expires_at) : null;
   const demoMode = import.meta.env.DEV && isDemoMode();
-  const currentConnections = detail.value && demoMode ? getDemoDatabaseCurrentConnections(detail.value.grn) : null;
-  const suspensionInfo = detail.value && demoMode ? getDemoDatabaseSuspensionInfo(detail.value.grn) : null;
+  const currentConnections = detail.value && demoMode ? demoMetrics.currentConnections : null;
+  const suspensionInfo = detail.value && demoMode ? demoMetrics.suspensionInfo : null;
   const databaseSql = detail.value ? sqlExample(detail.value) : null;
   const databaseListPath = (database: DatabaseDetail) => database.owner.type === 'team'
     ? `/databases?owner=${encodeURIComponent(database.owner.id)}`

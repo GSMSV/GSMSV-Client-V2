@@ -211,7 +211,7 @@ function quotaPercentage(amount: QuotaAmount) {
 export default function AppsListPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = isDemoMode();
+  const demoMode = import.meta.env.DEV && isDemoMode();
   const [apps, setApps] = useState<LoadableApps>({ value: null, loading: true, error: false });
   const [quota, setQuota] = useState<LoadableQuota>(initialQuota);
   const [teams, setTeams] = useState<LoadableTeams>(initialTeams);

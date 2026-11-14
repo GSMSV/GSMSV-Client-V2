@@ -626,10 +626,10 @@ export default function AdminInfrastructurePage() {
         <Navigation aria-label="관리자 메뉴">
           {navItems.map((item, index) => {
             const href = index === 0 ? '/admin/infra'
-              : index === 1 ? (isDemoMode() ? '/admin/team-approvals' : undefined)
-                : index === 2 ? (isDemoMode() ? '/admin/vms/demo-vm-1' : '/admin/vms')
-                  : index === 3 ? (isDemoMode() ? '/admin/inquiries' : undefined)
-                    : index === 4 ? (isDemoMode() ? '/admin/accounts' : undefined)
+              : index === 1 ? (import.meta.env.DEV && isDemoMode() ? '/admin/team-approvals' : undefined)
+                : index === 2 ? (import.meta.env.DEV && isDemoMode() ? '/admin/vms/demo-vm-1' : '/admin/vms')
+                  : index === 3 ? (import.meta.env.DEV && isDemoMode() ? '/admin/inquiries' : undefined)
+                    : index === 4 ? (import.meta.env.DEV && isDemoMode() ? '/admin/accounts' : undefined)
                       : undefined;
             const active = href ? Boolean(matchPath(href, location.pathname)) : false;
             return (
@@ -693,7 +693,7 @@ export default function AdminInfrastructurePage() {
                       nodeVmStates={nodeVmStates}
                       expiringGrns={demoSnapshot?.expiringGrns}
                       demoVmDetails={demoSnapshot?.vmDetails}
-                      onDemoPowerAction={demoSnapshot ? (grn, powerState) => {
+                      onDemoPowerAction={import.meta.env.DEV && demoSnapshot ? (grn, powerState) => {
                         const nextSnapshot = {
                           ...demoSnapshot,
                           resources: demoSnapshot.resources.map(resource => resource.grn === grn

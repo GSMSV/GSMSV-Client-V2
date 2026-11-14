@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { deleteDatabase, getDatabase, renameDatabase, rotateDatabasePassword } from '../../entities/database';
 import type { DatabaseDetail, DatabaseOperation, DatabasePasswordRotation } from '../../entities/database';
-import { getDemoDatabaseConnectedFunctions } from '../../entities/database/demo';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { isDemoMode } from '../../shared/demo';
@@ -116,6 +115,7 @@ export default function DatabaseSettingsPage(){
   const [deleting,setDeleting]=useState(false);
   const [deleteError,setDeleteError]=useState(false);
   const [deleteOperation,setDeleteOperation]=useState<DatabaseOperation|null>(null);
+  const [connectedFunctions,setConnectedFunctions]=useState<string[]>([]);
   const deleteIdempotencyKey=useRef<string|null>(null);
 
   const load=useCallback(async(signal:AbortSignal)=>{
@@ -136,6 +136,13 @@ export default function DatabaseSettingsPage(){
     }
   },[databaseGrn]);
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load,retryKey]);
+  useEffect(()=>{
+    const current=detail.value;
+    if(!(import.meta.env.DEV&&isDemoMode())||!current){setConnectedFunctions([]);return;}
+    let active=true;
+    void import('../../entities/database/demo').then(demo=>{if(active)setConnectedFunctions(demo.getDemoDatabaseConnectedFunctions(current.grn));});
+    return()=>{active=false;};
+  },[detail.value]);
   useEffect(()=>{
     if(import.meta.env.DEV&&isDemoMode()){
       let cancelled=false;
@@ -181,7 +188,6 @@ export default function DatabaseSettingsPage(){
     if(item==='team')navigate(current?.owner.type==='team'?teamPath(current):'/teams');
   };
   const value=detail.value;
-  const connectedFunctions=value&&import.meta.env.DEV&&isDemoMode()?getDemoDatabaseConnectedFunctions(value.grn):[];
   const trimmedName=name.trim();
   const nameValid=trimmedName.length>=1&&trimmedName.length<=30;
   const nameDirty=Boolean(value&&trimmedName!==value.name);
