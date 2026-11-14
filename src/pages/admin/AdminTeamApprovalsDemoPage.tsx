@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { getDemoTeamRequests, saveDemoTeamRequests, type TeamRequest } from '../../entities/demo-workflows';
-import { listDemoDisbandRequests, type DemoTeamDetail } from '../../entities/team/demo';
+import { listDemoDisbandRequests, setDemoTeamApproval, type DemoTeamDetail } from '../../entities/team/demo';
 import { AccountDialog, DialogCopy, approveDemoTeamDisband, getDemoDisbandResources } from '../../features/settings/demo-account';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -24,20 +24,37 @@ export default function AdminTeamApprovalsDemoPage() {
 
   function update(request: TeamRequest) {
     const next = requests.map((item) => item.id === request.id ? request : item);
+    if (!saveDemoTeamRequests(next)) return false;
     setRequests(next);
-    saveDemoTeamRequests(next);
+    return true;
   }
 
   function approve() {
-    if (!selected || selected.status === '승인 완료') return;
-    update({ ...selected, status: '승인 완료' });
+    if (!selected || selected.status === '승인 완료' || selected.status === '거절') return;
+    const teamId = selected.teamId ?? (selected.name === 'GSM Connect' ? 'demo-team' : undefined);
+    if (teamId && !setDemoTeamApproval(teamId, 'approved', { vcpu: selected.vcpu, ram: selected.ram, ssd: selected.ssd })) {
+      setNotice('팀 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    if (!update({ ...selected, status: '승인 완료' })) {
+      setNotice('신청 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(`${selected.name} 팀 신청을 승인했습니다. 로컬 미리보기에서만 적용됩니다.`);
   }
 
   function reject() {
-    if (!selected) return;
-    if (!rejectReason.trim()) { setNotice('팀장에게 전달할 거절 사유를 입력해 주세요.'); return; }
-    update({ ...selected, status: '거절', rejectReason: rejectReason.trim() });
+    const reason = rejectReason.trim();
+    if (!selected || selected.status === '거절' || selected.status === '승인 완료' || !reason) return;
+    const teamId = selected.teamId ?? (selected.name === 'GSM Connect' ? 'demo-team' : undefined);
+    if (teamId && !setDemoTeamApproval(teamId, 'rejected', { rejectionReason: reason })) {
+      setNotice('팀 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    if (!update({ ...selected, status: '거절', rejectReason: reason })) {
+      setNotice('신청 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(`${selected.name} 팀 신청을 거절했습니다.`);
   }
 
@@ -48,7 +65,7 @@ export default function AdminTeamApprovalsDemoPage() {
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="승인"><PageStack>
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 승인</p>
     <Heading><TitleGroup><Title>승인</Title><Muted>팀의 사용 목적을 확인하고 할당량을 정해 승인하세요.</Muted></TitleGroup></Heading>
-    {notice && <Alert $tone={notice.includes('입력') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
+    {notice && <Alert $tone={notice.includes('입력') || notice.includes('저장하지 못') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><div style={{ display: 'flex', gap: 8 }}><Button variant="primary">팀 <Badge>3</Badge></Button><Button variant="ghost" onClick={() => navigate('/admin/database-approvals')}>전용형 Database <Badge>1</Badge></Button></div><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setRequests(getDemoTeamRequests()); setDisbandRequests(listDemoDisbandRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button></div>
     <Card><CardHeader><SectionTitle>승인 대기 팀</SectionTitle><div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 8, background: '#403d45' }}><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => setFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => setFilter('done')}>처리 완료</Button></div></CardHeader>
       <TableWrap><Table><thead><tr><th>팀</th><th>팀장</th><th>팀원</th><th>사용 목적</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} aria-selected={item.id === selected?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }}><td>{item.name}</td><td>{item.leader}</td><td>{item.members}명</td><td>{item.purpose}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></Table></TableWrap>
@@ -61,7 +78,7 @@ export default function AdminTeamApprovalsDemoPage() {
         <Field style={{ marginTop: 16 }}>RAM (GB)<Input type="number" min={1} value={selected.ram} onChange={(event) => patchSelected({ ram: Number(event.target.value) })} /></Field>
         <Field style={{ marginTop: 16 }}>SSD (GB)<Input type="number" min={1} value={selected.ssd} onChange={(event) => patchSelected({ ssd: Number(event.target.value) })} /></Field>
       </Card>
-      <Card><CardHeader><div><SectionTitle>거절</SectionTitle><Hint>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Hint></div><Button variant="secondary" disabled={selected.status === '거절' || selected.status === '승인 완료'} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Field>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
+      <Card><CardHeader><div><SectionTitle>거절</SectionTitle><Hint>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Hint></div><Button variant="secondary" disabled={!rejectReason.trim() || selected.status === '거절' || selected.status === '승인 완료'} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Field>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
     </>}
     {disbandRequests.length > 0 && <Card>
       <CardHeader><SectionTitle>해체 요청</SectionTitle></CardHeader>
