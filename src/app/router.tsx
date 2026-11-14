@@ -3,6 +3,7 @@ import { createBrowserRouter, useParams } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
+const DemoEntryPage = lazy(() => import('../pages/demo/DemoEntryPage'));
 const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const DatabaseListPage = lazy(() => import('../pages/database/DatabaseListPage'));
@@ -71,6 +72,14 @@ function VMNetworkRoute() {
 }
 
 export const router = createBrowserRouter([
+  {
+    path: '/__demo',
+    element: (
+      <Suspense fallback={null}>
+        <DemoEntryPage />
+      </Suspense>
+    ),
+  },
   {
     path: '/',
     element: (
