@@ -9,6 +9,7 @@ import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { isDemoMode } from '../../shared/demo';
 
 const TEAM_APP_LIMIT = 4;
 
@@ -146,6 +147,7 @@ const roleLabel: Record<TeamRole, string> = {
 export default function TeamAppsListPage({ teamId }: { teamId: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const [team, setTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
@@ -155,6 +157,34 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
     setTeam(current => ({ ...current, loading: true, error: false }));
     setApps(current => ({ ...current, loading: true, error: false }));
     setTeams(current => ({ ...current, loading: true, error: false }));
+
+    if (import.meta.env.DEV && demoMode) {
+      void Promise.all([
+        import('../../entities/home'),
+        import('../../entities/app/demo'),
+      ]).then(([home, app]) => {
+        if (signal.aborted) return;
+        const summary = home.demoHomeTeams.find(item => item.id === teamId);
+        const demoTeam: TeamDetail | null = summary ? {
+          ...summary,
+          rejection_reason: null,
+          members: [],
+          quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
+          permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
+        } : null;
+        const teamApps = app.getDemoAppSummaries({ type: 'team', id: teamId, name: summary?.name ?? 'GSM Connect' });
+        const teams = summary ? home.demoHomeTeams : [];
+        setTeam(demoTeam ? { value: demoTeam, loading: false, error: false } : { value: null, loading: false, error: true });
+        setApps({ value: teamApps, loading: false, error: false });
+        setTeams({ value: teams, loading: false, error: false });
+      }).catch(() => {
+        if (signal.aborted) return;
+        setTeam({ value: null, loading: false, error: true });
+        setApps({ value: null, loading: false, error: true });
+        setTeams({ value: null, loading: false, error: true });
+      });
+      return;
+    }
 
     const [teamResult, appResult, teamsResult] = await Promise.allSettled([
       getTeam(teamId, signal),
@@ -172,7 +202,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
     setTeams(teamsResult.status === 'fulfilled'
       ? { value: teamsResult.value, loading: false, error: false }
       : { value: null, loading: false, error: true });
-  }, [teamId]);
+  }, [demoMode, teamId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -273,7 +303,9 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
             ) : apps.value.length ? (
               <CardsRow>
                 {apps.value.map(app => (
-                  <AppResourceCard key={app.grn} app={app} onOpen={() => navigate(`/apps/${encodeURIComponent(app.grn)}`)} />
+                  <AppResourceCard key={app.grn} app={app} onOpen={() => navigate(demoMode
+                    ? `/apps/${encodeURIComponent(app.id)}/demo`
+                    : `/apps/${encodeURIComponent(app.grn)}`)} />
                 ))}
               </CardsRow>
             ) : (

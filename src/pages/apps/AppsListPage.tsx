@@ -5,6 +5,7 @@ import { AppResourceCard, listPersonalApps, type AppSummary } from '../../entiti
 import { getMyQuota, type MyQuota, type QuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -210,6 +211,7 @@ function quotaPercentage(amount: QuotaAmount) {
 export default function AppsListPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const [apps, setApps] = useState<LoadableApps>({ value: null, loading: true, error: false });
   const [quota, setQuota] = useState<LoadableQuota>(initialQuota);
   const [teams, setTeams] = useState<LoadableTeams>(initialTeams);
@@ -219,32 +221,65 @@ export default function AppsListPage() {
   const loadApps = useCallback(async (signal: AbortSignal) => {
     setApps(current => ({ ...current, loading: true, error: false }));
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const { getDemoAppSummaries } = await import('../../entities/app/demo');
+        const value = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
+        if (!signal.aborted) setApps({ value, loading: false, error: false });
+        return;
+      }
       const value = await listPersonalApps({ signal });
       if (!signal.aborted) setApps({ value, loading: false, error: false });
     } catch {
       if (!signal.aborted) setApps({ value: null, loading: false, error: true });
     }
-  }, []);
+  }, [demoMode]);
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const [{ demoHomeQuota }, { getDemoAppSummaries, getDemoApps }] = await Promise.all([
+          import('../../entities/home'),
+          import('../../entities/app/demo'),
+        ]);
+        const demoApps = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
+        const storedApps = getDemoApps().filter(app => app.owner?.type === 'user' && app.owner.id === 'demo-student');
+        const baseAppQuota = demoHomeQuota.app;
+        const memoryUsed = storedApps.reduce((sum, app) => sum + app.services.reduce((total, service) => total + service.memoryMb, 0), 0);
+        const alwaysOnUsed = storedApps.reduce((sum, app) => sum + app.services.filter(service => service.alwaysOn).length, 0);
+        const value: MyQuota = {
+          ...demoHomeQuota,
+          app: {
+            ...baseAppQuota,
+            count: { ...baseAppQuota.count, used: demoApps.length },
+            memory_mb: { ...baseAppQuota.memory_mb, used: memoryUsed },
+            always_on: { ...baseAppQuota.always_on, used: alwaysOnUsed },
+          },
+        };
+        if (!signal.aborted) setQuota({ value, loading: false, error: false });
+        return;
+      }
       const value = await getMyQuota(signal);
       if (!signal.aborted) setQuota({ value, loading: false, error: false });
     } catch {
       if (!signal.aborted) setQuota({ value: null, loading: false, error: true });
     }
-  }, []);
+  }, [demoMode]);
 
   const loadTeams = useCallback(async (signal: AbortSignal) => {
     setTeams(current => ({ ...current, loading: true }));
     try {
+      if (import.meta.env.DEV && demoMode) {
+        const { demoHomeTeams } = await import('../../entities/home');
+        if (!signal.aborted) setTeams({ value: demoHomeTeams, loading: false });
+        return;
+      }
       const value = await listMyTeams(signal);
       if (!signal.aborted) setTeams({ value, loading: false });
     } catch {
       if (!signal.aborted) setTeams({ value: null, loading: false });
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -286,7 +321,9 @@ export default function AppsListPage() {
     else navigate('/apps/new');
   };
 
-  const openApp = (app: AppSummary) => navigate(`/apps/${encodeURIComponent(app.grn)}`);
+  const openApp = (app: AppSummary) => navigate(demoMode
+    ? `/apps/${encodeURIComponent(app.id)}/demo`
+    : `/apps/${encodeURIComponent(app.grn)}`);
 
   return (
     <StudentShell

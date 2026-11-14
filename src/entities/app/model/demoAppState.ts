@@ -3,6 +3,7 @@ import {
   readDemoState,
   writeDemoState,
 } from "../../../shared/demo";
+import type { AppOwner, AppSummary } from "./types";
 
 export interface DemoAppVariable {
   key: string;
@@ -50,6 +51,7 @@ export interface DemoManagedService {
 export interface DemoManagedApp {
   id: string;
   name: string;
+  owner?: AppOwner;
   sourceType: "github" | "container" | "archive";
   repository: string;
   branch: string;
@@ -63,6 +65,7 @@ const demoAppSeed: DemoManagedApp[] = [
   {
     id: "demo-portfolio-web",
     name: "portfolio-web",
+    owner: { type: "user", id: "demo-student", name: "김민수" },
     sourceType: "github",
     repository: "gsm-jimin/portfolio-web",
     branch: "main",
@@ -188,6 +191,18 @@ const demoAppSeed: DemoManagedApp[] = [
   },
 ];
 
+const demoTeamAppSeed: DemoManagedApp = {
+  ...structuredClone(demoAppSeed[0]),
+  id: "demo-team-portal",
+  name: "connect-portal",
+  owner: { type: "team", id: "demo-team", name: "GSM Connect" },
+  services: demoAppSeed[0].services.map((service, index) => ({
+    ...structuredClone(service),
+    id: `demo-team-service-${index + 1}`,
+    subdomain: `connect-${service.subdomain}`,
+  })),
+};
+
 function isDemoManagedApp(value: unknown): value is DemoManagedApp {
   if (!value || typeof value !== "object") return false;
   const app = value as Partial<DemoManagedApp>;
@@ -195,6 +210,12 @@ function isDemoManagedApp(value: unknown): value is DemoManagedApp {
     typeof app.id === "string" &&
     typeof app.name === "string" &&
     typeof app.repository === "string" &&
+    (app.owner === undefined || Boolean(
+      app.owner &&
+        (app.owner.type === "user" || app.owner.type === "team") &&
+        typeof app.owner.id === "string" &&
+        typeof app.owner.name === "string",
+    )) &&
     Array.isArray(app.environments) &&
     Array.isArray(app.services) &&
     app.services.every((service) =>
@@ -212,13 +233,35 @@ function isDemoManagedApp(value: unknown): value is DemoManagedApp {
 
 export function getDemoApps(): DemoManagedApp[] {
   if (!isDemoMode()) return [];
-  const apps = readDemoState<unknown>(
+  const storedApps = readDemoState<unknown>(
     "apps.services",
-    structuredClone(demoAppSeed),
+    structuredClone([...demoAppSeed, demoTeamAppSeed]),
   );
-  return Array.isArray(apps) && apps.every(isDemoManagedApp)
-    ? apps
-    : structuredClone(demoAppSeed);
+  const apps = Array.isArray(storedApps) && storedApps.every(isDemoManagedApp)
+    ? storedApps.map((app) => ({
+        ...app,
+        owner: app.owner ?? { type: "user", id: "demo-student", name: "김민수" },
+      }))
+    : structuredClone([...demoAppSeed, demoTeamAppSeed]);
+  if (!apps.some((app) => app.id === demoTeamAppSeed.id)) apps.push(structuredClone(demoTeamAppSeed));
+  return apps;
+}
+
+export function getDemoAppSummaries(owner?: AppOwner): AppSummary[] {
+  return getDemoApps()
+    .filter((app) => !owner || (app.owner?.type === owner.type && app.owner.id === owner.id))
+    .map((app) => ({
+      grn: `grn:gsmsv:app:${app.owner?.id ?? "demo-student"}:${app.id}`,
+      id: app.id,
+      name: app.name,
+      owner: app.owner ?? { type: "user", id: "demo-student", name: "김민수" },
+      status: "active",
+      created_by: "demo-student",
+      created_at: "2026-10-01T00:00:00.000Z",
+      updated_at: "2026-11-13T04:00:00.000Z",
+      expires_at: "2026-12-31T14:59:59.000Z",
+      permissions: { view: true, update: true, extend: true, delete: true },
+    }));
 }
 
 export function saveDemoApps(apps: DemoManagedApp[]): boolean {
@@ -259,6 +302,7 @@ export function addDemoApp(
   serviceName = "web",
   subdomain = "portfolio-web",
   sourceType: DemoManagedApp["sourceType"] = "github",
+  owner: AppOwner = { type: "user", id: "demo-student", name: "김민수" },
 ): string {
   const apps = getDemoApps();
   const suffix = Date.now().toString(36);
@@ -269,6 +313,7 @@ export function addDemoApp(
     ...demoAppSeed[0],
     id: appId,
     name,
+    owner,
     sourceType,
     repository,
     branch,
