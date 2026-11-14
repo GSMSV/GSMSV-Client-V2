@@ -11,9 +11,11 @@ import {
   describeCronExpression,
   executeDemoServerlessTest,
   extendDemoServerlessFunction,
+  formatCronExecution,
   getDemoServerlessFunction,
   getDemoServerlessQuota,
   getDemoServerlessUrl,
+  getNextCronExecution,
   regenerateDemoServerlessUrl,
   rollbackDemoServerlessVersion,
   saveDemoServerlessCode,
@@ -130,6 +132,17 @@ export function ServerlessTriggersRoute() {
   if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
   const changed = () => refresh(setRevision);
   const quota = getDemoServerlessQuota();
+  const enabledCronTriggers = fn.triggers.filter(trigger => trigger.type === 'Cron' && trigger.enabled);
+  const isSeededFigmaPreview = fn.id === 'welcome-api'
+    && fn.triggers.length === 2
+    && enabledCronTriggers.length === 1
+    && enabledCronTriggers[0].id === 'cron'
+    && enabledCronTriggers[0].schedule === '0 9 * * *';
+  const seedPreviewClock = isSeededFigmaPreview ? new Date('2026-09-30T08:59:00+09:00') : undefined;
+  const nextCronExecution = enabledCronTriggers
+    .map(trigger => getNextCronExecution(trigger.schedule, seedPreviewClock))
+    .filter((nextExecution): nextExecution is Date => Boolean(nextExecution))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
   return (
     <ServerlessShell>
       <TriggersPage
@@ -139,7 +152,7 @@ export function ServerlessTriggersRoute() {
         concurrentLimit={2}
         dailyExecutions={quota.daily_executions}
         triggers={fn.triggers}
-        nextCronExecution={fn.triggers.some(trigger => trigger.type === 'Cron' && trigger.enabled) ? '2026. 09. 30. 오전 09:00' : undefined}
+        nextCronExecution={nextCronExecution ? formatCronExecution(nextCronExecution) : undefined}
         domain={fn.domain}
         enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTriggerTab[]}
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
