@@ -15,7 +15,7 @@ const defaultHost = 'ssh.gsmsv.site';
 function seed(vmGrn: string): DemoNetworkState {
   const team = vmGrn.includes('team-vm');
   const ssh = team ? 32117 : 32104;
-  const hostname = vmGrn.replace(/^(team-vm-|vm-)/, '').replace(/^team-/, '');
+  const hostname = vmGrn.replace(/^grn:gsmsv:vm:/, '').replace(/^(team-vm-|vm-)/, '').replace(/^team-/, '') || 'demo-vm';
   return {
     ports: [
       { id: `${vmGrn}-ssh`, kind: 'ssh', external_port: ssh, internal_port: 22, protocol: 'tcp', allowed_source: null, description: 'SSH 기본 포트' },
