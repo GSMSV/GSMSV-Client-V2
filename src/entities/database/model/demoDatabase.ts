@@ -11,6 +11,7 @@ export interface DemoDatabaseState {
   welcomeFixtureInitialized?: boolean;
 }
 
+const legacyWelcomeGrn = 'grn:gsmsv:database:demo-student:student-db';
 const welcomeGrn = 'grn:gsmsv:database:demo-student:welcome-db';
 const lockedGrn = 'grn:gsmsv:database:demo-student:quota-locked-db';
 const teamGrn = 'grn:gsmsv:database:demo-team:connect-db';
@@ -90,20 +91,29 @@ export function getDemoDatabaseState(): DemoDatabaseState {
   let changed = false;
   if (!validState.welcomeFixtureInitialized) {
     const welcomeSeed = demoDatabaseSeed.databases.find(database => database.grn === welcomeGrn);
-    const legacyIndex = validState.databases.findIndex(database => database.grn === 'grn:gsmsv:database:demo-student:student-db' || database.id === 'student-db');
+    const legacyIndex = validState.databases.findIndex(database => database.grn === legacyWelcomeGrn || database.id === 'student-db');
     const canonicalIndex = validState.databases.findIndex(database => database.grn === welcomeGrn || database.id === 'welcome-db');
     const sourceIndex = legacyIndex >= 0 ? legacyIndex : canonicalIndex;
     const source = sourceIndex >= 0 ? validState.databases[sourceIndex] : null;
     if (welcomeSeed && source) {
+      const isLegacyWelcome = source.grn === legacyWelcomeGrn || source.id === 'student-db';
       const canonical = {
         ...source,
         grn: welcomeGrn,
         id: 'welcome-db',
-        name: source.id === 'student-db' && source.name === 'student-db' ? 'welcome-db' : source.name,
+        name: isLegacyWelcome && source.name === 'student-db' ? 'welcome-db' : source.name,
         engine: welcomeSeed.engine,
         isolation: welcomeSeed.isolation,
         connection: clone(welcomeSeed.connection),
-        storage: { ...source.storage, owner_limit_gb: welcomeSeed.storage.owner_limit_gb },
+        storage: {
+          ...source.storage,
+          used_gb: isLegacyWelcome && source.storage.used_gb === 3.2 ? welcomeSeed.storage.used_gb : source.storage.used_gb,
+          owner_total_used_gb: isLegacyWelcome && source.storage.owner_total_used_gb === 3.2 ? welcomeSeed.storage.owner_total_used_gb : source.storage.owner_total_used_gb,
+          owner_limit_gb: isLegacyWelcome && source.storage.owner_limit_gb === 10 ? welcomeSeed.storage.owner_limit_gb : source.storage.owner_limit_gb,
+        },
+        created_at: isLegacyWelcome && source.created_at === '2026-10-01T00:00:00.000Z' ? welcomeSeed.created_at : source.created_at,
+        updated_at: isLegacyWelcome && source.updated_at === '2026-11-13T04:00:00.000Z' ? welcomeSeed.updated_at : source.updated_at,
+        expires_at: isLegacyWelcome && source.expires_at === '2026-12-31T14:59:59.000Z' ? welcomeSeed.expires_at : source.expires_at,
         max_connections: welcomeSeed.max_connections,
       };
       validState.databases[sourceIndex] = canonical;
@@ -115,7 +125,10 @@ export function getDemoDatabaseState(): DemoDatabaseState {
       validState.backups[welcomeGrn] = mergedBackups.length
         ? [...new Map(mergedBackups.map(backup => [backup.id, backup])).values()]
         : clone(demoDatabaseSeed.backups[welcomeGrn]);
-      validState.passwords[welcomeGrn] = validState.passwords[source.grn] ?? validState.passwords[welcomeGrn] ?? 'demo-local-pass-welcome';
+      const sourcePassword = validState.passwords[source.grn];
+      validState.passwords[welcomeGrn] = isLegacyWelcome && sourcePassword === 'demo-local-pass-student'
+        ? 'demo-local-pass-welcome'
+        : sourcePassword ?? validState.passwords[welcomeGrn] ?? 'demo-local-pass-welcome';
       if (source.grn !== welcomeGrn) {
         delete validState.backups[source.grn];
         delete validState.passwords[source.grn];

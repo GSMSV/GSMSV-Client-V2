@@ -1,5 +1,4 @@
 import type { AppSummary } from '../../app/model/types';
-import type { DatabaseSummary } from '../../database/model/types';
 import type { MyQuota } from '../../quota/model/types';
 import type { TeamSummary } from '../../team/model/types';
 import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
@@ -33,11 +32,6 @@ export const demoHomeQuota: MyQuota = {
 };
 
 export const demoHomeTeams: TeamSummary[] = [{ id: 'demo-team', name: 'GSM Connect', status: 'approved', my_role: 'leader', member_count: 4 }];
-
-export const demoHomeDatabases: DatabaseSummary[] = [{
-  grn: 'grn:gsmsv:database:demo-student:welcome-db', name: 'welcome-db', engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
-  storage: { used_gb: 0.3 }, expires_at: '2026-10-06T14:59:59.000Z',
-}];
 
 export const demoHomeApps: AppSummary[] = [{
   grn: 'grn:gsmsv:app:demo-student:portfolio', id: 'app-portfolio', name: 'portfolio', owner: { type: 'user', id: 'demo-student', name: '김민수' }, status: 'active',
