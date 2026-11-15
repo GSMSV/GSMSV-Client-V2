@@ -14,10 +14,10 @@ import type { DemoTeamDetail } from '../../entities/team/demo';
 import type { TeamMember } from '../../entities/team';
 import { isDemoMode } from '../../shared/demo';
 
-const TransferDemoTeamLeader = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader }))) : null;
-const DemoTeamDisbandRequest = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest }))) : null;
-const LeaveDemoTeam = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.LeaveDemoTeam }))) : null;
-const DemoTeamMemberAction = import.meta.env.DEV ? lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamMemberAction }))) : null;
+const TransferDemoTeamLeader = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader })));
+const DemoTeamDisbandRequest = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest })));
+const LeaveDemoTeam = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.LeaveDemoTeam })));
+const DemoTeamMemberAction = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamMemberAction })));
 
 const Page = styled.div`
   box-sizing: border-box;
@@ -273,7 +273,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const [quotaRequestSent, setQuotaRequestSent] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [memberAction, setMemberAction] = useState<{ member: TeamMember; action: 'grant' | 'revoke' | 'remove' } | null>(null);
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const [confirmCancel, setConfirmCancel] = useState<TeamInvitation | null>(null);
 
   const selectedTeamId = routeTeamId ?? null;
@@ -291,7 +291,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!selectedTeamId) { setLoading(false); return; }
     setLoading(true); setError(false); setInviteLoadError(false);
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       const demo = await import('../../entities/team/demo');
       const vmRepository = await import('../../entities/vm');
       if (signal?.aborted) return;
@@ -353,7 +353,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     }
     setBusyAction('invite'); setFormError(''); setInviteError('');
     try {
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (isDemoMode()) {
         const { inviteDemoTeamMember } = await import('../../entities/team/demo');
         inviteDemoTeamMember(selectedTeamId!, trimmed);
         setEmail('');
@@ -372,7 +372,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (!confirmCancel || !selectedTeamId) return;
     setBusyAction(confirmCancel.id); setInviteError('');
     try {
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (isDemoMode()) {
         const { cancelDemoTeamInvitation } = await import('../../entities/team/demo');
         cancelDemoTeamInvitation(selectedTeamId, confirmCancel.id);
         setConfirmCancel(null);
@@ -391,7 +391,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (!selectedTeamId) return;
     setBusyAction(invitation.id); setInviteError('');
     try {
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (isDemoMode()) {
         const { inviteDemoTeamMember } = await import('../../entities/team/demo');
         inviteDemoTeamMember(selectedTeamId, invitation.email);
         refresh();
@@ -540,22 +540,22 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
             ? <Button variant="danger" disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
             : <Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button>}</DangerActions>
         </DangerPanel>
-        {demoMode && successor && TransferDemoTeamLeader && <Suspense fallback={null}>
+        {demoMode && successor && <Suspense fallback={null}>
           <TransferDemoTeamLeader teamId={team.id} successor={successor} onDismiss={() => setSuccessor(null)}
             onSave={() => { setSuccessor(null); refresh(); }} />
         </Suspense>}
-        {demoMode && showDisband && DemoTeamDisbandRequest && <Suspense fallback={null}>
+        {demoMode && showDisband && <Suspense fallback={null}>
           <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
             onSave={() => { setShowDisband(false); refresh(); }} />
         </Suspense>}
         {demoMode && showQuotaRequest && <TeamQuotaRequestDialog
           onDismiss={() => setShowQuotaRequest(false)} onSubmit={submitQuotaRequest} />}
-        {demoMode && showLeave && LeaveDemoTeam && <Suspense fallback={null}>
+        {demoMode && showLeave && <Suspense fallback={null}>
           <LeaveDemoTeam team={team} onDismiss={() => setShowLeave(false)}
             onLeave={() => { setShowLeave(false); navigate('/teams'); }}
             onRequestDisband={() => { setShowLeave(false); setShowDisband(true); }} />
         </Suspense>}
-        {demoMode && memberAction && DemoTeamMemberAction && <Suspense fallback={null}>
+        {demoMode && memberAction && <Suspense fallback={null}>
           <DemoTeamMemberAction teamId={team.id} member={memberAction.member} action={memberAction.action}
             onDismiss={() => setMemberAction(null)} onSave={() => { setMemberAction(null); refresh(); }} />
         </Suspense>}

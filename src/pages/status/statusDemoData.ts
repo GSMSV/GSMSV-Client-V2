@@ -18,3 +18,27 @@ export const notices = [
 ] as const;
 
 export const historyDescription = '외부 감시 서버가 1분마다 확인합니다. 3회 연속 실패하면 장애, 응답 시간 95번째 백분위가 2초를 넘는 상태가 5분 이어지면 성능 저하로 표시합니다. 가용률은 정상인 분 ÷ 전체 분이며, 계획 점검 시간은 뺍니다.';
+
+export const statusScenarios = {
+  'network-outage': {
+    title: 'VM Network·접속 장애',
+    description: '14:20부터 외부에서 VM에 접속할 수 없습니다. 원인을 확인하고 있습니다.',
+    details: ['· 다음 업데이트 · 14:50까지', '· GSM SV Discord 공지 채널에도 알렸습니다'],
+    tone: 'danger',
+    icon: 'alert',
+  },
+  maintenance: {
+    title: 'VM 생성 점검 중',
+    description: '10월 4일(일) 02:00–04:00에는 새 VM을 만들 수 없습니다. 실행 중인 VM과 접속에는 영향이 없습니다.',
+    details: ['· 점검 시간은 가용률 계산에서 빠집니다.'],
+    tone: 'neutral',
+    icon: 'calendar',
+  },
+  normal: {
+    title: '모든 서비스가 정상입니다',
+    description: '진행 중인 장애와 예정된 점검이 없습니다.',
+    details: ['· 마지막 확인 · 1분 전'],
+    tone: 'primary',
+    icon: 'check-circle',
+  },
+} as const;

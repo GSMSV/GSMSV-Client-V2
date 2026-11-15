@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
@@ -246,17 +247,25 @@ const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
   apps: '/apps',
   team: '/teams',
   settings: '/settings',
-  ...(import.meta.env.DEV ? { support: '/support/inquiries?demo=1' } : {}),
 };
 
 export default function AuthenticatedDocsPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const demoMode = isDemoMode();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    if (demoMode) {
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!controller.signal.aborted) setTeams(listDemoTeams());
+      }).catch(() => {
+        if (!controller.signal.aborted) setTeams([]);
+      });
+      return () => controller.abort();
+    }
     void listMyTeams(controller.signal).then(result => {
       if (!controller.signal.aborted) setTeams(result);
     }).catch(error => {
@@ -268,7 +277,7 @@ export default function AuthenticatedDocsPage() {
       setTeams([]);
     });
     return () => controller.abort();
-  }, [navigate]);
+  }, [demoMode, navigate]);
 
   useEffect(() => {
     const sectionId = window.location.hash.slice(1);
@@ -299,7 +308,7 @@ export default function AuthenticatedDocsPage() {
       activeItem="docs"
       scopeLabel="내 Resources"
       scopeOptions={scopeOptions}
-      disabledNavigationItems={import.meta.env.DEV ? ['vm-create', 'serverless'] : ['vm-create', 'serverless', 'support']}
+      disabledNavigationItems={demoMode ? [] : ['vm-create', 'serverless', 'support']}
       sidebarActionsAtBottom={false}
       showTopbarDivider
       userName={user?.name ?? '사용자'}
@@ -322,7 +331,7 @@ export default function AuthenticatedDocsPage() {
           {unsupportedTopics.slice(2).map(topic => <UnavailableTopic key={topic} aria-disabled="true" title="이 문서는 아직 제공되지 않습니다">{topic}</UnavailableTopic>)}
           <Topic href="#faq">FAQ</Topic>
           <TopicAction>
-            <Button variant="secondary" disabled={!import.meta.env.DEV} title={!import.meta.env.DEV ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries?demo=1')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
+            <Button variant="secondary" disabled={!demoMode} title={!demoMode ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </TopicAction>
         </TopicBar>
 
@@ -370,7 +379,7 @@ export default function AuthenticatedDocsPage() {
         <Card aria-labelledby="feedback-title">
           <FeedbackHeader>
             <CardTitle id="feedback-title">문제가 해결됐습니까?</CardTitle>
-            <Button variant="ghost" disabled={!import.meta.env.DEV} title={!import.meta.env.DEV ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries?demo=1')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
+            <Button variant="ghost" disabled={!demoMode} title={!demoMode ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </FeedbackHeader>
           <FeedbackBody>
             <Octicon name="question" size={16} aria-hidden="true" />

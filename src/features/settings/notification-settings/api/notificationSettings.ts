@@ -16,11 +16,21 @@ export interface NotificationSettings {
   items: NotificationSettingItem[];
 }
 
+const demoSettingsKey = 'notificationSettings';
+
 async function readDemoNotificationSettings(): Promise<NotificationSettings> {
   const { getDemoProfile } = await import('../../../../entities/profile');
   const profile = getDemoProfile();
-  const stored = readDemoState<NotificationSettings | NotificationSettingItem[] | null>('notifications', null);
-  const items = Array.isArray(stored) ? stored : stored?.items ?? demoNotificationSettings.items;
+  const storedItems = readDemoState<unknown>(demoSettingsKey, null);
+  const savedItems = Array.isArray(storedItems) && storedItems.every(item =>
+    item && typeof item.email === 'boolean' && typeof item.discord === 'boolean' && typeof item.locked === 'boolean',
+  ) ? storedItems as NotificationSettingItem[] : null;
+  const legacy = readDemoState<NotificationSettings | NotificationSettingItem[] | null>('notifications', null);
+  const legacyItems = Array.isArray(legacy) ? legacy : legacy?.items;
+  const recognizablePreferences = legacyItems?.length && legacyItems.every(item =>
+    item && typeof item.email === 'boolean' && typeof item.discord === 'boolean' && typeof item.locked === 'boolean',
+  );
+  const items = savedItems ?? (recognizablePreferences ? legacyItems : demoNotificationSettings.items);
   return {
     items,
     channels: {
@@ -43,7 +53,7 @@ const demoNotificationSettings: NotificationSettings = {
 };
 
 export function getNotificationSettings(signal?: AbortSignal): Promise<NotificationSettings> {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
     return readDemoNotificationSettings();
   }
@@ -51,13 +61,13 @@ export function getNotificationSettings(signal?: AbortSignal): Promise<Notificat
 }
 
 export function updateNotificationSettings(items: Array<Pick<NotificationSettingItem, 'group' | 'email' | 'discord'>>): Promise<{ items: NotificationSettingItem[] }> {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     return readDemoNotificationSettings().then(current => {
       const next = current.items.map(item => {
         const draft = items.find(candidate => candidate.group === item.group);
         return draft && !item.locked ? { ...item, email: draft.email, discord: draft.discord } : item;
       });
-      if (!writeDemoState('notifications', next)) throw new Error('Notification settings could not be saved');
+      if (!writeDemoState(demoSettingsKey, next)) throw new Error('Notification settings could not be saved');
       return { items: next };
     });
   }

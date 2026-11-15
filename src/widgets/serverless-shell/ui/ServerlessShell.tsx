@@ -11,7 +11,7 @@ export function ServerlessShell({ children }: { children: ReactNode }) {
   const user = getSessionUser();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   useEffect(() => {
-    if (!(import.meta.env.DEV && isDemoMode())) {
+    if (!isDemoMode()) {
       setTeams([]);
       return;
     }

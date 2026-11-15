@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
+import { signOutDemoProfile } from '../../entities/profile';
 import { isDemoMode } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
@@ -66,7 +67,7 @@ export default function NotificationSettingsPage() {
   const [logoutError, setLogoutError] = useState(false);
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       void import('../../entities/team/demo').then(({ listDemoTeams }) => {
         if (!cancelled) setTeams(listDemoTeams());
@@ -123,7 +124,9 @@ export default function NotificationSettingsPage() {
     setLogoutPending(true);
     setLogoutError(false);
     try {
-      if (!(import.meta.env.DEV && isDemoMode())) await logout();
+      if (isDemoMode()) {
+        signOutDemoProfile();
+      } else await logout();
       clearSessionUser();
       void navigate('/login', { replace: true });
     } catch {

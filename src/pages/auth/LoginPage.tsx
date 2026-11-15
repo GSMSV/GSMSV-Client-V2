@@ -300,6 +300,12 @@ function getDemoReturnPath(value: string | null): string | null {
     if (/^\/vms\/new(?:\/(?:details|review))?$/.test(target.pathname)) {
       return `${target.pathname}${target.search}${target.hash}`;
     }
+    if (/^\/teams\/[^/]+\/vms\/new(?:\/(?:details|review))?$/.test(target.pathname)) {
+      return `${target.pathname}${target.search}${target.hash}`;
+    }
+    if (target.pathname === '/docs' || target.pathname.startsWith('/docs/')) {
+      return `${target.pathname}${target.search}${target.hash}`;
+    }
     if (/^\/vms\/[^/]+(?:\/(?:network|monitoring|snapshots|settings))?$/.test(target.pathname)) {
       return `${target.pathname}${target.search}${target.hash}`;
     }

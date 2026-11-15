@@ -37,7 +37,10 @@ function seededDemoNotifications(): NotificationItem[] {
 }
 
 function getDemoNotifications(): NotificationItem[] {
-  return readDemoState(demoNotificationSlice, seededDemoNotifications());
+  const seed = seededDemoNotifications();
+  const stored = readDemoState<unknown>(demoNotificationSlice, seed);
+  if (Array.isArray(stored) && stored.every(item => item && typeof item.id === 'string')) return stored;
+  return seed;
 }
 
 function saveDemoNotifications(items: NotificationItem[]): boolean {
