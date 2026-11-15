@@ -9,6 +9,7 @@ import { Octicon } from '../../../../shared/ui/icons';
 const Panel = styled.section`
   display: flex;
   width: 100%;
+  min-width: 0;
   flex-direction: column;
   gap: 16px;
   padding: 24px;
@@ -21,6 +22,13 @@ const PanelHeading = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    gap: 16px;
+
+    > button { width: 100%; }
+  }
 `;
 
 const TitleBlock = styled.div`
@@ -53,6 +61,11 @@ const Row = styled.div`
   align-items: center;
   gap: 16px;
   min-height: 32px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr) 52px 52px;
+    gap: 8px;
+  }
 `;
 
 const RowLabel = styled.span`

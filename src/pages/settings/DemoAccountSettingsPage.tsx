@@ -21,6 +21,10 @@ const Page = styled.div`
   gap: ${({ theme }) => theme.space[24]}px;
   margin: 0 auto;
   padding: 40px;
+
+  @media (max-width: 600px) {
+    padding: 24px 16px;
+  }
 `;
 const Breadcrumb = styled.p`
   margin: 0;
@@ -47,7 +51,16 @@ const PanelTitle = styled.h2`
   margin: 0;
   font: ${({ theme: { typography: { title } } }) => `${title.weight} ${title.size}px/${title.lineHeight}px ${title.family}`}, sans-serif;
 `;
-const ProfileRow = styled.div`display: flex; min-height: 44px; align-items: center; gap: ${({ theme }) => theme.space[16]}px;`;
+const ProfileRow = styled.div`
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+  }
+`;
 const Avatar = styled.div`
   display: grid;
   width: 44px;
@@ -67,7 +80,15 @@ const Guide = styled.div`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme: { typography: { bodySmall } } }) => `${bodySmall.weight} ${bodySmall.size}px/${bodySmall.lineHeight}px ${bodySmall.family}`}, sans-serif;
 `;
-const Columns = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: ${({ theme }) => theme.space[16]}px;`;
+const Columns = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
 const Fields = styled.dl`display: flex; min-width: 0; flex-direction: column; gap: ${({ theme }) => theme.space[16]}px; margin: 0; overflow-wrap: anywhere;`;
 const Field = styled.div`display: flex; flex-direction: column; gap: ${({ theme }) => theme.space[4]}px;`;
 const FieldLabel = styled.dt`
@@ -88,7 +109,16 @@ const FeatureIcon = styled.span`
   background: ${({ theme }) => theme.colors.raised};
 `;
 const FeatureTitle = styled(PanelTitle)`font: ${({ theme: { typography: { h2 } } }) => `${h2.weight} ${h2.size}px/${h2.lineHeight}px ${h2.family}`}, sans-serif;`;
-const ActionRow = styled.div`display: flex; align-items: flex-start; justify-content: space-between; gap: ${({ theme }) => theme.space[16]}px;`;
+const ActionRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+  }
+`;
 const Description = styled.p`
   max-width: 600px;
   margin: 0;

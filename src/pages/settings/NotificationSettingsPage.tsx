@@ -16,6 +16,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 600px) {
+    padding: 24px 16px;
+  }
 `;
 
 const Breadcrumb = styled.p`
