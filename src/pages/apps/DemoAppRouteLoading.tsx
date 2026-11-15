@@ -5,6 +5,7 @@ import { LoadingCard } from '../../shared/ui/feedback';
 import { ResourceListCards, ResourceListPage, ResourceListSummary } from '../../shared/ui/layout/ResourceListLayout';
 import { StudentShell } from '../../widgets/student-shell';
 import { DemoCreateFormState } from './DemoCreateFormState';
+import { demoServiceStateHeights } from './DemoAppRequestState';
 
 const Breadcrumb = styled.p`
   margin: 0;
@@ -20,21 +21,11 @@ const Heading = styled.div`
   align-content: center;
 `;
 
-const serviceHeights = {
-  deployments: [450, 282],
-  logs: [348],
-  metrics: [338, 338],
-  variables: [270, 314, 200, 216],
-  settings: [530, 328, 146],
-  domains: [200, 254],
-  shell: [326],
-};
-
 function ServiceLoadingCards() {
   const { tab = 'deployments' } = useParams<{ tab: string }>();
-  const heights = Object.hasOwn(serviceHeights, tab)
-    ? serviceHeights[tab as keyof typeof serviceHeights]
-    : serviceHeights.deployments;
+  const heights = Object.hasOwn(demoServiceStateHeights, tab)
+    ? demoServiceStateHeights[tab as keyof typeof demoServiceStateHeights]
+    : demoServiceStateHeights.deployments;
   const cards = heights.map((height, index) => <LoadingCard key={index} height={height} />);
   return tab === 'metrics' ? <ResourceListSummary>{cards}</ResourceListSummary> : cards;
 }

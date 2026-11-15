@@ -10,7 +10,7 @@ import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { ResourceListCards, ResourceListHeading, ResourceListPage, ResourceListSummary } from '../../shared/ui/layout/ResourceListLayout';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 
 const TEAM_APP_LIMIT = 4;
 
@@ -128,10 +128,10 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
     setTeams(current => ({ ...current, loading: true, error: false }));
 
     if (demoMode) {
-      void Promise.all([
+      void simulateDemoRequest('apps', signal).then(() => Promise.all([
         import('../../entities/team/demo'),
         import('../../entities/app/demo'),
-      ]).then(([teamRepository, app]) => {
+      ])).then(([teamRepository, app]) => {
         if (signal.aborted) return;
         const demoTeam = teamRepository.getDemoTeam(teamId) ?? null;
         const teamApps = app.getDemoAppSummaries({ type: 'team', id: teamId, name: demoTeam?.name ?? 'GSM Connect' });

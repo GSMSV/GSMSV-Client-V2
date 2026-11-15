@@ -18,8 +18,10 @@ import {
   type DemoEnvironment,
   type DemoManagedService,
 } from "../../entities/app/demo";
+import { getDemoTeam } from "../../entities/team/demo";
 import { reconcileDemoDatabaseRestarts } from "../../features/apps/demoServiceOperations";
 import { DemoAppDialog, Modal } from "./DemoAppDialog";
+import { DemoAppStateCards, useDemoAppRequest } from "./DemoAppRequestState";
 import { DeleteConfirmDialog } from "../../shared/ui/feedback";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
@@ -427,6 +429,7 @@ export function DemoAppOverviewPage() {
   const [cronService, setCronService] = useState<DemoManagedService>();
   const [notice, setNotice] = useState("");
   const [, refresh] = useState(0);
+  const request = useDemoAppRequest("apps-overview", appId);
   useEffect(() => {
     const reconcile = () => {
       const current = getDemoApp(appId);
@@ -476,6 +479,8 @@ export function DemoAppOverviewPage() {
   );
   const quota = getDemoAppQuota(app.owner ?? demoPersonalAppOwner);
   const canManage = canManageDemoApp(app);
+  // 승인 대기 중인 팀의 팀장은 관리 권한이 없어도 "일반 팀원" 안내 대상이 아니다.
+  const viewingAsMember = Boolean(app.readOnly) || (app.owner?.type === "team" && getDemoTeam(app.owner.id)?.my_role === "member");
   const expired = isDemoAppExpired(app);
   const extendUsage = () => {
     if (renewDemoApp(appId)) setNotice("사용 기간을 연장했습니다.");
@@ -524,6 +529,9 @@ export function DemoAppOverviewPage() {
             서비스 추가
           </Button>}
         </Tabs>
+        {request.status !== "ready" ? (
+          <DemoAppStateCards page="overview" status={request.status} onRetry={request.retry} environment={environment} />
+        ) : <>
         {(expired || (app.expiresAtMs ?? Infinity) - Date.now() <= 7 * 86_400_000) && <RenewalNotice role="status">
           <div>
             <SummaryLabel>{expired ? "정지됐습니다 · 3일 뒤 삭제됩니다" : `만료까지 ${Math.max(1, Math.ceil(((app.expiresAtMs ?? Date.now()) - Date.now()) / 86_400_000))}일 남았어요`}</SummaryLabel>
@@ -533,7 +541,7 @@ export function DemoAppOverviewPage() {
           </div>
           <Button variant="secondary" onClick={extendUsage}>사용 기간 연장</Button>
         </RenewalNotice>}
-        {!canManage && <RenewalNotice role="status"><div>
+        {viewingAsMember && <RenewalNotice role="status"><div>
           <SummaryLabel>일반 팀원으로 보고 있습니다</SummaryLabel>
           <SummaryHelp>상태와 로그를 보고 사용 기간을 연장할 수 있습니다. 배포·변수·설정은 팀장·DevOps가 바꿉니다.</SummaryHelp>
         </div></RenewalNotice>}
@@ -631,6 +639,7 @@ export function DemoAppOverviewPage() {
             })}
           </ServiceGrid>
         </section>
+        </>}
         {cronService && <DemoAppDialog
           title={`${cronService.name} 크론 설정`}
           icon="clock"
@@ -665,6 +674,7 @@ export function DemoAppSettingsPage() {
   const [editingEnvironment, setEditingEnvironment] = useState<string>();
   const [editingEnvironmentSnapshot, setEditingEnvironmentSnapshot] = useState<DemoEnvironment>();
   const [branchDraft, setBranchDraft] = useState("");
+  const request = useDemoAppRequest("apps-app-settings", appId);
   useEffect(() => {
     const current = getDemoApp(appId);
     setDraft(current ? structuredClone(current) : undefined);
@@ -813,10 +823,13 @@ export function DemoAppSettingsPage() {
             개요
           </Tab>
           <Tab $active>설정</Tab>
-          <Button icon={<Octicon name="check" size={16} />} onClick={saveSettings} disabled={!canManage}>
+          <Button icon={<Octicon name="check" size={16} />} onClick={saveSettings} disabled={!canManage || request.status !== "ready"}>
             설정 저장
           </Button>
         </Tabs>
+        {request.status !== "ready" ? (
+          <DemoAppStateCards page="app-settings" status={request.status} onRetry={request.retry} />
+        ) : <>
         <Card>
           <ServicesHeading>
             <CardTitle>환경 · {draft?.environments.length ?? 0} / 3</CardTitle>
@@ -1002,6 +1015,7 @@ export function DemoAppSettingsPage() {
             이름을 입력해 확인합니다.
           </Subtitle>
         </Card>
+        </>}
         {addingEnvironment && <Modal onClose={() => setAddingEnvironment(false)}>
           <CardTitle id="demo-app-dialog-title">환경 추가</CardTitle>
           <form onSubmit={addEnvironment}>

@@ -565,7 +565,7 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| 50 Apps 만들기·배포 (664:2956) | 앱을 더 만들 수 없어요 | 664:3461 | `AppsListPage` quotaOpen dialog (:379); also the `quota` dialog in `AppCreateSourcePage` and `AppCreateServicePage` | Create 1 personal app (seed has 1 of 2), then click 새 앱 on /apps | OK | List copy says "내 앱 2개를 사용 중이며 한도는 2개입니다" (wording differs a little) |
+| 50 Apps 만들기·배포 (664:2956) | 앱을 더 만들 수 없어요 | 664:3461 | `AppsListPage` quotaOpen dialog (:379); also the `quota` dialog in `AppCreateSourcePage` and `AppCreateServicePage` | Create 1 personal app (seed has 1 of 2), then click 새 앱 on /apps | OK | Copy matches ("내 앱 2개를 모두 쓰고 있습니다") |
 | 664:2956 | 메모리 할당량이 모자라요 | 664:3487 | `AppCreateServicePage` dialog='memory' (:414) | Team scope only: admin approves demo-team, then /teams/demo-team/apps → 새 앱 → 512 MB → 앱 만들기 (free memory is 256 MB) | OK | Can't happen in personal scope: the quota check fires first, and the slider max (1 GB) is below the 1280 MB free |
 | 664:2956 | 팀이 승인되면 앱을 만들 수 있어요 | 664:3516 | `AppCreateServicePage` dialog='team-pending' (:288) | /teams/demo-team/apps (pending) → 새 앱 → 다음: 서비스 | OK | |
 | 664:2956 | GitHub 계정을 먼저 연결해 주세요 | 664:3569 | `AppCreateSourcePage` dialog='github-disconnected' (:332) | Unlink GitHub in /settings (demo account page), then /apps/new → 다음 | OK | The demo account page is loaded only when `import.meta.env.DEV` (`AccountSettingsPage.tsx:14`) |
@@ -579,12 +579,12 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 | 664:2956 | 팀장·DevOps가 배포해야 나가요 | 664:3846 | same banner, !canManage | /apps/demo-read-only-app/demo → web → 배포 | OK | |
 | 664:2956 | 이 커밋을 배포할까요? | 664:3899 | `DemoAppDialog` kind='deploy' (:1273) | Click 「이 커밋 배포」 on row 9f8e7d6 (or 재배포) | OK | Copy matches |
 | 664:2956 | 3d2e1f0으로 되돌릴까요? | 664:3933 | `DemoAppDialog` kind='rollback' | Click 되돌리기 on row 3d2e1f0 | OK | |
-| 664:2956 | 서브도메인을 쓸 수 없어요 | 664:3967 | `AppCreateServicePage` dialog='domain-unavailable' (:416); `DemoServicePage` kind='domain' (:1310) | Create flow with subdomain `portfolio-web` → 앱 만들기; or Domains tab → enter a used name → 저장 | OK | Create dialog says "…은 사용할 수 없습니다" instead of "이미 다른 앱이 쓰고 있습니다" |
+| 664:2956 | 서브도메인을 쓸 수 없어요 | 664:3967 | `AppCreateServicePage` dialog='domain-unavailable' (:416); `DemoServicePage` kind='domain' (:1310) | Create flow with subdomain `portfolio-web` → 앱 만들기; or Domains tab → enter a used name → 저장 | OK | Both dialogs say "{name}은 이미 다른 앱이 쓰고 있습니다" |
 | 51 Apps 운영 (665:3142) | 10번 넘게 다시 시작해서 멈췄어요 | 665:3647 | Overview banner restartReason='limit' (`DemoAppOverviewPage.tsx:540`) | /apps/demo-team-portal/demo | OK | Seeded on the team app, not portfolio-web |
 | 665:3142 | 메모리 할당량을 모두 썼어요 | 665:3673 | Metrics banner when `quota.freeMemory === 0` (`DemoServicePage.tsx:806`) | Use up exactly 2048 MB (e.g. 2nd app at 1 GB + raise web to 768 MB), then open 지표 | OK | Seed never shows it; takes several steps |
 | 665:3142 | Database 비밀번호가 바뀌어 다시 시작했어요 | 665:3707 | Overview banner restartReason='database' via `reconcileDemoDatabaseRestarts` | Change the welcome-db password in Database settings → open portfolio-web overview | OK | |
 | 665:3142 | 정지됐어요 · 3일 뒤 삭제돼요 | 665:3760 | Overview RenewalNotice, expired (:527) | /teams/demo-team/apps → demo-expired-app | OK | Seeded on a team app |
-| 665:3142 | 일반 팀원으로 보고 있어요 | 665:3788 | Overview notice when `!canManage` (:536) | /apps/demo-read-only-app/demo (or any demo-team app) | OK | Also shown to the **leader** of the pending demo-team, because `canManageDemoApp` needs an approved team |
+| 665:3142 | 일반 팀원으로 보고 있어요 | 665:3788 | Overview notice when `!canManage` (:536) | /apps/demo-read-only-app/demo (or any demo-team app) | OK | Shown only to members / read-only apps (not to the pending-team leader) |
 | 665:3142 | 설정 파일에서 무시한 칸이 있어요 | 665:3812 | Settings banner when `service.configFile` (:1004) | portfolio-web › web › 설정 | OK | |
 | 665:3142 | 변수를 저장할까요? | 665:3865 | `DemoAppDialog` kind='variables' (:1293) | 변수 tab → 변경사항 저장 | OK | |
 | 665:3142 | PORT는 쓸 수 없는 이름이에요 | 665:3891 | kind='port' (:1304) | 변수 tab → key `PORT` → 변수 추가/변경사항 저장 | OK | |
@@ -598,21 +598,21 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 |---|---|---|---|---|
 | 51 · Apps 목록 | 667:33582 | entry: sidebar Apps → /apps | `navigateFromShell('apps')` → /apps | OK |
 | 51-01 · 앱을 더 만들 수 없어요 | 667:33646 | 51 새 앱 at quota → quota dialog | `openCreateApp` → quotaOpen when used ≥ limit | OK |
-| 51-02 · 로딩 | 741:61234 | 51 loading skeleton | apps/quota loading LoadingCards while the demo module import resolves (brief) | OK |
-| 51-03 · 오류 | 747:68746 | 51 load error card | ErrorCard only shows if the fetch throws; the demo path never throws | UNREACHABLE |
+| 51-02 · 로딩 | 741:61234 | 51 loading skeleton | `simulateDemoRequest('apps')` latency → LoadingCards | OK |
+| 51-03 · 오류 | 747:68746 | 51 load error card | `?demoError=apps` → 3 usage-slot ErrorCards + card-sized ErrorCard (`AppsListPage.tsx`, also `TeamAppsListPage.tsx`); 다시 시도 succeeds | OK |
 | 51-04 · 호버 · 새 앱 | 667:33884 | 새 앱 → 52 | navigate('/apps/new') | OK |
 | 52 · 앱 만들기 · 소스 | 667:34085 | entry: 51 새 앱 | /apps/new | OK |
 | 52-01 · GitHub 계정을 먼저 연결해 주세요 | 667:34191 | 다음 without GitHub → dialog | dialog='github-disconnected'; CTA → /settings with returnTo | OK |
 | 52-02 · 저장소에 접근할 수 없어요 | 667:34255 | 다음 with uninstalled repo → dialog | dialog='repository-inaccessible' (study-log) | OK |
-| 52-03 · 로딩 | 741:61425 | 52 loading | `DemoCreateFormState step=source` while demo modules load (brief) | OK |
-| 52-04 · 오류 | 747:68965 | 52 load error | `DemoCreateFormState` + onRetry only when the dynamic import rejects | UNREACHABLE |
+| 52-03 · 로딩 | 741:61425 | 52 loading | `DemoCreateFormState step=source` during demo latency | OK |
+| 52-04 · 오류 | 747:68965 | 52 load error | `?demoError=apps-create` → `DemoCreateFormState` error cards (`AppCreateSourcePage.tsx`) | OK |
 | 52-05 · 호버 · 다음: 서비스 | 667:34266 | 다음: 서비스 → 53 | handleContinue → /apps/new/service | OK |
 | 53 · 앱 만들기 · 서비스 | 667:34465 | entry: 52 다음 | /apps/new/service (sends back to the source page if there is no draft) | OK |
 | 53-01 · 메모리 할당량이 모자라요 | 667:34541 | 앱 만들기 over memory → dialog | dialog='memory'; only reachable in team scope after admin approval | OK |
 | 53-02 · 팀이 승인되면 앱을 만들 수 있어요 | 667:34590 | pending team → dialog | dialog='team-pending' on load for pending demo-team | OK |
 | 53-03 · 서브도메인을 쓸 수 없어요 | 667:34638 | taken subdomain → dialog | dialog='domain-unavailable' on 앱 만들기 (blur shows only an inline error) | OK |
-| 53-04 · 로딩 | 741:61586 | 53 loading | `DemoCreateFormState step=service` (brief) | OK |
-| 53-05 · 오류 | 747:69147 | 53 load error | ErrorCard only when the import rejects | UNREACHABLE |
+| 53-04 · 로딩 | 741:61586 | 53 loading | `DemoCreateFormState step=service` during demo latency | OK |
+| 53-05 · 오류 | 747:69147 | 53 load error | `?demoError=apps-create` on /apps/new/service → error cards (`AppCreateServicePage.tsx`) | OK |
 | 53-06 · 호버 · 앱 만들기 | 667:34648 | 앱 만들기 → 54 | `addDemoApp` → /apps/:id/demo | OK |
 | 54 · 앱 개요 | 668:35409 | entry: 51 card / 53 create | `openApp` → /apps/:id/demo | OK |
 | 54-01 · 정지됐어요 · 3일 뒤 삭제돼요 | 668:35460 | expired app banner | RenewalNotice on demo-expired-app; 사용 기간 연장 renews it | OK |
@@ -621,7 +621,7 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 | 54-04 · 일반 팀원으로 보고 있어요 | 668:36474 | read-only banner | !canManage notice (read-only app; also the pending-team leader) | OK |
 | 54-05 · 앱을 찾을 수 없어요 | 668:36743 | not-found state | Unknown appId → not-found card + Apps 목록 | OK |
 | 54-06 · 로딩 | 741:61732 | 54 loading | Suspense fallback `DemoAppRouteLoading page=overview` (first chunk load only) | OK |
-| 54-07 · 오류 | 747:69314 | 54 load error | Demo page has no error path; the real page's ErrorCard redirects to demo in mock mode | UNREACHABLE |
+| 54-07 · 오류 | 747:69314 | 54 load error | `?demoError=apps-overview` → real header/tabs + `DemoAppStateCards page=overview` (`DemoAppRequestState.tsx`) | OK |
 | 54-08 · 호버 · 열기 | 668:37213 | service card 열기 → 55 | navigate(`/services/:id/deployments`) | OK |
 | 55 · 서비스 · 배포 | 668:37465 | entry: 54 열기 | default tab deployments | OK |
 | 55-01 · 이 커밋을 배포할까요? | 668:37655 | 이 커밋 배포 → confirm | kind='deploy' dialog; confirm runs `activateDemoDeployment` | OK |
@@ -632,48 +632,48 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 | 55-06 · 상태 확인에 응답이 없어요 | 668:38658 | health banner | Select row 5c3b2a1 | OK |
 | 55-07 · 팀장·DevOps가 배포해야 나가요 | 668:38952 | read-only skipped banner | demo-read-only-app deployments | OK |
 | 55-08 · 로딩 | 741:61950 | 55 loading | Suspense fallback `page=service` heights [450,282] (first chunk load) | OK |
-| 55-09 · 오류 | 747:69574 | 55 load error | No error rendering in `DemoServicePage` (only not-found) | MISSING |
+| 55-09 · 오류 | 747:69574 | 55 load error | `?demoError=apps-deploy` → header/tabs + error cards [450,282] (`DemoServicePage.tsx` + `DemoAppRequestState.tsx`) | OK |
 | 55-10 · 호버 · 이 커밋 배포 | 668:39227 | 이 커밋 배포 → 55-01 | Row button opens the deploy dialog | OK |
 | 56 · 서비스 · 로그 | 669:38045 | entry: 로그 tab | move('logs') | OK |
 | 56-01 · 로딩 | 741:62157 | 56 loading | Suspense fallback logs [348] | OK |
-| 56-02 · 오류 | 747:69795 | 56 load error | No error path | MISSING |
+| 56-02 · 오류 | 747:69795 | 56 load error | `?demoError=apps-logs` → error card [348] | OK |
 | 56-03 · 호버 · 일시 정지 | 669:38076 | 일시 정지 → paused stream | Toggles logsPaused ("일시 정지됨", button "다시 시작") | OK |
 | 57 · 서비스 · 지표 | 669:38279 | entry: 지표 tab | move('metrics') | OK |
 | 57-01 · 메모리 할당량을 모두 썼어요 | 669:38326 | quota-exhausted banner | Banner when freeMemory===0 (needs extra setup) | OK |
 | 57-02 · 로딩 | 741:62301 | 57 loading | Suspense fallback metrics [338,338] | OK |
-| 57-03 · 오류 | 747:69946 | 57 load error | No error path | MISSING |
+| 57-03 · 오류 | 747:69946 | 57 load error | `?demoError=apps-metrics` → two side-by-side error cards | OK |
 | 57-04 · 호버 · 설정 열기 | 669:38724 | 설정 열기 → 59 | Memory-restart banner button → move('settings') | OK |
 | 58 · 서비스 · 변수 | 669:38929 | entry: 변수 tab | move('variables') | OK |
 | 58-01 · 변수를 저장할까요? | 669:39075 | 변경사항 저장 → confirm | kind='variables' dialog → save + restart | OK |
 | 58-02 · PORT는 쓸 수 없는 이름이에요 | 669:39159 | key PORT → dialog | kind='port' | OK |
 | 58-03 · 팀장·DevOps만 바꿀 수 있어요 | 669:39242 | non-manager save → dialog | kind='read-only' | OK |
 | 58-04 · 로딩 | 741:62470 | 58 loading | Suspense fallback variables [270,314,200,216] | OK |
-| 58-05 · 오류 | 747:70129 | 58 load error | No error path | MISSING |
+| 58-05 · 오류 | 747:70129 | 58 load error | `?demoError=apps-variables` → error cards | OK |
 | 58-06 · 호버 · 변경사항 저장 | 669:39252 | 변경사항 저장 → 58-01 | `requestVariables(true)` → dialog | OK |
 | 59 · 서비스 · 설정 | 669:39533 | entry: 설정 tab | move('settings') | OK |
 | 59-01 · 설정 파일에서 무시한 칸이 있어요 | 669:39590 | config-file banner | Banner for demo-web (configFile) | OK |
 | 59-02 · 로딩 | 741:62661 | 59 loading | Suspense fallback settings [530,328,146] | OK |
-| 59-03 · 오류 | 747:70348 | 59 load error | No error path | MISSING |
+| 59-03 · 오류 | 747:70348 | 59 load error | `?demoError=apps-service-settings` → error cards | OK |
 | 59-04 · 호버 · 설정 저장 | 669:39825 | 설정 저장 → saved | saveSettings → "설정을 저장했습니다." (quota checks; read-only → dialog) | OK |
 | 60 · 서비스 · 도메인 | 669:41192 | entry: 도메인 tab | move('domains') (web only) | OK |
 | 60-01 · 로딩 | 741:62826 | 60 loading | Suspense fallback domains [200,254] | OK |
-| 60-02 · 오류 | 747:70534 | 60 load error | No error path | MISSING |
+| 60-02 · 오류 | 747:70534 | 60 load error | `?demoError=apps-domains` → error cards | OK |
 | 60-03 · 호버 · 저장 | 669:41235 | 저장 → saved / unavailable dialog | Saves the subdomain or opens kind='domain' | OK |
 | 62 · 앱 설정 | 669:41428 | entry: 54 설정 tab | navigate('/apps/:id/demo-settings') | OK |
 | 62-01 · portfolio-web을 삭제할까요? | 669:41634 | 앱 삭제 → confirm | `DeleteConfirmDialog` typed-name confirm → deletes → list | OK |
 | 62-02 · 로딩 | 741:62974 | 62 loading | Suspense fallback `page=app-settings` | OK |
-| 62-03 · 오류 | 747:70696 | 62 load error | Demo settings has no error path; the real page redirects in mock mode | UNREACHABLE |
+| 62-03 · 오류 | 747:70696 | 62 load error | `?demoError=apps-app-settings` → header/tabs + 4 error cards (`DemoAppSettingsPage`) | OK |
 | 62-04 · 호버 · 앱 삭제 | 669:41661 | 앱 삭제 → 62-01 | setDeleteName('') opens the dialog | OK |
 | 63 · 서비스 · 셸 | 669:41911 | entry: 셸 tab | move('shell') | OK |
 | 63-01 · 셸 세션이 끝났어요 | 669:41942 | expired session banner | shellExpired banner + 다시 열기 | OK |
 | 63-02 · 로딩 | 741:63188 | 63 loading | Suspense fallback shell [326] | OK |
-| 63-03 · 오류 | 747:70938 | 63 load error | No error path | MISSING |
+| 63-03 · 오류 | 747:70938 | 63 load error | `?demoError=apps-shell` → error card [326] | OK |
 | 63-04 · 호버 · 세션 끝내기 | 669:42148 | 세션 끝내기 → closed | openShell toggles shellOpen=false ("셸이 닫혀 있습니다") | OK |
 | 64 · 공개 · 정지된 앱 | 669:42343 | entry: stopped app URL | Expired overview web-service link → /public/:appId/stopped | OK |
 | 64-01 · 호버 · GSM SV 열기 | 669:42358 | GSM SV 열기 → GSM SV home | navigate('/') | OK |
 
 #### Counts
-Product: 13 total (OK 13 / non-OK 0); States panels: 27 total (OK 27 / non-OK 0); Flows: 75 total (OK 63 / non-OK 12: 7 MISSING, 5 UNREACHABLE)
+Product: 13 total (OK 13 / non-OK 0); States panels: 27 total (OK 27 / non-OK 0); Flows: 75 total (OK 75 / non-OK 0), updated by `codex/figma-apps-account`
 
 ### Teams
 
@@ -889,7 +889,7 @@ Product: 5 total (OK 4 / non-OK 1 PARTIAL); States panels: 15 total (OK 4 / PEND
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
-| 23 | 계정 설정 | 53:3934 | 1440x2069 | `/settings` | `src/pages/settings/DemoAccountSettingsPage.tsx` (via `AccountSettingsPage.tsx:312`) | OK | Demo page is DEV-only on develop (PR #144 removes the gate) |
+| 23 | 계정 설정 | 53:3934 | 1440x2069 | `/settings` | `src/pages/settings/DemoAccountSettingsPage.tsx` (via `AccountSettingsPage.tsx`) | OK | Loaded via `isDemoMode()` (DEV gate removed in #144) |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
@@ -943,12 +943,12 @@ Product: 5 total (OK 4 / non-OK 1 PARTIAL); States panels: 15 total (OK 4 / PEND
 | 23-19 · 팀장 역할을 넘겨 주세요 | 692:43322 | 팀장 계정 탈퇴 → handoff prompt | `team-lead`; 팀장 넘기기 → team settings | OK |
 | 23-20 · 계정을 탈퇴할까요? | 692:43486 | → final confirm | `DeleteConfirmDialog` with email confirmation | OK |
 | 23-21 · 탈퇴했어요 | 692:43690 | confirm → done | Done dialog → 로그인 화면으로 | OK |
-| 23-22 · 로딩 | 741:56357 | settings loading skeleton | Demo page reads profile synchronously, so there is no loading state. The production page only has a "소속 팀을 불러오는 중" text | MISSING |
-| 23-23 · 오류 | 747:63204 | settings load error | No page-level error state in demo (production page only shows a team-load error text) | MISSING |
+| 23-22 · 로딩 | 741:56357 | settings loading skeleton | `simulateDemoRequest('settings')` latency → loading cards 150 / 330×2 / 200 / 384 / 328 with the upload guide (`DemoAccountSettingsPage.tsx`) | OK |
+| 23-23 · 오류 | 747:63204 | settings load error | `?demoError=settings` → same layout with ErrorCards (first one compact); 다시 시도 succeeds (`DemoAccountSettingsPage.tsx`) | OK |
 | 23-24 · 호버 · 연결 | 241:28609 | 연결 → Discord 연결 (23-11) | Discord row 연결 → `discord-connect` (GitHub row shows 해제 because the seed is connected) | OK |
 
 #### Counts
-Product: 1 total (OK 1 / non-OK 0); States panels: 23 (OK 23 / non-OK 0); Flows: 25 (OK 23 / non-OK 2)
+Product: 1 total (OK 1 / non-OK 0); States panels: 23 (OK 23 / non-OK 0); Flows: 25 (OK 25 / non-OK 0), updated by `codex/figma-apps-account`
 
 ### Shell/navigation
 
@@ -1089,24 +1089,9 @@ Every non-OK item, grouped by domain, with the file(s) that would need to change
 
 ### Apps
 
-- `747:69574` 55-09 서비스 · 배포 · 오류 — MISSING: `ServiceDetail` renders only a not-found card, with no load-error/ErrorCard state. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:69795` 56-02 서비스 · 로그 · 오류 — MISSING: same, no error state. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:69946` 57-03 서비스 · 지표 · 오류 — MISSING: same. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:70129` 58-05 서비스 · 변수 · 오류 — MISSING: same. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:70348` 59-03 서비스 · 설정 · 오류 — MISSING: same. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:70534` 60-02 서비스 · 도메인 · 오류 — MISSING: same. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:70938` 63-03 서비스 · 셸 · 오류 — MISSING: same. Files: `src/pages/apps/DemoServicePage.tsx`
-- `747:69314` 54-07 앱 개요 · 오류 — UNREACHABLE: the ErrorCard exists only in the real `AppOverviewPage`, which redirects to the demo page in mock mode; the demo page has no error state and no demo failure toggle. Files: `src/pages/apps/DemoAppOverviewPage.tsx`, `src/pages/apps/AppOverviewPage.tsx:312`
-- `747:70696` 62-03 앱 설정 · 오류 — UNREACHABLE: same pattern (`AppSettingsPage.tsx:475` vs `DemoAppSettingsPage`). Files: `src/pages/apps/DemoAppOverviewPage.tsx`
-- `747:68746` 51-03 Apps 목록 · 오류 — UNREACHABLE: ErrorCard only on a thrown fetch; the demo loaders never throw. Files: `src/pages/apps/AppsListPage.tsx:355`
-- `747:68965` 52-04 앱 만들기 · 소스 · 오류 — UNREACHABLE: the error form only shows when the dynamic import rejects. Files: `src/pages/apps/AppCreateSourcePage.tsx:379`, `DemoCreateFormState.tsx`
-- `747:69147` 53-05 앱 만들기 · 서비스 · 오류 — UNREACHABLE: same. Files: `src/pages/apps/AppCreateServicePage.tsx:529`
-- Notes (status OK, worth fixing):
-  - All `로딩` frames show only briefly: a lazy-chunk Suspense fallback or the module-import window, with no demo delay.
-  - 664:3487 memory dialog only appears in team scope after admin approval.
-  - 665:3673 quota-exhausted banner needs manual memory exhaustion.
-  - 665:3788 "일반 팀원" banner is also shown to the leader of the pending team.
-  - 664:3569 depends on the demo account page, which is loaded only in DEV.
+All 12 gaps fixed in `codex/figma-apps-account` (status OK above). Loading frames now show for the demo latency (`useDemoAppRequest` in `src/pages/apps/DemoAppRequestState.tsx`, `simulateDemoRequest` in the list/create pages). Load errors are reachable with `?demoError=apps|apps-create|apps-overview|apps-app-settings|apps-deploy|apps-logs|apps-metrics|apps-variables|apps-service-settings|apps-domains|apps-shell`.
+- Also fixed: the 665:3788 "일반 팀원" banner no longer shows to the leader of a pending team; 664:3461 and 664:3967 copy now matches Figma.
+- Remaining notes (by design, OK): 664:3487 memory dialog only in team scope after approval; 665:3673 quota-exhausted banner needs manual memory exhaustion.
 
 ### Teams
 
@@ -1147,8 +1132,7 @@ Every non-OK item, grouped by domain, with the file(s) that would need to change
 
 ### Account/Settings
 
-- `741:56357` 23-22 계정 설정 · 로딩: MISSING. No loading or skeleton path in the demo account page. Files: `src/pages/settings/DemoAccountSettingsPage.tsx`
-- `747:63204` 23-23 계정 설정 · 오류: MISSING. No page-level error state. Files: `src/pages/settings/DemoAccountSettingsPage.tsx`, `src/pages/settings/AccountSettingsPage.tsx`
+Both gaps fixed in `codex/figma-apps-account`: 23-22 loading (demo latency) and 23-23 error (`?demoError=settings`) in `src/pages/settings/DemoAccountSettingsPage.tsx`.
 
 ### Shell/navigation
 

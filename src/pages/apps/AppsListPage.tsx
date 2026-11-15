@@ -5,7 +5,7 @@ import { AppResourceCard, listPersonalApps, type AppListItem } from '../../entit
 import { getMyQuota, type MyQuota, type QuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -55,6 +55,16 @@ const FlexibleUsageCard = styled(UsageCard)`
 const SummaryLoading = styled(LoadingCard)`
   min-width: 0;
   flex: 1 1 0;
+`;
+
+const SummaryError = styled(ErrorCard)`
+  min-width: 0;
+  flex: 1 1 0;
+`;
+
+const AppsError = styled(ErrorCard)`
+  width: calc((100% - 32px) / 3);
+  height: 180px;
 `;
 
 const Section = styled.section`
@@ -187,10 +197,11 @@ export default function AppsListPage() {
   const [retryKey, setRetryKey] = useState(0);
   const [quotaOpen, setQuotaOpen] = useState(false);
 
-  const loadApps = useCallback(async (signal: AbortSignal) => {
+  const loadApps = useCallback(async (signal: AbortSignal, demoRequest?: Promise<void>) => {
     setApps(current => ({ ...current, loading: true, error: false }));
     try {
       if (demoMode) {
+        await demoRequest;
         const { getDemoAppSummaries } = await import('../../entities/app/demo');
         const value = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
         if (!signal.aborted) setApps({ value, loading: false, error: false });
@@ -203,10 +214,11 @@ export default function AppsListPage() {
     }
   }, [demoMode]);
 
-  const loadQuota = useCallback(async (signal: AbortSignal) => {
+  const loadQuota = useCallback(async (signal: AbortSignal, demoRequest?: Promise<void>) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
       if (demoMode) {
+        await demoRequest;
         const [{ demoHomeQuota }, { demoAppMemoryLimit, demoPersonalAppOwner, getDemoAppQuota }] = await Promise.all([
           import('../../entities/home'),
           import('../../entities/app/demo'),
@@ -249,11 +261,14 @@ export default function AppsListPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadApps(controller.signal);
-    void loadQuota(controller.signal);
+    // 목데이터 모드: 로딩 화면을 보여 주고 `?demoError=apps`면 첫 요청을 실패시킨다.
+    const demoRequest = demoMode ? simulateDemoRequest('apps', controller.signal) : undefined;
+    demoRequest?.catch(() => undefined);
+    void loadApps(controller.signal, demoRequest);
+    void loadQuota(controller.signal, demoRequest);
     void loadTeams(controller.signal);
     return () => controller.abort();
-  }, [loadApps, loadQuota, loadTeams, retryKey]);
+  }, [demoMode, loadApps, loadQuota, loadTeams, retryKey]);
 
   useEffect(() => {
     if (!quotaOpen) return;
@@ -321,6 +336,12 @@ export default function AppsListPage() {
         <ResourceListSummary aria-label="Apps 사용량">
           {quota.loading ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
+          ) : quota.error ? (
+            <>
+              <SummaryError onRetry={() => setRetryKey(value => value + 1)} />
+              <SummaryError onRetry={() => setRetryKey(value => value + 1)} />
+              <SummaryError onRetry={() => setRetryKey(value => value + 1)} />
+            </>
           ) : (
             <>
               <FlexibleUsageCard
@@ -346,14 +367,13 @@ export default function AppsListPage() {
             </>
           )}
         </ResourceListSummary>
-        {quota.error && <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />}
 
         <Section>
           <SectionTitle>내 앱</SectionTitle>
           {apps.loading ? (
             <ResourceListCards><LoadingCard width="calc((100% - 32px) / 3)" height={180} /></ResourceListCards>
           ) : apps.error ? (
-            <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />
+            <ResourceListCards><AppsError onRetry={() => setRetryKey(value => value + 1)} /></ResourceListCards>
           ) : apps.value?.length ? (
             <ResourceListCards>
               {apps.value.map(app => <AppResourceCard key={app.grn} app={app} onOpen={() => openApp(app)} />)}
@@ -384,7 +404,7 @@ export default function AppsListPage() {
               <DialogTitle id="app-quota-title">앱을 더 만들 수 없습니다</DialogTitle>
             </DialogTitleRow>
             <DialogCopy>{demoMode
-              ? `· 내 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`
+              ? `· 내 앱 ${appQuota?.limit ?? appCount}개를 모두 쓰고 있습니다.`
               : `· 개인 앱 ${appQuota?.used ?? appCount}개를 사용 중이며 한도는 ${appQuota?.limit ?? '—'}개입니다.`}</DialogCopy>
             <DialogCopy>· 쓰지 않는 앱을 지우면 다시 만들 수 있습니다.</DialogCopy>
             <DialogCopy>· 더 필요하면 팀을 만들어 팀 앱을 쓰세요.</DialogCopy>
