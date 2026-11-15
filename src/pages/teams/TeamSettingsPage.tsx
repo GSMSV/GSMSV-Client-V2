@@ -390,11 +390,12 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
       setInviteDialogError('학교 이메일을 입력해 주세요.');
       return;
     }
-    // 주소를 고쳤거나 찾지 못한 상태라면 다시 찾는다.
-    if (target !== inviteDialog.lookedUpEmail || !inviteDialog.account) {
+    // 주소를 고쳤으면 다시 찾는다. 찾지 못한 상태는 주소를 고치기 전까지 보낼 수 없다(버튼 비활성).
+    if (target !== inviteDialog.lookedUpEmail) {
       openInviteDialog(target);
       return;
     }
+    if (!inviteDialog.account) return;
     setBusyAction('invite');
     try {
       const { inviteDemoTeamMember } = await import('../../entities/team/demo');
@@ -604,7 +605,9 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           : <AccountDialog title="초대할 계정을 찾지 못했습니다" icon="search"
             description={'GSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.\n먼저 로그인해 달라고 알려주세요.'}
             onDismiss={() => setInviteDialog(null)} actions={
-              <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={() => void confirmDemoInvite()}>초대 보내기</Button>
+              <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={inviteDialog.email.trim() === inviteDialog.lookedUpEmail}
+                title={inviteDialog.email.trim() === inviteDialog.lookedUpEmail ? '이메일을 고친 뒤 다시 찾을 수 있습니다.' : undefined}
+                onClick={() => void confirmDemoInvite()}>초대 보내기</Button>
             }>
             <TextField label="학교 이메일" type="email" value={inviteDialog.email} onChange={event => { const value = event.currentTarget.value; setInviteDialog(current => current && { ...current, email: value }); setInviteDialogError(''); }} />
             <DialogCopy role="alert">{inviteDialogError || (inviteDialog.email.trim() === inviteDialog.lookedUpEmail ? '일치하는 계정이 없습니다.' : '')}</DialogCopy>

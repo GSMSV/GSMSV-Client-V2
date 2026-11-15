@@ -572,12 +572,14 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null);
   const [retryKey, setRetryKey] = useState(0);
   const [showQuotaRequest, setShowQuotaRequest] = useState(false);
-  const [quotaRequestSent, setQuotaRequestSent] = useState(false);
+  // null = 아직 확인 전. 확인 전에는 버튼을 눌러 중복 요청하지 못하게 막는다.
+  const [quotaRequestSent, setQuotaRequestSent] = useState<boolean | null>(null);
   const [dismissedDecision, setDismissedDecision] = useState<string | null>(null);
   const demoMode = isDemoMode();
 
   useEffect(() => {
     if (!demoMode || !selectedTeamId) { setQuotaRequestSent(false); return; }
+    setQuotaRequestSent(null);
     let cancelled = false;
     void import('../../entities/team/demo').then(({ listDemoTeamQuotaRequests }) => {
       if (!cancelled) setQuotaRequestSent(listDemoTeamQuotaRequests(selectedTeamId).length > 0);
@@ -851,7 +853,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
           <QuotaFoot>
             <span>{quota ? (quota.vcpu.used >= quota.vcpu.limit ? 'vCPU를 모두 쓰고 있습니다. 더 필요하면 팀 설정에서 할당량 늘리기를 요청하세요.' : 'VM 할당량 사용량') : '승인된 팀의 VM 할당량이 표시됩니다.'}</span>
             {currentTeam.status === 'approved' && currentTeam.my_role === 'leader' && (
-              <Button variant="secondary" icon={<Octicon name="graph" size={16} />} disabled={demoMode && quotaRequestSent}
+              <Button variant="secondary" icon={<Octicon name="graph" size={16} />} disabled={demoMode && quotaRequestSent !== false}
                 onClick={() => demoMode ? setShowQuotaRequest(true) : navigate(`/teams/${encodeURIComponent(currentTeam.id)}/settings`)}>
                 {demoMode && quotaRequestSent ? '요청 검토 중' : '할당량 늘리기 요청'}
               </Button>

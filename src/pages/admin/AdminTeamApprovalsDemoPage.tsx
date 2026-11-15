@@ -197,6 +197,6 @@ export default function AdminTeamApprovalsDemoPage() {
       </>}>{disbandFailed && <DialogCopy role="alert">해체를 승인하지 못했습니다.</DialogCopy>}</AccountDialog>}
     <Stats><Stat>팀 룸 사용<strong>38%</strong><Muted>vCPU 36 / 96 할당</Muted></Stat><Stat>승인된 팀<strong>9개</strong><Muted>해체 요청 {disbandRequests.length}건</Muted></Stat><Stat>할당량 늘리기 요청<strong>2건</strong><Muted>확인이 필요합니다</Muted></Stat></Stats>
     </>}
-    <Muted>할당량 등급 기준 ·소형 4/8/60 · 팀원 5명 이하 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</Muted>
+    <Muted>할당량 등급 기준 · 소형 4/8/60 · 팀원 5명 이하 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</Muted>
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }
