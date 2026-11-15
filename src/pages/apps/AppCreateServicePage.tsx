@@ -78,6 +78,8 @@ const StepActions = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 480px) { width: 100%; flex-wrap: wrap; justify-content: flex-end; }
 `;
 
 const Card = styled.section`
@@ -95,6 +97,8 @@ const CardHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 560px) { flex-wrap: wrap; }
 `;
 
 const CardTitle = styled.h2`
@@ -107,6 +111,8 @@ const QuotaMeta = styled.span`
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
   text-align: right;
+
+  @media (max-width: 560px) { text-align: left; }
 `;
 
 const Hint = styled.p<{ $tone?: 'normal' | 'error' | 'success' }>`
@@ -130,6 +136,8 @@ const PreviewBlock = styled.div`
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  & > span { min-width: 0; overflow-wrap: anywhere; }
 `;
 
 const DialogBackdrop = styled.div`

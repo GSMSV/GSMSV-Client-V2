@@ -19,6 +19,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 28px 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -32,6 +34,8 @@ const HeadingRow = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const HeadingContent = styled.div`
@@ -39,6 +43,8 @@ const HeadingContent = styled.div`
   min-width: 0;
   flex-direction: column;
   gap: 8px;
+
+  @media (max-width: 760px) { width: 100%; }
 `;
 
 const NameInput = styled.input`
@@ -66,6 +72,8 @@ const HeadingActions = styled.div`
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
+
+  @media (max-width: 760px) { width: 100%; }
 `;
 
 const Tabs = styled.nav`
@@ -103,6 +111,8 @@ const CardHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 560px) { flex-wrap: wrap; }
 `;
 
 const CardTitle = styled.h2`
@@ -121,31 +131,38 @@ const Table = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 `;
 
 const TableHead = styled.div`
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(100px, 1fr) 160px 140px;
+  grid-template-columns: 219px 300px 200px 180px minmax(197px, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 42px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  & > span { min-width: 0; padding: 12px; }
+
+  @media (max-width: 760px) { min-width: 1096px; }
 `;
 
 const EnvRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(100px, 1fr) 160px 140px;
+  grid-template-columns: 219px 300px 200px 180px minmax(197px, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: 48px;
-  padding: 0 12px;
+  min-height: 66px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  & > :not(button) { min-width: 0; padding: 12px; }
+  & > button { margin: 12px; }
+
+  @media (max-width: 760px) { min-width: 1096px; }
 `;
 
 const Mono = styled.code`
@@ -231,14 +248,25 @@ const Overlay = styled.div`
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow-y: auto;
   background: #0009;
 `;
 
 const DeleteDialogContent = styled.div`
   display: flex;
-  width: 480px;
+  width: min(480px, 100%);
+  min-width: 0;
   flex-direction: column;
   gap: 12px;
+`;
+
+const ResponsiveDeleteConfirmDialog = styled(DeleteConfirmDialog)`
+  @media (max-width: 528px) {
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
 `;
 
 const DeleteFailure = styled.p`
@@ -467,17 +495,18 @@ export default function AppSettingsPage() {
               <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled title="환경 관리 API 계약이 제공되지 않습니다.">환경 추가</Button>
             </CardHeader>
             <Table role="table" aria-label="앱 환경">
-              <TableHead role="row"><span role="columnheader">환경</span><span role="columnheader">브랜치</span><span role="columnheader">자동 재배포</span><span role="columnheader">작업</span></TableHead>
+              <TableHead role="row"><span role="columnheader">환경</span><span role="columnheader">브랜치</span><span role="columnheader">자동 재배포</span><span role="columnheader">CI 기다리기</span><span role="columnheader">작업</span></TableHead>
               {current.envs.map(environment => (
                 <EnvRow role="row" key={environment.id}>
                   <span>{environment.name}</span>
                   <Mono title="브랜치 정보 API 계약 미제공">—</Mono>
-                  <span>—</span>
+                  <Mono title="자동 재배포 설정 API 계약 미제공">—</Mono>
+                  <Mono title="CI 대기 설정 API 계약 미제공">—</Mono>
                   <Button variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled title="환경 설정 API 계약이 제공되지 않습니다.">편집</Button>
                 </EnvRow>
               ))}
             </Table>
-            <CardCopy>서비스·브랜치별 설정 API 계약이 제공되지 않아 환경 편집은 사용할 수 없습니다.</CardCopy>
+            <CardCopy>브랜치·자동 재배포·CI 대기 설정 API 계약이 제공되지 않아 환경 편집은 사용할 수 없습니다.</CardCopy>
           </Card>
 
           <Card>
@@ -531,7 +560,7 @@ export default function AppSettingsPage() {
       {deleteOpen && current && <Overlay onMouseDown={event => { if (event.target === event.currentTarget && !deleting) setDeleteOpen(false); }}>
         <DeleteDialogContent>
           {deleteMessage && <DeleteFailure role="alert">{deleteMessage}</DeleteFailure>}
-        <DeleteConfirmDialog
+        <ResponsiveDeleteConfirmDialog
           open
           title="앱을 삭제할까요?"
           description="삭제 작업을 시작하면 앱이 삭제 중 상태로 바뀝니다. 삭제를 확인하려면 앱 이름을 정확히 입력해 주세요."
