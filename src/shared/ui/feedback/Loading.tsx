@@ -5,9 +5,10 @@ const travel = keyframes`
   to { transform: translateX(168px); }
 `;
 
+// keyframes 안에서는 테마 함수가 풀리지 않으므로 CSS 변수로 색을 넘긴다.
 const pulse = keyframes`
-  0%, 100% { background-color: ${({ theme }) => theme.colors.surface}; }
-  50% { background-color: ${({ theme }) => theme.colors.raised}; }
+  0%, 100% { background-color: var(--loading-card-base); }
+  50% { background-color: var(--loading-card-peak); }
 `;
 
 const Track = styled.span`
@@ -42,6 +43,9 @@ const LoadingCardSurface = styled.div<{ $width?: number | string; $height?: numb
   height: ${({ $height }) => typeof $height === 'number' ? `${$height}px` : $height ?? '174px'};
   place-items: center;
   border-radius: ${({ theme }) => theme.radii.base}px;
+  --loading-card-base: ${({ theme }) => theme.colors.surface};
+  --loading-card-peak: ${({ theme }) => theme.colors.raised};
+  background-color: var(--loading-card-base);
   animation: ${pulse} 1.6s ease-in-out infinite;
 
   @media (prefers-reduced-motion: reduce) {

@@ -6,9 +6,11 @@ type PageItem = number | 'ellipsis';
 const Bar = styled.nav`
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   width: 100%;
+  min-width: 0;
   min-height: 42px;
 `;
 
@@ -75,9 +77,15 @@ export interface PaginationProps {
 }
 
 function getPageItems(page: number, pageCount: number): PageItem[] {
-  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  if (pageCount <= 5) return Array.from({ length: pageCount }, (_, index) => index + 1);
 
-  const pages = new Set([1, pageCount, page - 1, page, page + 1].filter(value => value >= 1 && value <= pageCount));
+  // Figma 기준: 앞쪽이면 "1 2 3 … 6", 뒤쪽이면 "1 … 4 5 6", 가운데면 "1 … 3 4 5 … 8".
+  const candidates = page <= 3
+    ? [1, 2, 3, page + 1, pageCount]
+    : page >= pageCount - 2
+      ? [1, page - 1, pageCount - 2, pageCount - 1, pageCount]
+      : [1, page - 1, page, page + 1, pageCount];
+  const pages = new Set(candidates.filter(value => value >= 1 && value <= pageCount));
   const ordered = [...pages].sort((a, b) => a - b);
   const items: PageItem[] = [];
 
