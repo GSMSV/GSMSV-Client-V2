@@ -9,8 +9,8 @@ import { Octicon } from '../../shared/ui/icons';
 
 const Screen = styled.main`
   display: flex;
-  width: 1440px;
-  min-height: 1080px;
+  width: 100%;
+  min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
 `;
 
@@ -24,6 +24,8 @@ const IntroductionPanel = styled.aside`
   gap: ${({ theme }) => theme.space[24]}px;
   padding: 48px 64px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media (max-width: 1439px) { display: none; }
 `;
 
 const Brand = styled.div`
@@ -71,7 +73,7 @@ const IntroCopy = styled.p`
 
 const BenefitsCard = styled.section`
   display: flex;
-  width: 472px;
+  width: 100%;
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[16]}px;
@@ -92,7 +94,7 @@ const BenefitsTitle = styled.h2`
 
 const BenefitRow = styled.div`
   display: flex;
-  width: 424px;
+  width: 100%;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
 `;
@@ -129,7 +131,7 @@ const BenefitDescription = styled.p`
 `;
 
 const Divider = styled.div`
-  width: 424px;
+  width: 100%;
   height: 1px;
   flex: 0 0 1px;
   background: ${({ theme }) => theme.colors.border};
@@ -138,17 +140,30 @@ const Divider = styled.div`
 const Content = styled.section`
   display: flex;
   width: 840px;
-  min-height: 1080px;
+  min-height: 100vh;
   flex: 0 0 840px;
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
   padding: 160px 80px 80px;
+
+  @media (max-width: 1439px) {
+    width: 100%;
+    flex: 1 1 auto;
+    align-items: center;
+    padding: 80px max(24px, calc((100vw - 680px) / 2)) 48px;
+  }
+
+  @media (max-width: 600px) {
+    min-height: 100svh;
+    gap: ${({ theme }) => theme.space[24]}px;
+    padding: 32px 16px;
+  }
 `;
 
 const Heading = styled.div`
   display: flex;
-  width: 680px;
+  width: min(680px, 100%);
   flex-direction: column;
   gap: ${({ theme }) => theme.space[16]}px;
 `;
@@ -174,12 +189,14 @@ const Subtitle = styled.p`
 
 const DetailsCard = styled.section`
   display: flex;
-  width: 680px;
+  width: min(680px, 100%);
   flex-direction: column;
   gap: ${({ theme }) => theme.space[16]}px;
   padding: ${({ theme }) => theme.space[24]}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const CardTitle = styled.h2`
@@ -194,7 +211,7 @@ const CardTitle = styled.h2`
 
 const DetailRow = styled.div`
   display: flex;
-  width: 632px;
+  width: 100%;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
 `;
@@ -239,12 +256,14 @@ const UnknownValue = styled(DetailText)`
 
 const AccountCard = styled.section`
   display: flex;
-  width: 680px;
+  width: min(680px, 100%);
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
   padding: ${({ theme }) => theme.space[16]}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 480px) { align-items: flex-start; gap: 12px; }
 `;
 
 const AccountCopy = styled.div`
@@ -289,10 +308,17 @@ const ErrorMessage = styled.p`
 
 const Actions = styled.div`
   display: flex;
-  width: 680px;
+  width: min(680px, 100%);
   align-items: center;
   justify-content: flex-end;
   gap: ${({ theme }) => theme.space[8]}px;
+
+  @media (max-width: 600px) {
+    flex-direction: column-reverse;
+    align-items: stretch;
+
+    > button, > a { width: 100%; }
+  }
 `;
 
 const DisabledAction = styled(Button)`
@@ -300,7 +326,7 @@ const DisabledAction = styled(Button)`
 `;
 
 const FormError = styled.div`
-  width: 680px;
+  width: min(680px, 100%);
   padding: ${({ theme }) => theme.space[16]}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme }) => theme.colors.danger};
@@ -308,6 +334,8 @@ const FormError = styled.div`
   font-family: ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
   font-size: ${({ theme }) => theme.typography.bodySmall.size}px;
   line-height: ${({ theme }) => theme.typography.bodySmall.lineHeight}px;
+
+  @media (max-width: 600px) { padding: 12px; }
 `;
 
 const LoginLink = styled.a`
