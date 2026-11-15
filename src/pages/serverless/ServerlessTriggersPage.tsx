@@ -120,9 +120,11 @@ const Tabs = styled.div`
 const Tab = styled.button<{ $active: boolean }>`
   display: inline-flex;
   min-height: 42px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   padding: 0 16px;
+  white-space: nowrap;
   border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
@@ -271,8 +273,12 @@ const ScheduleNote = styled.div`
   width: 100%;
   flex-direction: column;
   gap: 8px;
-  color: ${({ theme }) => theme.colors.faint};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const MutedCell = styled(Cell)`
+  color: ${({ theme }) => theme.colors.muted};
 `;
 
 const DomainValue = styled.div`
@@ -511,7 +517,7 @@ export function ServerlessTriggersPage({
           {triggers.map(trigger => (
             <TableRow key={trigger.id} role="row">
               <Cell role="cell">{trigger.type}</Cell>
-              <Cell role="cell">{trigger.type === 'Cron' ? formatCronSchedule(trigger.schedule) : trigger.schedule === 'ALL' ? '전체' : trigger.schedule}</Cell>
+              <MutedCell role="cell">{trigger.type === 'Cron' ? formatCronSchedule(trigger.schedule) : trigger.schedule === 'ALL' ? '전체' : trigger.schedule}</MutedCell>
               <Cell role="cell">
                 <Switch
                   label=""

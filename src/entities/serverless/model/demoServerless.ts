@@ -39,7 +39,16 @@ export class DemoServerlessFunctionLimitError extends Error {
   }
 }
 const defaultWelcomePublicUrl = 'https://q8w2n5r7t1vz.example.com';
-const jsCode = `export default async function handler(request, env) {\n  const body = request?.method === "POST" ? await request.json().catch(() => ({})) : {};\n  const name = body.name || "지민";\n  const greeting = env.GREETING || "안녕하세요";\n  console.log("Greeting sent", name);\n  return Response.json({ message: greeting + ", " + name + "!" });\n}`;
+const jsCode = `export default async function handler(request, env) {
+  let name = "GSM";
+  if (request?.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    name = body.name || name;
+  }
+  const greeting = env.GREETING || "안녕하세요";
+  console.log("Greeting sent", name);
+  return Response.json({ message: \`\${greeting}, \${name}!\` });
+}`;
 const pyCode = `def handler(request, env):\n    return {\n        "status": "ok",\n        "service": "health-check"\n    }`;
 const initialRuns: DemoServerlessRun[] = [
   { id: 'run-1', result: 'success', startedAt: '2026. 09. 29. 14:34:12', path: '수동', duration: '182ms', outputLines: ['Greeting sent 지민', 'Using API_KEY ••••••••'] },
@@ -73,7 +82,7 @@ const seed: DemoServerlessState = {
         { id: '5', label: '버전 5', savedAt: '2026. 09. 28. 17:20', author: '김지민', changeSummary: '코드 · Runtime', current: false, code: jsCode, runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128 },
       ],
       runs: initialLogHistory,
-      testResult: { responseJson: '{\n  "message": "안녕하세요, 지민!"\n}', statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: '오늘 실행 1,285 / 10,000회에 포함됩니다', durationLabel: '182ms', durationCaption: '메모리 46MB', logs: 'Greeting sent 지민', timestampLabel: '2026. 09. 29. 14:34:12', dailyExecutionsUsed: 1285 },
+      testResult: { responseJson: '{\n  "message": "안녕하세요, 지민!"\n}', statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: '오늘 실행 1,285 / 10,000회에 포함됩니다', durationLabel: '182ms', durationCaption: '메모리 46MB 사용', logs: 'Greeting sent 지민', timestampLabel: '2026. 09. 29. 14:34:12', dailyExecutionsUsed: 1285 },
     },
     {
       id: 'health-check', name: 'health-check', description: '개발 중인 서비스의 응답 상태를 확인합니다.', runtime: 'python', timeoutSeconds: 30, memoryMb: 128,
@@ -356,7 +365,7 @@ export async function executeDemoServerlessTest(id: string, payload: string): Pr
     const greeting = fn.variables.find(item => item.name === 'GREETING')?.value ?? '안녕하세요';
     const message = fn.runtime === 'python' ? '함수가 정상적으로 응답했습니다' : `${greeting}, ${name}!`;
     state.executionsToday += 1;
-    const execution: DemoServerlessTestResult = { responseJson: JSON.stringify({ message: fn.runtime === 'python' ? 'ok' : message, ...(fn.runtime === 'python' ? { service: fn.name } : {}) }, null, 2), statusLabel: '성공', statusMessage: message, pathLabel: '수동 실행', pathCaption: `오늘 실행 ${state.executionsToday.toLocaleString('ko-KR')} / ${state.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`, durationLabel: '182ms', durationCaption: `메모리 ${Math.min(128, fn.memoryMb)}MB`, logs: `Greeting sent ${name}`, timestampLabel: timestamp, dailyExecutionsUsed: state.executionsToday };
+    const execution: DemoServerlessTestResult = { responseJson: JSON.stringify({ message: fn.runtime === 'python' ? 'ok' : message, ...(fn.runtime === 'python' ? { service: fn.name } : {}) }, null, 2), statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: `오늘 실행 ${state.executionsToday.toLocaleString('ko-KR')} / ${state.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`, durationLabel: '182ms', durationCaption: '메모리 46MB 사용', logs: `Greeting sent ${name}`, timestampLabel: timestamp, dailyExecutionsUsed: state.executionsToday };
     fn.testResult = execution;
     fn.runs.unshift({ id: crypto.randomUUID(), result: 'success', startedAt: timestamp, path: '수동', duration: '182ms', outputLines: execution.logs.split('\n') });
     return { kind: 'executed', result: execution } as const;

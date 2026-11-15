@@ -133,6 +133,7 @@ const Tab = styled.button<{ $active: boolean }>`
   border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
+  white-space: nowrap;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   cursor: pointer;
@@ -213,11 +214,12 @@ const HeaderCell = styled.div`
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 
-const DataRow = styled.button<{ $selected: boolean }>`
-  min-height: 50px;
+const DataRow = styled(Row).attrs({ as: 'button' })<{ $selected: boolean }>`
+  min-height: 46px;
   padding: 0;
   border: 0;
-  border-radius: ${({ theme }) => theme.radii.base}px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0;
   background: ${({ theme, $selected }) => $selected ? theme.colors.primarySoft : 'transparent'};
   text-align: left;
   cursor: pointer;
@@ -361,7 +363,8 @@ export function ServerlessLogsPage({
   onDeleteAll,
   onTest,
 }: ServerlessLogsPageProps) {
-  const [localSelection, setLocalSelection] = useState<string | null>(null);
+  // Figma 19(53:2174)처럼 처음에는 가장 최근 실행을 펼쳐 출력 Log를 보여 준다.
+  const [localSelection, setLocalSelection] = useState<string | null>(() => runs[0]?.id ?? null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const currentSelection = selectedRunId ?? localSelection;
   const selectedRun = runs.find(run => run.id === currentSelection);
