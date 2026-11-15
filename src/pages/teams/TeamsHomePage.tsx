@@ -15,12 +15,17 @@ import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
 const Page = styled.div`
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   max-width: 1224px;
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+  container: team-home / inline-size;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 16px; gap: 20px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -35,6 +40,12 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @container team-home (max-width: 760px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
 `;
 
 const TitleBlock = styled.div`
@@ -70,11 +81,14 @@ const TeamWarning = styled.p`
 
 const Actions = styled.div`
   display: flex;
+  min-width: 0;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 8px;
 `;
 
 const QuotaPanel = styled.section`
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -82,6 +96,8 @@ const QuotaPanel = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @container team-home (max-width: 560px) { padding: 16px; }
 `;
 
 const SectionHeading = styled.div`
@@ -138,9 +154,15 @@ const QuotaFoot = styled.div`
   gap: 16px;
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @container team-home (max-width: 700px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 `;
 
 const VmPanel = styled.section`
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -148,6 +170,8 @@ const VmPanel = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @container team-home (max-width: 560px) { padding: 16px; }
 `;
 
 const VmTable = styled.div`
@@ -161,6 +185,8 @@ const VmTable = styled.div`
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @container team-home (max-width: 700px) { display: none; }
 `;
 
 const VmNotice = styled.div`
@@ -189,6 +215,30 @@ const VmDataRow = styled.div`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 
   &:last-child { border-bottom: 0; }
+
+  @container team-home (max-width: 700px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 16px 0;
+  }
+`;
+
+const VmCell = styled.div`
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  @container team-home (max-width: 700px) {
+    display: grid;
+    grid-template-columns: minmax(84px, 0.35fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    color: ${({ theme }) => theme.colors.text};
+
+    &::before {
+      content: attr(data-label);
+      color: ${({ theme }) => theme.colors.faint};
+    }
+  }
 `;
 
 const VmNameButton = styled.button`
@@ -215,6 +265,9 @@ const ServiceCards = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+
+  @container team-home (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container team-home (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const DatabaseUsageCard = styled(UsageCard)`
@@ -256,6 +309,8 @@ const BottomGrid = styled.div`
   align-items: start;
   gap: 16px;
   width: 100%;
+
+  @container team-home (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const MemberPanel = styled.section`
@@ -356,6 +411,7 @@ const DotList = styled.ul`
 const EmptyActions = styled.div`
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
 `;
@@ -371,6 +427,9 @@ const SkeletonServices = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+
+  @container team-home (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container team-home (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
@@ -747,12 +806,12 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
           {import.meta.env.DEV && demoMode
             ? demoTeamVms.length > 0
               ? demoTeamVms.map(vm => <VmDataRow key={vm.id}>
-                <VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton>
-                <span>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '대기 중'}</span>
-                <span>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</span>
-                <span>{vm.creator}</span>
-                <span>{vm.expiresAt.split(' ')[0]}</span>
-                <Button variant="ghost" aria-label={`${vm.name} 관리`} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}><Octicon name="chevron-right" size={16} /></Button>
+                <VmCell data-label="VM"><VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton></VmCell>
+                <VmCell data-label="상태">{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '대기 중'}</VmCell>
+                <VmCell data-label="Resources">{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</VmCell>
+                <VmCell data-label="만든 사람">{vm.creator}</VmCell>
+                <VmCell data-label="만료">{vm.expiresAt.split(' ')[0]}</VmCell>
+                <VmCell data-label="관리"><Button variant="ghost" aria-label={`${vm.name} 관리`} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}><Octicon name="chevron-right" size={16} /></Button></VmCell>
               </VmDataRow>)
               : <VmNotice>팀 VM이 없습니다.</VmNotice>
             : <VmNotice>팀 VM 목록 정보가 제공되지 않습니다.</VmNotice>}
