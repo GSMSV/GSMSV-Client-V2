@@ -29,3 +29,13 @@ export interface AppPage {
   items: AppSummary[];
   next_cursor: string | null;
 }
+
+export interface AppListItem extends AppSummary {
+  demoDetails?: {
+    repository: string;
+    branch: string;
+    serviceCount: number;
+    environmentCount: number;
+    memoryMb: number;
+  };
+}

@@ -16,9 +16,10 @@ import {
   getDemoApps,
   saveDemoApps,
   type DemoEnvironment,
+  type DemoManagedService,
 } from "../../entities/app/demo";
 import { reconcileDemoDatabaseRestarts } from "../../features/apps/demoServiceOperations";
-import { Modal } from "./DemoAppDialog";
+import { DemoAppDialog, Modal } from "./DemoAppDialog";
 import { DeleteConfirmDialog } from "../../shared/ui/feedback";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
@@ -271,6 +272,15 @@ const LinkText = styled.span`
       ${({ theme }) => theme.typography.bodySmall.family},
     sans-serif;
 `;
+const CronScheduleButton = styled(LinkText).attrs({ as: "button" })`
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover, &:focus-visible { text-decoration: underline; }
+`;
 const Table = styled.div`
   width: 100%;
   min-width: 0;
@@ -414,6 +424,7 @@ export function DemoAppOverviewPage() {
   const app = getDemoApp(appId);
   const user = getSessionUser();
   const [environment, setEnvironment] = useState("production");
+  const [cronService, setCronService] = useState<DemoManagedService>();
   const [notice, setNotice] = useState("");
   const [, refresh] = useState(0);
   useEffect(() => {
@@ -600,11 +611,10 @@ export function DemoAppOverviewPage() {
                 <div>
                   <ServiceName>{service.name}</ServiceName>
                   {service.type === "웹" && expired ? (
-                    <LinkText as={Link} to={`/public/${encodeURIComponent(appId)}/stopped`}>https://{service.subdomain}.{"{앱 도메인}"}</LinkText>
-                  ) : <LinkText>{service.type === "웹"
-                    ? `https://${service.subdomain}.{앱 도메인}`
-                    : service.type === "크론" ? "매일 03:00 (서울)" : "주소 없음"}</LinkText>}
-                  {service.type === "크론" && <Button variant="ghost" onClick={() => navigate(getPath(appId, service.id, "settings"))}>설정 열기</Button>}
+                    <LinkText as={Link} to={`/public/${encodeURIComponent(appId)}/stopped?service=${encodeURIComponent(service.id)}`}>https://{service.subdomain}.{"{앱 도메인}"}</LinkText>
+                  ) : service.type === "크론" ? (
+                    <CronScheduleButton type="button" onClick={() => setCronService(service)}>매일 03:00 (서울)</CronScheduleButton>
+                  ) : <LinkText>{service.type === "웹" ? `https://${service.subdomain}.{앱 도메인}` : "주소 없음"}</LinkText>}
                   <Subtitle>
                     {service.type} · {service.memoryMb} MB · {service.cpu} vCPU
                   </Subtitle>
@@ -621,6 +631,20 @@ export function DemoAppOverviewPage() {
             })}
           </ServiceGrid>
         </section>
+        {cronService && <DemoAppDialog
+          title={`${cronService.name} 크론 설정`}
+          icon="clock"
+          confirmLabel="설정 열기"
+          onClose={() => setCronService(undefined)}
+          onConfirm={() => navigate(getPath(appId, cronService.id, "settings"))}
+          showCancel={false}
+        >
+          {`${cronService.cronSchedule}
+
+· 매일 03:00에 실행합니다. 서울 시간으로 계산합니다.
+· 5분보다 자주 실행할 수 없고, 30분이 넘으면 강제로 끝냅니다.
+· staging·PR 환경에서는 따로 켜야 실행됩니다.`}
+        </DemoAppDialog>}
         {notice && <Notice role="status">{notice}</Notice>}
       </Page>
     </StudentShell>

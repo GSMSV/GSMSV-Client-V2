@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { isDemoMode } from '../../shared/demo';
 import styled from 'styled-components';
 import { getAppStatusDisplay } from '../../entities/app';
 import { deleteApp, extendApp, getApp, updateApp, type AppDetail } from '../../features/app/manage-app';
@@ -311,6 +312,15 @@ function getApiMessage(error: unknown, fallback: string) {
 }
 
 export default function AppSettingsPage() {
+  const { appGrn } = useParams<{ appGrn: string }>();
+  if (isDemoMode()) {
+    const appId = appGrn?.split(':').at(-1);
+    return <Navigate to={appId ? `/apps/${encodeURIComponent(appId)}/demo-settings` : '/apps'} replace />;
+  }
+  return <LiveAppSettingsPage />;
+}
+
+function LiveAppSettingsPage() {
   const navigate = useNavigate();
   const { appGrn } = useParams<{ appGrn: string }>();
   const user = getSessionUser();

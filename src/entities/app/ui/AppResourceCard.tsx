@@ -1,17 +1,17 @@
 import styled from 'styled-components';
 import { getAppStatusDisplay } from '../model/getAppStatusDisplay';
-import type { AppSummary } from '../model/types';
+import type { AppListItem } from '../model/types';
 import { Button } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
 
-const Card = styled.article`
+const Card = styled.article<{ $demo: boolean }>`
   display: flex;
   width: calc((100% - 32px) / 3);
   min-width: 300px;
   min-height: 180px;
   flex-direction: column;
   gap: 16px;
-  padding: 16px;
+  padding: ${({ $demo }) => $demo ? 24 : 16}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
 `;
@@ -24,11 +24,11 @@ const CardActions = styled.div`
   min-height: 42px;
 `;
 
-const AppIcon = styled.span`
+const AppIcon = styled.span<{ $demo: boolean }>`
   display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: ${({ $demo }) => $demo ? 42 : 32}px;
+  height: ${({ $demo }) => $demo ? 42 : 32}px;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: ${({ theme }) => theme.radii.base}px;
@@ -73,9 +73,9 @@ const Expiry = styled.span`
   white-space: nowrap;
 `;
 
-const StatusText = styled.span<{ $tone: 'warning' | 'neutral' }>`
+const StatusText = styled.span<{ $tone: 'warning' | 'neutral' | 'success' }>`
   flex: 0 0 auto;
-  color: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warning : theme.colors.muted};
+  color: ${({ theme, $tone }) => $tone === 'success' ? theme.colors.primary : $tone === 'warning' ? theme.colors.warning : theme.colors.muted};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 
@@ -88,19 +88,23 @@ function formatExpiry(value: string) {
   return `만료 ${year}. ${month}. ${day}.`;
 }
 
-export function AppResourceCard({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
-  const status = getAppStatusDisplay(app.status);
+export function AppResourceCard({ app, onOpen }: { app: AppListItem; onOpen: () => void }) {
+  const details = app.demoDetails;
+  const demo = Boolean(details);
+  const status = demo && app.status === 'active' ? { label: '실행 중', tone: 'success' as const } : getAppStatusDisplay(app.status);
+  const source = details ? `${details.repository}${details.branch ? ` · ${details.branch} 브랜치` : ''}` : `소유자 ${app.owner.name} · 생성자 ${app.created_by}`;
 
   return (
-    <Card>
+    <Card $demo={demo}>
       <CardActions>
-        <AppIcon aria-hidden="true"><Octicon name="upload" size={16} /></AppIcon>
+        <AppIcon $demo={demo} aria-hidden="true"><Octicon name="upload" size={16} /></AppIcon>
         <Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={onOpen}>열기</Button>
       </CardActions>
       <AppName title={app.name}>{app.name}</AppName>
-      <Metadata title={`소유자 ${app.owner.name} · 생성자 ${app.created_by}`}>
-        소유자 {app.owner.name} · 생성자 {app.created_by}
-      </Metadata>
+      <Metadata title={source}>{source}</Metadata>
+      {details && <Metadata>
+        서비스 {details.serviceCount}개 · 환경 {details.environmentCount}개 · 메모리 {details.memoryMb >= 1024 ? `${details.memoryMb / 1024} GB` : `${details.memoryMb} MB`}
+      </Metadata>}
       <CardFooter>
         <Expiry>{formatExpiry(app.expires_at)}</Expiry>
         <StatusText $tone={status.tone}>{status.label}</StatusText>
