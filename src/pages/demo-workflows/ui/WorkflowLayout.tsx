@@ -364,6 +364,10 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
   const [adminNavigationOpen, setAdminNavigationOpen] = useState(false);
   const adminSidebarRef = useRef<HTMLElement>(null);
   const adminNavigationTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeAdminNavigation = () => {
+    setAdminNavigationOpen(false);
+    window.requestAnimationFrame(() => adminNavigationTriggerRef.current?.focus());
+  };
 
   useEffect(() => {
     if (!admin || !adminNavigationOpen) return;
@@ -396,13 +400,13 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
           <Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand>
           <Workspace>관리자 워크스페이스</Workspace>
           <AdminNav>
-            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { setAdminNavigationOpen(false); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { closeAdminNavigation(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
             <AdminDivider />
-            {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { setAdminNavigationOpen(false); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { closeAdminNavigation(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
           </AdminNav>
           <div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div>
         </AdminSidebar>
-        {adminNavigationOpen && <AdminNavigationOverlay type="button" aria-label="메뉴 닫기" onClick={() => setAdminNavigationOpen(false)} />}
+        {adminNavigationOpen && <AdminNavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeAdminNavigation} />}
         <AdminMain>
           <AdminHeader>
             <AdminMenuToggle

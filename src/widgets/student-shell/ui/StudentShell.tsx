@@ -111,6 +111,11 @@ export function StudentShell({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [navigationOpen]);
 
+  const closeNavigation = () => {
+    setNavigationOpen(false);
+    window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
+  };
+
   const requestNavigation = (action: () => void) => {
     if (logoutPending) return;
     if (hasUnsavedInput) {
@@ -122,7 +127,7 @@ export function StudentShell({
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
-      setNavigationOpen(false);
+      closeNavigation();
       if (item === 'serverless') {
         void navigate('/serverless');
         return;
@@ -147,8 +152,8 @@ export function StudentShell({
         open={navigationOpen}
         activeItem={activeItem}
         onNavigate={handleNavigate}
-        onCreateTeam={() => requestNavigation(() => { setNavigationOpen(false); onCreateTeam(); })}
-        onOpenStatus={() => requestNavigation(() => { setNavigationOpen(false); onOpenStatus(); })}
+        onCreateTeam={() => requestNavigation(() => { closeNavigation(); onCreateTeam(); })}
+        onOpenStatus={() => requestNavigation(() => { closeNavigation(); onOpenStatus(); })}
         disabledItems={disabledNavigationItems}
         actionsAtBottom={sidebarActionsAtBottom}
       />
@@ -175,7 +180,7 @@ export function StudentShell({
         />
         <PageContent>{children}</PageContent>
       </MainColumn>
-      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={() => setNavigationOpen(false)} />}
+      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeNavigation} />}
       {pendingNavigation && (
         <UnsavedChangesDialog
           onLeave={() => {

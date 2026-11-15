@@ -562,6 +562,10 @@ export default function AdminInfrastructurePage() {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationRef = useRef<HTMLElement>(null);
   const navigationTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeNavigation = () => {
+    setNavigationOpen(false);
+    window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
+  };
   const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
   const [demoSnapshot, setDemoSnapshot] = useState<DemoInfraSnapshot | null>(null);
@@ -738,7 +742,7 @@ export default function AdminInfrastructurePage() {
                 disabled={!href}
                 aria-current={active ? 'page' : undefined}
                 title={!href ? '해당 화면은 아직 연결되지 않았습니다' : undefined}
-                onClick={href ? () => { setNavigationOpen(false); void navigate(href); } : undefined}
+                onClick={href ? () => { closeNavigation(); void navigate(href); } : undefined}
               >{icon(item.icon)}{item.label}</NavigationItem>
             );
           })}
@@ -751,7 +755,7 @@ export default function AdminInfrastructurePage() {
           <NavigationItem type="button" onClick={() => navigate('/status')}>{icon('pulse')}서비스 상태</NavigationItem>
         </SidebarFooter>
       </Sidebar>
-      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={() => setNavigationOpen(false)} />}
+      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeNavigation} />}
 
       <MainColumn>
         <Header>
