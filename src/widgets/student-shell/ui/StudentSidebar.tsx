@@ -95,6 +95,7 @@ const NavigationDivider = styled.div`
 const SidebarActions = styled.div<{ $atBottom: boolean }>`
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: ${({ theme }) => theme.space[8]}px;
   margin-top: ${({ $atBottom }) => $atBottom ? 'auto' : '0'};
   padding-top: ${({ $atBottom }) => $atBottom ? '0' : '60px'};
@@ -128,7 +129,7 @@ const secondaryNavigation = [
   { key: 'settings', label: '설정', icon: 'gear' },
 ] as const;
 
-export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], disabledReasons = {}, actionsAtBottom = true }: StudentSidebarProps) {
+export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], disabledReasons = {}, actionsAtBottom = false }: StudentSidebarProps) {
   return (
     <Sidebar id="student-navigation" ref={sidebarRef} $open={open} onKeyDown={onKeyDown} aria-label="학생 메뉴">
       <Brand>

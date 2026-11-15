@@ -90,8 +90,8 @@ export function StudentShell({
   onLogoutPendingChange,
   onLogoutRequest,
   disabledNavigationItems,
-  sidebarActionsAtBottom = true,
-  showTopbarDivider = false,
+  sidebarActionsAtBottom = false,
+  showTopbarDivider = true,
 }: StudentShellProps) {
   const navigate = useNavigate();
   const [logoutPending, setLogoutPending] = useState(false);
