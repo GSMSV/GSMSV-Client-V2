@@ -1,10 +1,17 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Button, NavigationItem } from '../../shared/ui/controls';
+import { Banner } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
+import { ServerlessStateCard, StateCopy, StateField, StateFieldLabel, StateFieldValue } from './ServerlessStateCard';
 
 export type ServerlessTestTab = 'code' | 'versions' | 'triggers' | 'environment' | 'test' | 'logs';
+
+export type ServerlessExecutionError =
+  | { kind: 'inactive' | 'quota' | 'missing' | 'storage' }
+  | { kind: 'runtime-error'; message: string; location: string }
+  | { kind: 'timeout'; timeoutSeconds: 30 | 60; memoryMb: 128 | 256 };
 
 export interface ServerlessTestResult {
   responseJson: string;
@@ -27,7 +34,9 @@ export interface ServerlessTestPageProps {
   onExecute?: (requestPayload: string) => void | Promise<void>;
   active?: boolean;
   dailyExecutions?: { used: number; limit: number };
-  executionError?: 'inactive' | 'quota' | 'missing' | 'storage' | null;
+  executionError?: ServerlessExecutionError | null;
+  /** 실행 오류·시간 초과 대화상자의 "코드 수정"/"코드 확인" */
+  onEditCode?: () => void;
   onDismissExecutionError: () => void;
   onActivate: () => void;
   onCopyResponse?: (responseJson: string) => void;
@@ -320,6 +329,7 @@ export function ServerlessTestPage({
   executionError = null,
   onDismissExecutionError,
   onActivate,
+  onEditCode,
   onExecute,
   onCopyResponse,
   onViewLogs,
@@ -391,6 +401,13 @@ export function ServerlessTestPage({
         <Button variant="secondary" icon={<Octicon name="history" size={16} />} disabled={!onViewLogs} onClick={onViewLogs}>실행 Log 보기</Button>
       </TabsRow>
 
+      {executionError?.kind === 'quota' && <Banner
+        tone="danger"
+        icon={<Octicon name="alert" size={20} />}
+        title="한도에 닿아서 실행하지 않았습니다"
+        description="수동 실행도 하루 실행 한도에 포함됩니다. 다음 날 다시 실행해 주세요."
+      />}
+
       <TwoColumns>
         <Panel data-node-id="53:2097">
           <PanelHeader>
@@ -456,22 +473,51 @@ export function ServerlessTestPage({
         )) : <EmptyLog aria-label="실행 Log 없음" />}
         <Caption>{result?.timestampLabel ? `${result.timestampLabel} · console.log` : <Placeholder />}</Caption>
       </LogsPanel>
-      {executionError && <ModalSurface labelledBy="serverless-test-error-title" onDismiss={onDismissExecutionError}>
+      {executionError?.kind === 'runtime-error' && <ModalSurface labelledBy="serverless-test-runtime-title" onDismiss={onDismissExecutionError}>
+        <ServerlessStateCard
+          floating
+          titleId="serverless-test-runtime-title"
+          icon="alert"
+          tone="danger"
+          title="함수 실행 중 오류가 발생했습니다"
+          actions={<>
+            <Button type="button" variant="secondary" icon={<Octicon name="history" size={16} />} disabled={!onViewLogs} onClick={() => { onDismissExecutionError(); onViewLogs?.(); }}>Log 확인</Button>
+            <Button type="button" variant="primary" icon={<Octicon name="pencil" size={16} />} disabled={!onEditCode} onClick={() => { onDismissExecutionError(); onEditCode?.(); }}>코드 수정</Button>
+          </>}
+        >
+          <StateCopy>실행이 완료되지 않았습니다. 오류 내용을 확인한 뒤 코드를 수정하고 다시 테스트하세요.</StateCopy>
+          <StateCopy>· 출력 Log는 실행 도중까지 남은 내용만 표시될 수 있습니다.</StateCopy>
+          <StateField><StateFieldLabel>오류 메시지</StateFieldLabel><StateFieldValue $code>{executionError.message}</StateFieldValue></StateField>
+          <StateField><StateFieldLabel>오류 위치</StateFieldLabel><StateFieldValue>{executionError.location}</StateFieldValue></StateField>
+        </ServerlessStateCard>
+      </ModalSurface>}
+      {executionError?.kind === 'timeout' && <ModalSurface labelledBy="serverless-test-timeout-title" onDismiss={onDismissExecutionError}>
+        <ServerlessStateCard
+          floating
+          titleId="serverless-test-timeout-title"
+          icon="clock"
+          tone="warning"
+          title="실행 시간이 초과됐습니다"
+          actions={<>
+            <Button type="button" variant="secondary" icon={<Octicon name="file-code" size={16} />} disabled={!onEditCode} onClick={() => { onDismissExecutionError(); onEditCode?.(); }}>코드 확인</Button>
+            <Button type="button" variant="primary" icon={<Octicon name="play" size={16} />} disabled={!onExecute || isExecuting} onClick={() => { onDismissExecutionError(); void execute(); }}>다시 테스트</Button>
+          </>}
+        >
+          <StateCopy>기본 제한 시간 {executionError.timeoutSeconds}초 안에 함수가 응답하지 않았습니다. 오래 걸리는 처리를 확인하고 다시 실행하세요.</StateCopy>
+          <StateCopy>· 기본 실행 환경 · 최대 {executionError.timeoutSeconds}초 / {executionError.memoryMb}MB</StateCopy>
+          <StateCopy>· 외부 HTTP(S) 요청 · fetch 최대 10초</StateCopy>
+        </ServerlessStateCard>
+      </ModalSurface>}
+      {executionError && ['inactive', 'storage', 'missing'].includes(executionError.kind) && <ModalSurface labelledBy="serverless-test-error-title" onDismiss={onDismissExecutionError}>
         <ExecutionDialog>
-          {executionError === 'inactive' ? <>
+          {executionError.kind === 'inactive' ? <>
             <ExecutionDialogTitle id="serverless-test-error-title">비활성 함수는 실행할 수 없습니다</ExecutionDialogTitle>
             <ExecutionDialogCopy>{functionName}를 활성화하면 수동 테스트와 공개 URL 호출을 사용할 수 있습니다. 먼저 함수 상태를 변경해주세요.<br />현재 함수 상태<br />{active ? '활성' : '비활성'}</ExecutionDialogCopy>
             <ExecutionDialogActions>
               <Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button>
               <Button type="button" variant="primary" onClick={onActivate}>함수 활성화</Button>
             </ExecutionDialogActions>
-          </> : executionError === 'quota' ? <>
-            <ExecutionDialogTitle id="serverless-test-error-title">한도에 닿아서 실행하지 않았습니다</ExecutionDialogTitle>
-            <ExecutionDialogCopy>수동 실행도 하루 실행 한도에 포함됩니다. 다음 날 다시 실행해 주세요.<br />오늘 실행 {dailyExecutions?.used.toLocaleString('ko-KR') ?? '—'} / {dailyExecutions?.limit.toLocaleString('ko-KR') ?? '—'}회</ExecutionDialogCopy>
-            <ExecutionDialogActions>
-              <Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button>
-            </ExecutionDialogActions>
-          </> : executionError === 'storage' ? <>
+          </> : executionError.kind === 'storage' ? <>
             <ExecutionDialogTitle id="serverless-test-error-title">테스트를 완료하지 못했습니다</ExecutionDialogTitle>
             <ExecutionDialogCopy>실행 결과를 저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.</ExecutionDialogCopy>
             <ExecutionDialogActions><Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button></ExecutionDialogActions>
