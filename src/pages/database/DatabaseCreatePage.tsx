@@ -26,6 +26,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -39,10 +41,17 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 720px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 const TitleGroup = styled.div`
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
 `;
