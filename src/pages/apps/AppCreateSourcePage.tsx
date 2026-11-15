@@ -5,7 +5,7 @@ import { useAppSourceDraft, type AppSourceType } from '../../features/app/create
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { getSessionUser } from '../../entities/session';
 import { Button } from '../../shared/ui/controls';
-import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
+import { Combobox, SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
@@ -370,7 +370,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
             <StepLine role="presentation" />
             <StepIndicator number={2} label="서비스" />
           </Steps>
-          <Button variant="primary" icon={<Octicon name="arrow-right" size={16} />} iconPosition="end" onClick={handleContinue} disabled={(demoMode && (!demoReady || !form.repository.trim())) || (!demoMode && form.sourceType !== 'github') || !form.name.trim() || form.name.trim().length > 30}>
+          <Button variant="primary" icon={<Octicon name="arrow-right" size={16} />} onClick={handleContinue} disabled={(demoMode && (!demoReady || !form.repository.trim())) || (!demoMode && form.sourceType !== 'github') || !form.name.trim() || form.name.trim().length > 30}>
             다음: 서비스
           </Button>
         </StepRow>
@@ -414,7 +414,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                   <Caption>GSMSV GitHub 앱</Caption>
                   <Body>앱을 설치한 저장소만 고를 수 있습니다.</Body>
                 </AccountText>
-                <Button variant="ghost" icon={<Octicon name="gear" size={16} />} disabled={!demoMode} onClick={() => { if (!github) setDialog('github-disconnected'); else installRepository(); }}>
+                <Button variant="ghost" icon={<Octicon name="link-external" size={16} />} disabled={!demoMode} onClick={() => { if (!github) setDialog('github-disconnected'); else installRepository(); }}>
                   설치 저장소 바꾸기
                 </Button>
               </AccountRow>
@@ -422,10 +422,10 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                 <Octicon name="info" size={18} />
                 GitHub 연결 API가 없어 저장소는 연결되지 않습니다. 다음 단계에서 앱 이름만 저장하는 앱을 만들 수 있고, 소스 설정은 전송하지 않습니다.
               </SourceUnavailable>}
-                <SelectField
+                <Combobox
                   label="저장소"
                   value={form.repository}
-                  placeholder="저장소 선택"
+                  placeholder="저장소 검색"
                   disabled={!demoMode}
                   options={demoMode ? [{ value: 'gsm-jimin/portfolio-web', label: 'gsm-jimin/portfolio-web' }, { value: 'gsm-jimin/study-log', label: 'gsm-jimin/study-log' }] : []}
                   onChange={value => {
@@ -454,6 +454,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                 <TextField
                   label="감시 경로"
                   value={form.watchPaths}
+                  placeholder="src/**, package.json"
                   disabled={!demoMode}
                   onChange={event => setField('watchPaths', event.currentTarget.value)}
                   hint="이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를 배포합니다."

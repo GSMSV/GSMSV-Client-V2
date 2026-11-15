@@ -29,7 +29,8 @@ import { DemoAppStateCards, useDemoAppRequest } from "./DemoAppRequestState";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
-import { Button, SliderField } from "../../shared/ui/controls";
+import { Button, SelectField, SliderField, Switch, TextField } from "../../shared/ui/controls";
+import { Banner, StatusBadge } from "../../shared/ui/feedback";
 import { Octicon } from "../../shared/ui/icons";
 import {
   StudentShell,
@@ -76,10 +77,10 @@ const Title = styled.h1`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font:
-    ${({ theme }) => theme.typography.h2.weight}
-      ${({ theme }) => theme.typography.h2.size}px /
-      ${({ theme }) => theme.typography.h2.lineHeight}px
-      ${({ theme }) => theme.typography.h2.family},
+    ${({ theme }) => theme.typography.h1.weight}
+      ${({ theme }) => theme.typography.h1.size}px /
+      ${({ theme }) => theme.typography.h1.lineHeight}px
+      ${({ theme }) => theme.typography.h1.family},
     sans-serif;
 `;
 const Subtitle = styled.p`
@@ -104,8 +105,14 @@ const NavRow = styled.div`
     flex-wrap: wrap;
     justify-content: flex-start;
 
-    > button { margin-left: auto; }
+    > div:last-child { margin-left: auto; }
   }
+`;
+const NavActions = styled.div`
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 `;
 const Tabs = styled.nav`
   display: flex;
@@ -154,8 +161,14 @@ const Card = styled.section`
   @media (max-width: 600px) { padding: 16px; }
 `;
 const CardTitle = styled.h2`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
+
+  > svg { flex: 0 0 auto; color: ${({ theme }) => theme.colors.primary}; }
   font:
     ${({ theme }) => theme.typography.title.weight}
       ${({ theme }) => theme.typography.title.size}px /
@@ -173,31 +186,45 @@ const Help = styled.p`
       ${({ theme }) => theme.typography.caption.family},
     sans-serif;
 `;
-const Banner = styled.div<{ $warning?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 82px;
-  padding: 20px 24px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme, $warning }) =>
-    $warning ? theme.colors.warningSoft : theme.colors.primarySoft};
-  color: ${({ theme, $warning }) =>
-    $warning ? theme.colors.warning : theme.colors.primary};
-
-  @media (max-width: 520px) {
+const StateBanner = styled(Banner)`
+  @media (max-width: 600px) {
     flex-wrap: wrap;
-    padding: 16px;
+    align-items: flex-start;
 
-    > button { margin-left: auto; }
+    > div:last-child { width: 100%; }
+    > div:last-child > button { flex: 1 1 auto; }
   }
 `;
-const BannerCopy = styled.span`
+const CardHeader = styled.div`
   display: flex;
   min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+`;
+const InfoRow = styled.div`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+
+  @media (max-width: 600px) { flex-wrap: wrap; }
+`;
+const InfoIcon = styled.span`
+  display: inline-flex;
+  width: 16px;
+  flex: 0 0 16px;
+  color: ${({ theme }) => theme.colors.muted};
+`;
+const InfoText = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 8px;
-  small {
+  gap: 2px;
+
+  > span, > small {
     color: ${({ theme }) => theme.colors.muted};
     font:
       ${({ theme }) => theme.typography.caption.weight}
@@ -206,6 +233,26 @@ const BannerCopy = styled.span`
         ${({ theme }) => theme.typography.caption.family},
       sans-serif;
   }
+  > small { color: ${({ theme }) => theme.colors.faint}; }
+  > strong {
+    overflow-wrap: anywhere;
+    color: ${({ theme }) => theme.colors.text};
+    font:
+      ${({ theme }) => theme.typography.bodySmall.weight}
+        ${({ theme }) => theme.typography.bodySmall.size}px /
+        ${({ theme }) => theme.typography.bodySmall.lineHeight}px
+        ${({ theme }) => theme.typography.bodySmall.family},
+      sans-serif;
+  }
+`;
+const InfoActions = styled.div`
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  @media (max-width: 600px) { width: 100%; padding-left: 28px; }
 `;
 const Table = styled.div`
   width: 100%;
@@ -241,7 +288,8 @@ const TableRow = styled.div<{ $selected?: boolean }>`
   border-radius: ${({ theme }) => theme.radii.sm}px;
   background: ${({ theme, $selected }) =>
     $selected ? theme.colors.primarySoft : "transparent"};
-  color: ${({ theme }) => theme.colors.text};
+  color: ${({ theme }) => theme.colors.muted};
+  cursor: pointer;
   & > span {
     min-width: 0;
     padding: 10px 12px;
@@ -259,13 +307,14 @@ const TableRow = styled.div<{ $selected?: boolean }>`
     border-bottom: 0;
   }
 `;
-const Status = styled.span<{ $status?: string }>`
-  color: ${({ theme, $status }) =>
-    $status === "failed"
-      ? theme.colors.danger
-      : $status === "skipped"
-        ? theme.colors.muted
-        : theme.colors.primary};
+const RunningStatus = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+  font:
+    ${({ theme }) => theme.typography.label.weight}
+      ${({ theme }) => theme.typography.label.size}px /
+      ${({ theme }) => theme.typography.label.lineHeight}px
+      ${({ theme }) => theme.typography.label.family},
+    sans-serif;
 `;
 const Grid = styled.div`
   display: grid;
@@ -290,7 +339,20 @@ const Metric = styled.div`
   }
 `;
 const BigValue = styled.strong`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   color: ${({ theme }) => theme.colors.text};
+
+  sup {
+    color: ${({ theme }) => theme.colors.muted};
+    font:
+      ${({ theme }) => theme.typography.caption.weight}
+        ${({ theme }) => theme.typography.caption.size}px /
+        ${({ theme }) => theme.typography.caption.lineHeight}px
+        ${({ theme }) => theme.typography.caption.family},
+      sans-serif;
+  }
   font:
     ${({ theme }) => theme.typography.h1.weight}
       ${({ theme }) => theme.typography.h1.size}px /
@@ -306,69 +368,42 @@ const Plot = styled.svg`
     stroke: ${({ theme }) => theme.colors.border};
     stroke-width: 1;
   }
+  line.restart {
+    stroke: ${({ theme }) => theme.colors.danger};
+    stroke-width: 2;
+  }
   polyline {
     fill: none;
     stroke: ${({ theme }) => theme.colors.primary};
     stroke-width: 2;
   }
-  circle {
-    fill: ${({ theme }) => theme.colors.warning};
-  }
 `;
-const Field = styled.label`
+const ToggleRow = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  color: ${({ theme }) => theme.colors.muted};
-  font:
-    ${({ theme }) => theme.typography.label.weight}
-      ${({ theme }) => theme.typography.label.size}px /
-      ${({ theme }) => theme.typography.label.lineHeight}px
-      ${({ theme }) => theme.typography.label.family},
-    sans-serif;
-  input,
-  select {
-    min-height: 42px;
-    width: 100%;
-    padding: 0 12px;
-    border: 1px solid ${({ theme }) => theme.colors.border};
-    border-radius: ${({ theme }) => theme.radii.sm}px;
-    background: ${({ theme }) => theme.colors.field};
-    color: ${({ theme }) => theme.colors.text};
-    font: inherit;
-  }
-`;
-const VariableRow = styled.div`
-  display: flex;
-  min-height: 60px;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
-  @media (max-width: 520px) {
-    flex-wrap: wrap;
-    padding: 12px 0;
-
-    > div:last-child { width: 100%; }
-  }
+  > label { flex: 0 0 auto; }
 `;
-const VariableText = styled.div`
+const ToggleText = styled.div`
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+
   strong {
     color: ${({ theme }) => theme.colors.text};
     font:
-      ${({ theme }) => theme.typography.bodySmall.weight}
-        ${({ theme }) => theme.typography.bodySmall.size}px /
-        ${({ theme }) => theme.typography.bodySmall.lineHeight}px
-        ${({ theme }) => theme.typography.bodySmall.family},
+      ${({ theme }) => theme.typography.label.weight}
+        ${({ theme }) => theme.typography.label.size}px /
+        ${({ theme }) => theme.typography.label.lineHeight}px
+        ${({ theme }) => theme.typography.label.family},
       sans-serif;
   }
   span {
-    color: ${({ theme }) => theme.colors.muted};
+    color: ${({ theme }) => theme.colors.faint};
     font:
       ${({ theme }) => theme.typography.caption.weight}
         ${({ theme }) => theme.typography.caption.size}px /
@@ -377,26 +412,9 @@ const VariableText = styled.div`
       sans-serif;
   }
 `;
-const ToggleRow = styled.label`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 40px;
-  color: ${({ theme }) => theme.colors.text};
-  small {
-    display: block;
-    margin-top: 4px;
-    color: ${({ theme }) => theme.colors.faint};
-  }
-  input {
-    width: 44px;
-    height: 24px;
-    accent-color: ${({ theme }) => theme.colors.primary};
-  }
-`;
+const formatGb = (mb: number) => new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 }).format(mb / 1024);
 const Code = styled.pre`
-  min-height: 180px;
+  min-height: 64px;
   margin: 0;
   padding: 16px;
   overflow: auto;
@@ -410,11 +428,26 @@ const Code = styled.pre`
       ${({ theme }) => theme.typography.code.family},
     monospace;
 
-  @media (max-width: 600px) {
-    min-height: 140px;
-    padding: 12px;
+  > span { display: block; min-height: ${({ theme }) => theme.typography.code.lineHeight}px; }
+  i {
+    display: inline-block;
+    width: 40px;
+    color: ${({ theme }) => theme.colors.faint};
+    font-style: normal;
+    user-select: none;
   }
+
+  @media (max-width: 600px) { padding: 12px; }
 `;
+function CodeLines({ lines, numbered = false }: { lines: string[]; numbered?: boolean }) {
+  return (
+    <Code>
+      {lines.map((line, index) => (
+        <span key={index}>{numbered && <i>{index + 1}</i>}{line}</span>
+      ))}
+    </Code>
+  );
+}
 const Alert = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.primary};
@@ -449,25 +482,23 @@ const serviceRequestScope: Record<TabKey, string> = {
   domains: "apps-domains",
 };
 
-function MiniPlot({ restart = false }: { restart?: boolean }) {
+const plotPoints = {
+  memory: "0,101 52,98 94,99 140,92 186,90 232,88 281,80 328,74 376,80 420,83 466,86 512,85",
+  cpu: "0,114 46,118 92,109 140,102 186,106 232,98 279,74 326,18 372,52 419,87 465,106 512,102",
+};
+function MiniPlot({ kind, restart = false }: { kind: keyof typeof plotPoints; restart?: boolean }) {
   return (
     <Plot
       viewBox="0 0 512 140"
+      preserveAspectRatio="none"
       role="img"
       aria-label="최근 24시간 사용량 그래프"
     >
-      {[0, 46, 92, 139].map((y) => (
+      {[0, 47, 93, 139].map((y) => (
         <line key={y} x1="0" x2="512" y1={y} y2={y} />
       ))}
-      {restart && <line x1="348" x2="348" y1="0" y2="140" stroke="#ffd08a" />}
-      <polyline
-        points={
-          restart
-            ? "0,92 32,88 64,96 96,78 128,83 160,61 192,70 224,42 256,48 288,65 320,55 348,130 380,94 412,81 444,63 476,57 512,43"
-            : "0,105 32,99 64,101 96,84 128,91 160,72 192,78 224,70 256,54 288,62 320,48 352,52 384,42 416,46 448,30 480,38 512,24"
-        }
-      />
-      {restart && <circle cx="348" cy="130" r="4" />}
+      <polyline points={plotPoints[kind]} />
+      {restart && <line className="restart" x1="349" x2="349" y1="0" y2="140" />}
     </Plot>
   );
 }
@@ -648,7 +679,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   };
   const actionButton =
     tab === "deployments" ? (
-      <Button variant="secondary" disabled={!canManage || expired} onClick={() => {
+      <Button variant="secondary" icon={<Octicon name="sync" size={16} />} disabled={!canManage || expired} onClick={() => {
         const current = service.deployments.find(item => item.status === "running");
         const deployment: DemoDeployment = current ?? {
           id: crypto.randomUUID().slice(0, 7), status: "previous", commit: "재배포",
@@ -657,22 +688,22 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
         setDialog({ kind: "deploy", deployment });
       }}>재배포</Button>
     ) : tab === "logs" ? (
-      <Button variant="secondary" onClick={() => setLogsPaused(value => !value)}>
+      <Button variant="secondary" icon={<Octicon name={logsPaused ? "play" : "stop"} size={16} />} onClick={() => setLogsPaused(value => !value)}>
         {logsPaused ? "다시 시작" : "일시 정지"}
       </Button>
     ) : tab === "variables" ? (
       <>
-        <Button variant="secondary" disabled={expired} onClick={() => requestVariables(false)}>변수 추가</Button>
-        <Button disabled={expired} onClick={() => requestVariables(true)}>변경사항 저장</Button>
+        <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={expired} onClick={() => requestVariables(false)}>변수 추가</Button>
+        <Button icon={<Octicon name="check" size={16} />} disabled={expired} onClick={() => requestVariables(true)}>변경사항 저장</Button>
       </>
     ) : tab === "shell" ? (
-      <Button variant="secondary" disabled={!canManage || expired || service.status === "정지"} onClick={openShell}>
+      <Button variant="secondary" icon={<Octicon name={shellActive ? "stop" : "terminal"} size={16} />} disabled={!canManage || expired || service.status === "정지"} onClick={openShell}>
         {shellExpired ? "다시 열기" : shellActive ? "세션 끝내기" : "셸 열기"}
       </Button>
     ) : tab === "settings" ? (
-      <Button disabled={expired} onClick={() => canManage ? saveSettings() : setDialog({ kind: "read-only" })}>설정 저장</Button>
+      <Button icon={<Octicon name="check" size={16} />} disabled={expired} onClick={() => canManage ? saveSettings() : setDialog({ kind: "read-only" })}>설정 저장</Button>
     ) : tab === "domains" ? (
-      <Button disabled={!canManage || expired || service.type !== "웹"} onClick={() => {
+      <Button icon={<Octicon name="check" size={16} />} disabled={!canManage || expired || service.type !== "웹"} onClick={() => {
         const subdomain = (domainDraft ?? service.subdomain).trim();
         if (subdomain === service.subdomain) { setDomainDraft(undefined); return; }
         if (!isDemoAppSubdomainAvailable(subdomain, service.id)) { setDialog({ kind: "domain" }); return; }
@@ -682,19 +713,42 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
 
   let content: React.ReactNode;
   if (tab === "deployments") {
+    const failureTone = selected?.failure === "pre-deploy" || selected?.failure === "health" ? "warning" : "danger";
+    const failureIcon = selected?.failure === "timeout" ? "clock" : selected?.failure === "health" ? "pulse" : "alert";
     content = (
       <>
-        {(failure || skipped) && <Banner $warning role="status">
-          <Octicon name={failure ? "alert" : "shield"} size={18} />
-          <BannerCopy>
-            {failure?.[0] ?? (canManage ? "push를 건너뛰었습니다" : "팀장·DevOps가 배포해야 나갑니다")}
-            <small>{failure?.[1] ?? (canManage
-              ? `${skipped?.author} · ${skipped?.id}은 배포 권한이 없는 사람의 push라 배포하지 않았습니다.`
-              : "내가 push한 커밋은 배포 권한이 있는 팀원이 「이 커밋 배포」를 눌러야 나갑니다.")}</small>
-          </BannerCopy>
-          {failure && <Button variant="secondary" onClick={() => document.getElementById("demo-build-log")?.focus()}>빌드 로그</Button>}
-        </Banner>}
-        <Card>
+        {failure ? (
+          <StateBanner
+            tone={failureTone}
+            icon={<Octicon name={failureIcon} size={20} />}
+            title={failure[0]}
+            description={failure[1]}
+            action={<Button variant="secondary" icon={<Octicon name="terminal" size={16} />} onClick={() => document.getElementById("demo-build-log")?.focus()}>빌드 로그</Button>}
+          />
+        ) : skipped && !canManage ? (
+          <StateBanner
+            tone="neutral"
+            icon={<Octicon name="people" size={20} />}
+            title="팀장·DevOps가 배포해야 나갑니다"
+            description="내가 push한 커밋은 배포 권한이 있는 팀원이 「이 커밋 배포」를 눌러야 나갑니다."
+          />
+        ) : skipped && selected?.status === "skipped" ? (
+          <StateBanner
+            tone="neutral"
+            icon={<Octicon name="shield" size={20} />}
+            title="push를 건너뛰었습니다"
+            description={`${skipped.author} · ${skipped.id}은 배포 권한이 없는 사람의 push라 배포하지 않았습니다.`}
+            action={<Button variant="secondary" icon={<Octicon name="history" size={16} />} onClick={() => document.getElementById("demo-deployment-history")?.focus()}>배포 기록</Button>}
+          />
+        ) : skipped ? (
+          <StateBanner
+            tone="neutral"
+            icon={<Octicon name="shield" size={20} />}
+            title="건너뛴 push가 있습니다"
+            description="배포 권한이 없는 사람의 push라 배포하지 않았습니다. 기록에서 확인한 뒤 「이 커밋 배포」로 내보낼 수 있습니다."
+          />
+        ) : null}
+        <Card id="demo-deployment-history" tabIndex={-1}>
           <CardTitle>배포 기록 · 최근 10개</CardTitle>
           <Table>
             <TableHeader>
@@ -711,26 +765,24 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
                 onClick={() => setSelectedDeployment(item.id)}
               >
                 <span>
-                  <Status $status={item.status}>
-                    {item.status === "running"
-                      ? "실행 중"
-                      : item.status === "skipped"
-                        ? "건너뜀"
-                        : item.status === "failed"
-                          ? "실패"
-                          : "지난 배포"}
-                  </Status>
+                  {item.status === "running" ? <RunningStatus>실행 중</RunningStatus> : (
+                    <StatusBadge tone={item.status === "skipped" ? "warning" : item.status === "failed" ? "danger" : "neutral"}>
+                      {item.status === "skipped" ? "건너뜀" : item.status === "failed" ? "실패" : "지난 배포"}
+                    </StatusBadge>
+                  )}
                 </span>
                 <span>
-                  <code>{item.commitId ?? item.id}</code> {item.commit}
+                  {item.commitId ?? item.id} {item.commit}
                 </span>
                 <span>{item.author}</span>
                 <span>{item.at}</span>
                 <span>
                   <Button
                     variant="ghost"
+                    icon={<Octicon name={item.status === "skipped" ? "play" : item.status === "previous" ? "history" : "terminal"} size={16} />}
                     disabled={(item.status === "skipped" || item.status === "previous") && (!canManage || expired)}
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.stopPropagation();
                       if (item.status === "skipped" || item.status === "previous") {
                         setDialog({ kind: item.status === "skipped" ? "deploy" : "rollback", deployment: item });
                       } else {
@@ -738,21 +790,21 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
                       }
                     }}
                   >
-                    {item.status === "previous" ? "되돌리기" : item.message}
+                    {item.status === "skipped" ? "이 커밋 배포" : item.status === "previous" ? "되돌리기" : "빌드 로그"}
                   </Button>
                 </span>
               </TableRow>
             ))}
           </Table>
+          <Help>되돌리기는 다시 빌드하지 않고 그 배포를 그대로 씁니다. 변수는 지금 값을 씁니다.</Help>
         </Card>
-        <Help>되돌리기는 다시 빌드하지 않고 그 배포를 그대로 씁니다. 변수는 지금 값을 씁니다.</Help>
         {selected && (
           <Card id="demo-build-log" tabIndex={-1}>
             <CardTitle>
               <Octicon name="terminal" size={16} />
-              　선택한 배포 · {selected.commitId ?? selected.id} 빌드 로그
+              선택한 배포 · {selected.commitId ?? selected.id} 빌드 로그
             </CardTitle>
-            <Code>{deploymentLog(app, service, selected)}</Code>
+            <CodeLines lines={deploymentLog(app, service, selected).split("\n")} numbered />
             <Help>
               상태 확인에 실패하면 새 배포로 바꾸지 않고 지금 배포를 계속
               씁니다.
@@ -764,39 +816,33 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   } else if (tab === "logs") {
     content = (
       <>
-        <Banner>
-          <Octicon name="history" size={18} />
-          <BannerCopy>
-            최근 3일 또는 50 MB까지 보관해요
-            <small>
-              비밀 변수 값은 가려서 보여 줍니다. 요청마다 남는 HTTP 접근 기록은
-              따로 없습니다.
-            </small>
-          </BannerCopy>
-        </Banner>
+        <StateBanner
+          tone="neutral"
+          icon={<Octicon name="history" size={20} />}
+          title="최근 3일 또는 50 MB까지 보관합니다"
+          description="비밀 변수 값은 가려서 보여 줍니다. 요청마다 남는 HTTP 접근 기록은 따로 없습니다."
+        />
         <Card>
           <CardTitle>
             <Octicon name="terminal" size={16} />
-            　{service.environment} · {service.name} ·{" "}
-            {logsPaused ? "일시 정지됨" : "실시간"}
+            {service.environment} · {service.name} · {logsPaused ? "일시 정지됨" : "실시간"}
           </CardTitle>
-          <Code>
-            {[
+          <CodeLines
+            numbered
+            lines={[
               "11:02:14  Server listening on port 3000",
               "11:02:15  Connected to welcome-db",
-              "11:05:41  Using MAIL_API_KEY •••••••••",
+              "11:05:41  Using MAIL_API_KEY ••••••••",
               "11:05:42  Contact mail sent",
               "11:12:03  warn  Slow query 1.2s",
-              "11:22:03  GSMSV 요청이 없어 잠들었어요",
-              "11:31:40  GSMSV 요청이 와서 깨어났어요",
+              "11:22:03  GSMSV  요청이 없어 잠들었어요",
+              "11:31:40  GSMSV  요청이 와서 깨어났어요",
               "11:31:41  Server listening on port 3000",
-              ...(service.restartReason === "limit" ? [`GSMSV ${service.name}이 10번 넘게 다시 시작해서 멈췄습니다`] : []),
-              ...(service.restartReason === "variables" ? [`GSMSV 변수를 저장해 ${service.name}이 다시 시작했습니다`] : []),
-              ...(service.restartReason === "database" ? [`GSMSV ${service.databaseId} 비밀번호가 바뀌어 다시 시작했습니다`] : []),
-            ]
-              .map((line, index) => `${index + 1}  ${line}`)
-              .join("\n")}
-          </Code>
+              ...(service.restartReason === "limit" ? [`GSMSV  ${service.name}이 10번 넘게 다시 시작해서 멈췄습니다`] : []),
+              ...(service.restartReason === "variables" ? [`GSMSV  변수를 저장해 ${service.name}이 다시 시작했습니다`] : []),
+              ...(service.restartReason === "database" ? [`GSMSV  ${service.databaseId} 비밀번호가 바뀌어 다시 시작했습니다`] : []),
+            ]}
+          />
           <Help>
             서비스가 출력한 내용만 남습니다. 3일이 지나거나 50 MB를 넘으면
             오래된 로그부터 지워집니다.
@@ -807,29 +853,27 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   } else if (tab === "metrics") {
     content = (
       <>
-        {memoryRestart && <Banner $warning role="status">
-          <Octicon name="alert" size={18} />
-          <BannerCopy>
-            메모리 상한에 닿아 다시 시작했습니다
-            <small>11월 2일 09:40에 512 MB를 넘어 강제로 종료한 뒤 다시 시작했습니다. 메모리를 늘리거나 코드를 확인해 주세요.</small>
-          </BannerCopy>
-          <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => move("settings")}>설정 열기</Button>
-        </Banner>}
-        {quota?.freeMemory === 0 && <Banner $warning role="status">
-          <Octicon name="alert" size={18} />
-          <BannerCopy>
-            메모리 할당량을 모두 썼습니다
-            <small>PR 미리보기 환경도 할당량에 들어갑니다. 쓰지 않는 환경을 정리하거나 메모리를 줄여 주세요.</small>
-          </BannerCopy>
-          <Button variant="secondary" onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/demo-settings`)}>앱 설정</Button>
-        </Banner>}
+        {memoryRestart && <StateBanner
+          tone="warning"
+          icon={<Octicon name="alert" size={20} />}
+          title="메모리 상한에 닿아 다시 시작했습니다"
+          description="11월 2일 09:40에 512 MB를 넘어 강제로 종료한 뒤 다시 시작했습니다. 메모리를 늘리거나 코드를 확인해 주세요."
+          action={<Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => move("settings")}>설정 열기</Button>}
+        />}
+        {quota?.freeMemory === 0 && <StateBanner
+          tone="warning"
+          icon={<Octicon name="cpu" size={20} />}
+          title="메모리 할당량을 모두 썼습니다"
+          description="PR 미리보기 환경도 할당량에 들어갑니다. 쓰지 않는 환경을 정리하거나 메모리를 줄여 주세요."
+          action={<Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/demo-settings`)}>앱 설정</Button>}
+        />}
         <Grid>
           <Metric>
             <CardTitle>메모리</CardTitle>
             <BigValue>
-              {Math.min(service.memoryMb, 418)} <small>MB</small>
+              {Math.min(service.memoryMb, 418)}<sup>MB</sup>
             </BigValue>
-            <MiniPlot restart={memoryRestart} />
+            <MiniPlot kind="memory" restart={memoryRestart} />
             <Help>
               최근 24시간 · 최대 {Math.min(service.memoryMb, 512)} MB · 할당 {service.memoryMb} MB
               {memoryRestart && " · 빨간 선은 09:40 다시 시작"}
@@ -838,9 +882,9 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
           <Metric>
             <CardTitle>CPU</CardTitle>
             <BigValue>
-              12 <small>%</small>
+              12<sup>%</sup>
             </BigValue>
-            <MiniPlot />
+            <MiniPlot kind="cpu" />
             <Help>최근 24시간 · 최대 64% · 할당 {service.cpu} vCPU</Help>
           </Metric>
         </Grid>
@@ -849,54 +893,50 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   } else if (tab === "variables") {
     content = (
       <>
-        <Banner>
-          <Octicon name="lock" size={18} />
-          <BannerCopy>
-            비밀 변수는 저장한 뒤 다시 볼 수 없습니다
-            <small>
-              일반 변수는 이 앱을 볼 수 있는 사람 모두가 볼 수 있습니다. API
-              키처럼 숨길 값은 비밀로 저장하세요.
-            </small>
-          </BannerCopy>
-        </Banner>
+        <StateBanner
+          tone="neutral"
+          icon={<Octicon name="lock" size={20} />}
+          title="비밀 변수는 저장한 뒤 다시 볼 수 없습니다"
+          description="일반 변수는 이 앱을 볼 수 있는 사람 모두가 볼 수 있습니다. API 키처럼 숨길 값은 비밀로 저장하세요."
+        />
         <Card>
-          <NavRow>
+          <CardHeader>
             <CardTitle>
               등록된 변수 · {variables.length}개 · {(variableSize / 1024).toFixed(1)} / 32 KB
             </CardTitle>
             <Button
-              variant="ghost"
+              variant="secondary"
+              icon={<Octicon name="pencil" size={16} />}
               onClick={() => canManage && !expired ? setVariablesEditing(value => !value) : setDialog({ kind: "read-only" })}
             >
               {variablesEditing ? "편집 완료" : "변수 편집"}
             </Button>
-          </NavRow>
+          </CardHeader>
           {variables.map((variable) => (
-            <VariableRow key={variable.key}>
-              <VariableText>
-                <strong>{variable.key}</strong>
-                <span>
+            <InfoRow key={variable.key}>
+              <InfoIcon aria-hidden="true"><Octicon name="key" size={16} /></InfoIcon>
+              <InfoText>
+                <span>{variable.key}</span>
+                <strong>
                   {variable.secret
                     ? "비밀 · 저장한 뒤 다시 볼 수 없습니다"
                     : variable.value}
-                </span>
-              </VariableText>
+                </strong>
+              </InfoText>
               {canManage && !expired && (variablesEditing || variable.secret) && (
-                <div>
+                <InfoActions>
                   {editingVariableKey === variable.key ? (
                     <>
-                      <Field>
-                        {variable.key} 값
-                        <input
-                          autoFocus
-                          aria-label={`${variable.key} 값`}
-                          type={variable.secret ? "password" : "text"}
-                          value={editingVariableValue}
-                          onChange={event => setEditingVariableValue(event.currentTarget.value)}
-                        />
-                      </Field>
+                      <TextField
+                        autoFocus
+                        aria-label={`${variable.key} 값`}
+                        type={variable.secret ? "password" : "text"}
+                        value={editingVariableValue}
+                        onChange={event => setEditingVariableValue(event.currentTarget.value)}
+                      />
                       <Button
                         variant="ghost"
+                        icon={<Octicon name="check" size={16} />}
                         onClick={() => {
                           setVariableChanges(current => ({
                             ...current,
@@ -911,6 +951,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
                     </>
                   ) : <Button
                     variant="ghost"
+                    icon={<Octicon name="pencil" size={16} />}
                     onClick={() => {
                       setEditingVariableKey(variable.key);
                       setEditingVariableValue(variable.secret ? "" : variable.value);
@@ -918,91 +959,87 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
                   >값 바꾸기</Button>}
                   <Button
                     variant="ghost"
+                    icon={<Octicon name="trashcan" size={16} />}
                     onClick={() =>
                       setVariableChanges(current => ({ ...current, variables: variables.filter(item => item.key !== variable.key) }))
                     }
                   >
                     지우기
                   </Button>
-                </div>
+                </InfoActions>
               )}
-            </VariableRow>
+            </InfoRow>
           ))}
         </Card>
         <Card>
-          <NavRow>
+          <CardHeader>
             <CardTitle>새 변수</CardTitle>
             <Button
               variant="ghost"
+              icon={<Octicon name="trashcan" size={16} />}
               disabled={!canManage || expired}
               onClick={clearVariableInput}
             >
               이 행 삭제
             </Button>
-          </NavRow>
-          <Field>
-            키
-            <input
-              id="demo-new-variable-key"
-              disabled={!canManage || expired}
-              value={variableKey}
-              onChange={(event) => setVariableKey(event.currentTarget.value)}
-            />
-          </Field>
-          <Field>
-            값
-            <input
-              value={variableValue}
-              disabled={!canManage || expired}
-              type={variableSecret ? "password" : "text"}
-              onChange={(event) => setVariableValue(event.currentTarget.value)}
-            />
-          </Field>
+          </CardHeader>
+          <TextField
+            id="demo-new-variable-key"
+            label="키"
+            disabled={!canManage || expired}
+            value={variableKey}
+            onChange={(event) => setVariableKey(event.currentTarget.value)}
+          />
+          <TextField
+            label="값"
+            value={variableValue}
+            disabled={!canManage || expired}
+            type={variableSecret ? "password" : "text"}
+            onChange={(event) => setVariableValue(event.currentTarget.value)}
+          />
           <ToggleRow>
-            <span>
-              비밀로 저장
-              <small>
-                켜면 저장한 뒤 값을 다시 볼 수 없습니다. 바꾸기와 지우기만 할 수
-                있습니다.
-              </small>
-            </span>
-            <input
-              type="checkbox"
+            <ToggleText>
+              <strong>비밀로 저장</strong>
+              <span>켜면 저장한 뒤 값을 다시 볼 수 없습니다. 바꾸기와 지우기만 할 수 있습니다.</span>
+            </ToggleText>
+            <Switch
+              label=""
+              ariaLabel="비밀로 저장"
               checked={variableSecret}
               disabled={!canManage || expired}
-              onChange={(event) =>
-                setVariableSecret(event.currentTarget.checked)
-              }
+              onChange={setVariableSecret}
             />
           </ToggleRow>
         </Card>
         <Card>
           <CardTitle>Database 연결</CardTitle>
-          <Field>
-            연결할 Database
-            <select
-              value={databases.find(database => database.grn === databaseId || database.grn.endsWith(`:${databaseId}`))?.grn ?? ""}
-              disabled={!canManage || expired}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                setVariableChanges(current => ({ ...current, databaseId: value }));
-              }}
-            >
-              <option value="">연결하지 않음</option>
-              {databases.map(database => <option key={database.grn} value={database.grn}>{database.name} · {database.engine === "mysql" ? "MySQL" : "PostgreSQL"}</option>)}
-            </select>
-          </Field>
+          <SelectField
+            label="연결할 Database"
+            value={databases.find(database => database.grn === databaseId || database.grn.endsWith(`:${databaseId}`))?.grn ?? ""}
+            disabled={!canManage || expired}
+            options={[
+              { value: "", label: "연결하지 않음" },
+              ...databases.map(database => ({ value: database.grn, label: `${database.name} · ${database.engine === "mysql" ? "MySQL" : "PostgreSQL"}` })),
+            ]}
+            onChange={(value) => setVariableChanges(current => ({ ...current, databaseId: value }))}
+          />
           <Help>
             환경마다 자기 Database를 연결합니다. 연결하면 접속 정보가 변수로
             들어가고, staging은 따로 연결합니다.
           </Help>
         </Card>
         <Card>
-          <CardTitle>코드에서 쓰기 · Node.js</CardTitle>
-          <Code>
-            const apiKey = process.env.MAIL_API_KEY;{"\n"}const port =
-            process.env.PORT; // GSMSV가 넣어요
-          </Code>
+          <CardTitle>
+            <Octicon name="code" size={16} />
+            코드에서 쓰기 · Node.js
+          </CardTitle>
+          <CodeLines
+            numbered
+            lines={[
+              "const apiKey = process.env.MAIL_API_KEY;",
+              "const port = process.env.PORT; // GSMSV가 넣어요",
+            ]}
+          />
           <Help>
             저장하면 빌드 없이 서비스가 다시 시작됩니다. PORT처럼 GSMSV가 쓰는
             이름은 만들 수 없습니다.
@@ -1013,78 +1050,60 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   } else if (tab === "settings") {
     content = (
       <>
-        {service.configFile && <Banner $warning role="status">
-          <Octicon name="alert" size={18} />
-          <BannerCopy>
-            설정 파일에서 무시한 칸이 있습니다
-            <small>메모리·변수는 설정 파일로 바꿀 수 없어서 무시했습니다. 이 화면에서 바꿔 주세요.</small>
-          </BannerCopy>
-        </Banner>}
+        {service.configFile && <StateBanner
+          tone="warning"
+          icon={<Octicon name="file-code" size={20} />}
+          title="설정 파일에서 무시한 칸이 있습니다"
+          description="메모리·변수는 설정 파일로 바꿀 수 없어서 무시했습니다. 이 화면에서 바꿔 주세요."
+        />}
         <Card>
           <CardTitle>실행</CardTitle>
-          <Field>
-            시작 명령
-            <input
-              disabled={!canManage || expired || service.configFile}
-              value={settingsDraft.startCommand ?? service.startCommand}
-              onChange={event => {
-                const startCommand = event.currentTarget.value;
-                setSettingsDraft(current => ({ ...current, startCommand }));
-              }}
-            />
-          </Field>
-          {service.configFile && <Help>
-            설정 파일이 덮어씀 · 바꾸려면 저장소의 {"{설정 파일}"}을 고쳐 주세요.
-          </Help>}
-          <Field>
-            상태 확인 경로
-            <input
-              disabled={!canManage || expired}
-              value={settingsDraft.path ?? service.path}
-              onChange={event => {
-                const path = event.currentTarget.value;
-                setSettingsDraft(current => ({ ...current, path }));
-              }}
-            />
-          </Field>
-          <Help>
-            새 배포가 이 경로에서 200을 돌려줘야 바꿉니다. 300초 안에 응답하지
-            않으면 실패로 남습니다.
-          </Help>
-          <Field>
-            배포 전 명령
-            <input
-              disabled={!canManage || expired}
-              value={settingsDraft.preDeployCommand ?? service.preDeployCommand}
-              onChange={event => {
-                const preDeployCommand = event.currentTarget.value;
-                setSettingsDraft(current => ({ ...current, preDeployCommand }));
-              }}
-            />
-          </Field>
-          <Help>
-            새 배포로 바꾸기 전에 한 번 실행합니다. 기본 10분, 최대 30분까지
-            기다립니다.
-          </Help>
-          <Field>
-            감시 경로
-            <input
-              disabled={!canManage || expired}
-              value={settingsDraft.watchPaths ?? service.watchPaths}
-              onChange={event => {
-                const watchPaths = event.currentTarget.value;
-                setSettingsDraft(current => ({ ...current, watchPaths }));
-              }}
-            />
-          </Field>
-          <Help>
-            이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를
-            배포합니다.
-          </Help>
+          <TextField
+            label="시작 명령"
+            disabled={!canManage || expired || service.configFile}
+            value={settingsDraft.startCommand ?? service.startCommand}
+            hint={service.configFile ? "설정 파일이 덮어씀 · 바꾸려면 저장소의 {설정 파일}을 고쳐 주세요." : undefined}
+            onChange={event => {
+              const startCommand = event.currentTarget.value;
+              setSettingsDraft(current => ({ ...current, startCommand }));
+            }}
+          />
+          <TextField
+            label="상태 확인 경로"
+            disabled={!canManage || expired}
+            value={settingsDraft.path ?? service.path}
+            hint="새 배포가 이 경로에서 200을 돌려줘야 바꿉니다. 300초 안에 응답하지 않으면 실패로 남습니다."
+            onChange={event => {
+              const path = event.currentTarget.value;
+              setSettingsDraft(current => ({ ...current, path }));
+            }}
+          />
+          <TextField
+            label="배포 전 명령"
+            disabled={!canManage || expired}
+            value={settingsDraft.preDeployCommand ?? service.preDeployCommand}
+            hint="새 배포로 바꾸기 전에 한 번 실행합니다. 기본 10분, 최대 30분까지 기다립니다."
+            onChange={event => {
+              const preDeployCommand = event.currentTarget.value;
+              setSettingsDraft(current => ({ ...current, preDeployCommand }));
+            }}
+          />
+          <TextField
+            label="감시 경로"
+            disabled={!canManage || expired}
+            value={settingsDraft.watchPaths ?? service.watchPaths}
+            hint="이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를 배포합니다."
+            onChange={event => {
+              const watchPaths = event.currentTarget.value;
+              setSettingsDraft(current => ({ ...current, watchPaths }));
+            }}
+          />
         </Card>
         <Card>
-          <CardTitle>자원</CardTitle>
-          <Help>메모리 할당량 {quota?.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 {quota?.freeMemory} MB</Help>
+          <CardHeader>
+            <CardTitle>자원</CardTitle>
+            <Help>메모리 할당량 {formatGb(quota?.usedMemory ?? 0)}/2 GB 사용 중 · 남은 할당량 {formatGb(quota?.freeMemory ?? 0)} GB</Help>
+          </CardHeader>
           <SliderField
             label="메모리"
             disabled={!canManage || expired}
@@ -1125,36 +1144,32 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
         <Card>
           <CardTitle>상시 실행</CardTitle>
           <ToggleRow>
-            <span>
-              요청이 없어도 깨어 있기
-              <small>
-                켜면 잠들지 않고 계속 실행됩니다. 상시 실행은 1개까지 켤 수 있고
-                지금 {quota?.alwaysOn}개 씁니다.
-              </small>
-            </span>
-            <input
-              type="checkbox"
+            <ToggleText>
+              <strong>요청이 없어도 깨어 있기</strong>
+              <span>켜면 잠들지 않고 계속 실행됩니다. 상시 실행은 1개까지 켤 수 있고 지금 {quota?.alwaysOn}개 씁니다.</span>
+            </ToggleText>
+            <Switch
+              label=""
+              ariaLabel="요청이 없어도 깨어 있기"
               disabled={!canManage || expired}
               checked={settingsDraft.alwaysOn ?? service.alwaysOn}
-              onChange={event => {
-                const alwaysOn = event.currentTarget.checked;
-                setSettingsDraft(current => ({ ...current, alwaysOn }));
-              }}
+              onChange={alwaysOn => setSettingsDraft(current => ({ ...current, alwaysOn }))}
             />
           </ToggleRow>
         </Card>
         {service.type === "크론" && <Card>
           <CardTitle>{service.name} 크론 설정</CardTitle>
-          <Code>{service.cronSchedule}</Code>
+          <CodeLines lines={[service.cronSchedule ?? ""]} />
           <Help>· 매일 03:00에 실행합니다. 서울 시간으로 계산합니다.<br />· 5분보다 자주 실행할 수 없고, 30분이 넘으면 강제로 끝냅니다.<br />· staging·PR 환경에서는 따로 켜야 실행됩니다.</Help>
           <ToggleRow>
-            <span>{service.environment}</span>
-            <input aria-label="크론 실행" type="checkbox" disabled={!canManage || expired}
+            <ToggleText><strong>{service.environment}</strong></ToggleText>
+            <Switch
+              label=""
+              ariaLabel="크론 실행"
+              disabled={!canManage || expired}
               checked={settingsDraft.cronEnabled ?? service.cronEnabled ?? false}
-              onChange={event => {
-                const cronEnabled = event.currentTarget.checked;
-                setSettingsDraft(current => ({ ...current, cronEnabled }));
-              }} />
+              onChange={cronEnabled => setSettingsDraft(current => ({ ...current, cronEnabled }))}
+            />
           </ToggleRow>
         </Card>}
       </>
@@ -1164,64 +1179,57 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       <>
         <Card>
           <CardTitle>production 주소</CardTitle>
-          <Field>
-            서브도메인
-            <input
-              id="demo-service-domain"
-              value={domainDraft ?? service.subdomain}
-              disabled={!canManage || expired || service.type !== "웹"}
-              onChange={(event) => setDomainDraft(event.currentTarget.value)}
-            />
-          </Field>
-          <Help>
-            주소는 https://{domainDraft ?? service.subdomain}.{"{앱 도메인}"}입니다.
-            production만 직접 정할 수 있습니다.
-          </Help>
+          <TextField
+            id="demo-service-domain"
+            label="서브도메인"
+            value={domainDraft ?? service.subdomain}
+            disabled={!canManage || expired || service.type !== "웹"}
+            hint={`주소는 https://${domainDraft ?? service.subdomain}.{앱 도메인}입니다. production만 직접 정할 수 있습니다.`}
+            onChange={(event) => setDomainDraft(event.currentTarget.value)}
+          />
         </Card>
         <Card>
           <CardTitle>다른 환경</CardTitle>
-          <VariableRow>
-            <VariableText>
-              <strong>staging</strong>
-              <span>{app.name}-staging.{"{앱 도메인}"}</span>
+          <InfoRow>
+            <InfoIcon aria-hidden="true"><Octicon name="globe" size={16} /></InfoIcon>
+            <InfoText>
+              <span>staging</span>
+              <strong>{app.name}-staging.{"{앱 도메인}"}</strong>
               <small>자동으로 붙는 이름이라 바꿀 수 없습니다.</small>
-            </VariableText>
-            <Octicon name="globe" size={16} />
-          </VariableRow>
-          <VariableRow>
-            <VariableText>
-              <strong>PR 미리보기</strong>
-              <span>{app.name}-pr-&#123;번호&#125;.{"{앱 도메인}"}</span>
-              <small>
-                PR 미리보기를 켜면 PR마다 생기고, 7일 뒤 정리됩니다.
-              </small>
-            </VariableText>
-          </VariableRow>
+            </InfoText>
+          </InfoRow>
+          <InfoRow>
+            <InfoIcon aria-hidden="true"><Octicon name="globe" size={16} /></InfoIcon>
+            <InfoText>
+              <span>PR 미리보기</span>
+              <strong>{app.name}-pr-&#123;번호&#125;.{"{앱 도메인}"}</strong>
+              <small>PR 미리보기를 켜면 PR마다 생기고, 7일 뒤 정리됩니다.</small>
+            </InfoText>
+          </InfoRow>
         </Card>
       </>
     );
   } else {
     content = (
       <>
-        <Banner $warning>
-          <Octicon name="eye" size={18} />
-          <BannerCopy>
-            {shellExpired ? "셸 세션이 끝났습니다" : "셸 안에서는 비밀 변수 값이 보입니다"}
-            <small>{shellExpired
-              ? "1시간이 지나 연결을 닫았습니다. 셸에서 바꾼 파일은 다시 시작하면 사라집니다."
-              : "화면을 공유할 때 조심하세요. 세션은 1시간 뒤 끝납니다."}</small>
-          </BannerCopy>
-        </Banner>
+        <StateBanner
+          tone={shellExpired ? "neutral" : "warning"}
+          icon={<Octicon name={shellExpired ? "terminal" : "eye"} size={20} />}
+          title={shellExpired ? "셸 세션이 끝났습니다" : "셸 안에서는 비밀 변수 값이 보입니다"}
+          description={shellExpired
+            ? "1시간이 지나 연결을 닫았습니다. 셸에서 바꾼 파일은 다시 시작하면 사라집니다."
+            : "화면을 공유할 때 조심하세요. 세션은 1시간 뒤 끝납니다."}
+          action={shellExpired && canManage && !expired && service.status !== "정지"
+            ? <Button variant="secondary" icon={<Octicon name="terminal" size={16} />} onClick={openShell}>다시 열기</Button>
+            : undefined}
+        />
         <Card>
           <CardTitle>
             <Octicon name="terminal" size={16} />
-            　{service.environment} · {service.name} ·{" "}
+            {service.environment} · {service.name} ·{" "}
             {shellActive ? `남은 시간 ${Math.ceil(((expiresAt ?? clock) - Math.max(clock, Date.now())) / 60_000)}분` : "셸이 닫혀 있습니다"}
           </CardTitle>
-          <Code>
-            {shellActive && service.shellLines.join("\n")}
-            {shellActive && shellInput}
-          </Code>
+          <CodeLines lines={shellActive ? [...service.shellLines.slice(0, -1), `${service.shellLines.at(-1) ?? "$"} ${shellInput}`.trimEnd()] : []} />
           {shellActive && canManage && (
             <form
               onSubmit={(event) => {
@@ -1237,14 +1245,12 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
                 if (update({ shellLines })) setShellInput("");
               }}
             >
-              <Field>
-                명령
-                <input
-                  value={shellInput}
-                  onChange={(event) => setShellInput(event.currentTarget.value)}
-                  placeholder="터미널에 명령 입력"
-                />
-              </Field>
+              <TextField
+                label="명령"
+                value={shellInput}
+                onChange={(event) => setShellInput(event.currentTarget.value)}
+                placeholder="터미널에 명령 입력"
+              />
             </form>
           )}
           <Help>
@@ -1279,7 +1285,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
             </Tab>
           ))}
         </Tabs>
-        {actionButton}
+        {actionButton && <NavActions>{actionButton}</NavActions>}
       </NavRow>
       {request.status !== "ready"
         ? <DemoAppStateCards page="service" tab={tab} status={request.status} onRetry={request.retry} />
@@ -1341,15 +1347,15 @@ export function DemoStoppedAppContent() {
   return (
     <StoppedCard>
       {stopped ? <>
-        <StoppedTitle><Octicon name="stop" size={24} />이 앱은 지금 정지돼 있습니다</StoppedTitle>
+        <StoppedTitle><Octicon name="stop" size={20} />이 앱은 지금 정지돼 있습니다</StoppedTitle>
         <Subtitle>사용 기간이 끝나 잠시 멈췄습니다. 만든 사람이 연장하면 다시 열립니다.</Subtitle>
-        <StoppedAddress>
-          <Octicon name="globe" size={16} />
-          <VariableText>
-            <strong>주소</strong>
-            <span>{service.subdomain}.{"{앱 도메인}"}</span>
-          </VariableText>
-        </StoppedAddress>
+        <InfoRow>
+          <InfoIcon aria-hidden="true"><Octicon name="globe" size={16} /></InfoIcon>
+          <InfoText>
+            <span>주소</span>
+            <strong>{service.subdomain}.{"{앱 도메인}"}</strong>
+          </InfoText>
+        </InfoRow>
       </> : <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>}
     </StoppedCard>
   );
@@ -1360,7 +1366,7 @@ const StoppedCard = styled.section`
   width: min(560px, calc(100% - 32px));
   margin: 80px auto;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
@@ -1370,27 +1376,20 @@ const StoppedCard = styled.section`
     padding: 16px;
   }
 `;
-const StoppedAddress = styled.div`
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 16px;
-  margin-top: 8px;
-`;
 const StoppedTitle = styled.h1`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font:
-    ${({ theme }) => theme.typography.h1.weight}
-      ${({ theme }) => theme.typography.h1.size}px /
-      ${({ theme }) => theme.typography.h1.lineHeight}px
-      ${({ theme }) => theme.typography.h1.family},
+    ${({ theme }) => theme.typography.h2.weight}
+      ${({ theme }) => theme.typography.h2.size}px /
+      ${({ theme }) => theme.typography.h2.lineHeight}px
+      ${({ theme }) => theme.typography.h2.family},
     sans-serif;
 
-  svg { flex: 0 0 24px; }
+  svg { flex: 0 0 20px; }
 
   @media (max-width: 420px) {
     align-items: flex-start;
