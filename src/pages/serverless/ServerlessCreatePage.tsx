@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Button, SegmentedControl, TextField } from '../../shared/ui/controls';
-import { ModalSurface } from '../../shared/ui/feedback';
+import { Banner, ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { ServerlessStateCard, StateCopy, StateField, StateFieldError, StateFieldLabel, StateFieldValue } from './ServerlessStateCard';
 
@@ -118,43 +118,8 @@ const Actions = styled.div`
   @media (max-width: 760px) { width: 100%; }
 `;
 
-const Notice = styled.div`
-  display: flex;
+const Notice = styled(Banner)`
   width: 100%;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
-`;
-
-const NoticeIcon = styled.span`
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.muted};
-`;
-
-const NoticeCopy = styled.div`
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 4px;
-`;
-
-const NoticeTitle = styled.strong`
-  color: ${({ theme }) => theme.colors.text};
-  font: 500 12px/18px ${({ theme }) => theme.typography.body.family}, sans-serif;
-`;
-
-const NoticeDescription = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
-  font: 400 12px/18px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
 
 const Card = styled.section`
@@ -310,6 +275,8 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
   const lineCount = useMemo(() => code.split('\n').length, [code]);
   const duplicateName = existingNames.some(existingName => existingName.trim().toLowerCase() === name.trim().toLowerCase());
   const [reviewOpen, setReviewOpen] = useState(false);
+  // 기본 이름이 겹쳐도 처음에는 안내 문구만 보이고, 생성을 시도한 뒤에만 필드 오류를 표시한다.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const codeError = useMemo(() => findCodeError?.(code, runtime) ?? null, [code, findCodeError, runtime]);
 
   const handleRuntimeChange = (value: string) => {
@@ -322,6 +289,7 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
     event.preventDefault();
     if (isCreating || !name.trim()) return;
     if (duplicateName || codeError) {
+      setSubmitAttempted(true);
       setReviewOpen(true);
       return;
     }
@@ -365,16 +333,14 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
               <Button variant="primary" icon={<Octicon name={isCreating ? 'sync' : 'plus'} size={16} />} type="submit" disabled={isCreating || !name.trim()}>{isCreating ? '생성 중…' : '함수 생성'}</Button>
             </Actions>
           </Heading>
-          {duplicateName && <FormError role="alert">이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.</FormError>}
           {createError && <FormError role="alert">{createError}</FormError>}
 
-          <Notice role="note">
-            <NoticeIcon aria-hidden="true"><Octicon name="info" size={20} /></NoticeIcon>
-            <NoticeCopy>
-              <NoticeTitle>실행 환경을 먼저 확인하세요</NoticeTitle>
-              <NoticeDescription>함수는 격리된 샌드박스 컨테이너에서 실행됩니다. 실행 사이에 메모리 값이나 임시 파일이 남는다고 기대하지 마세요. 패키지는 GSMSV가 미리 넣어 둔 것만 쓸 수 있습니다.</NoticeDescription>
-            </NoticeCopy>
-          </Notice>
+          <Notice
+            tone="neutral"
+            icon={<Octicon name="info" size={20} />}
+            title="실행 환경을 먼저 확인하세요"
+            description="함수는 격리된 샌드박스 컨테이너에서 실행됩니다. 실행 사이에 메모리 값이나 임시 파일이 남는다고 기대하지 마세요. 패키지는 GSMSV가 미리 넣어 둔 것만 쓸 수 있습니다."
+          />
 
           <Card>
             <CardTitle>함수 정보</CardTitle>
@@ -385,7 +351,7 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
                 hint="함수를 알아볼 이름을 입력하세요. 호출 주소에는 이름이 들어가지 않습니다."
                 value={name}
                 onChange={(event) => { setName(event.currentTarget.value); setCreateError(''); }}
-                error={duplicateName ? '이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.' : undefined}
+                error={submitAttempted && !reviewOpen && duplicateName ? '이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.' : undefined}
                 disabled={isCreating}
                 required
               />

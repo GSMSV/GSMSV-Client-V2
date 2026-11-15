@@ -23,6 +23,11 @@ export interface ServerlessVersionsPageProps {
   onRollback?: (versionId: string) => void;
 }
 
+// Figma 50(593:6260)은 되돌리기 아이콘을 "관리" 열 시작에 맞춘다. 고스트 버튼의 좌우 여백만큼 당긴다.
+const RollbackButton = styled(Button)`
+  margin-left: -${({ theme }) => theme.space[16]}px;
+`;
+
 const tabs: ServerlessVersionTab[] = ['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs'];
 
 const Page = styled.div`
@@ -90,7 +95,9 @@ const Tabs = styled.nav`
 
 const Tab = styled(NavigationItem)<{ $selected?: boolean }>`
   width: auto;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  padding: 0 16px;
+  white-space: nowrap;
   ${({ $selected, theme }) => $selected ? `color: ${theme.colors.primary}; background: ${theme.colors.primarySoft};` : ''}
 `;
 
@@ -251,12 +258,12 @@ export function ServerlessVersionsPage({
               <Cell role="cell">{version.changeSummary}</Cell>
               <Cell role="cell">
                 {version.current ? '현재 버전' : (
-                  <Button
+                  <RollbackButton
                     variant="ghost"
                     icon={<Octicon name="history" size={16} />}
                     disabled={!onRollback}
                     onClick={() => setRollbackVersionId(version.id)}
-                  >되돌리기</Button>
+                  >되돌리기</RollbackButton>
                 )}
               </Cell>
             </TableRow>

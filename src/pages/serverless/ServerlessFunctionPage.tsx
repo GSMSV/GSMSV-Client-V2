@@ -138,7 +138,9 @@ const Tabs = styled.nav`
 
 const TabButton = styled(NavigationItem)<{ $selected?: boolean }>`
   width: auto;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  padding: 0 16px;
+  white-space: nowrap;
   ${({ $selected, theme }) => $selected ? `color: ${theme.colors.primary}; background: ${theme.colors.primarySoft};` : ''}
 `;
 
@@ -529,7 +531,7 @@ export function ServerlessFunctionPage({
         </RuntimeRow>
         <RuntimeRow>
           <Octicon name="cpu" size={16} aria-hidden="true" />
-          <RuntimeValue><MetaLabel>기본 제한</MetaLabel><MetaValue>실행 시간 {timeoutSeconds}초 · 메모리 {memoryMb}MB</MetaValue></RuntimeValue>
+          <RuntimeValue><MetaLabel>실행 제한</MetaLabel><MetaValue>실행 시간 {timeoutSeconds}초 · 메모리 {memoryMb}MB</MetaValue></RuntimeValue>
         </RuntimeRow>
         <TriggerRow>
           <Octicon name="zap" size={16} aria-hidden="true" />

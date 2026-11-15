@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Button, Switch } from '../../shared/ui/controls';
+import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import type { ServerlessFunctionTab } from './ServerlessFunctionPage';
 
@@ -112,10 +113,12 @@ const Tabs = styled.nav`
 
 const Tab = styled.button<{ $active: boolean }>`
   height: 42px;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  padding: 0 16px;
   border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
-  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.text};
+  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
+  white-space: nowrap;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   cursor: ${({ disabled }) => disabled ? 'not-allowed' : 'pointer'};
@@ -162,47 +165,40 @@ const PanelTitle = styled.h2`
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
 `;
 
-const BodyText = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-
-const Notice = styled.div`
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
-`;
-
-const NoticeIcon = styled.span`
+const TitleIcon = styled.span`
   display: inline-flex;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.muted};
+  color: ${({ theme }) => theme.colors.primary};
 `;
 
-const NoticeCopy = styled.div`
+const NoticeBanner = styled(Banner)`
+  width: 100%;
+`;
+
+const ToggleRow = styled.div`
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  & > :last-child { flex: 0 0 auto; white-space: nowrap; }
+`;
+
+const ToggleCopy = styled.div`
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 4px;
 `;
 
-const NoticeTitle = styled.strong`
-  color: ${({ theme }) => theme.colors.text};
+const ToggleTitle = styled.strong`
+  color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 
-const NoticeDescription = styled.p`
+const CaptionText = styled.p`
   margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
+  color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
@@ -211,7 +207,6 @@ const VariableRow = styled.div`
   width: 100%;
   align-items: center;
   gap: 16px;
-  padding: 8px 0;
 
   @media (max-width: 520px) { flex-wrap: wrap; }
 `;
@@ -410,6 +405,13 @@ export function ServerlessEnvironmentPage({
       setEditingVariables(false);
       setVariableDrafts({});
     }
+    // 새 환경변수 카드에 키를 적어 두었다면 함께 추가한다.
+    if (name.trim() && onAddVariable) {
+      onAddVariable({ name: name.trim(), value, secret });
+      setName('');
+      setValue('');
+      setSecret(false);
+    }
     onSaveChanges?.();
   };
 
@@ -458,13 +460,12 @@ export function ServerlessEnvironmentPage({
         </Actions>
       </TabsRow>
 
-      <Notice role="note">
-        <NoticeIcon aria-hidden="true"><Octicon name="lock" size={20} /></NoticeIcon>
-        <NoticeCopy>
-          <NoticeTitle>비밀 변수는 저장한 뒤 다시 볼 수 없습니다</NoticeTitle>
-          <NoticeDescription>일반 변수는 팀원 모두가 볼 수 있습니다. API 키처럼 숨길 값은 비밀로 저장하세요.</NoticeDescription>
-        </NoticeCopy>
-      </Notice>
+      <NoticeBanner
+        tone="neutral"
+        icon={<Octicon name="lock" size={20} />}
+        title="비밀 변수는 저장한 뒤 다시 볼 수 없습니다"
+        description="일반 변수는 팀원 모두가 볼 수 있습니다. API 키처럼 숨길 값은 비밀로 저장하세요."
+      />
 
       <Panel>
         <PanelHeading>
@@ -474,7 +475,7 @@ export function ServerlessEnvironmentPage({
               ? ` · ${(storageBytesUsed / 1024).toFixed(1)} / ${(storageBytesLimit / 1024).toFixed(0)} KB`
               : ''}
           </PanelTitle>
-          <Button type="button" variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled={!onEditVariables || !onUpdateVariable} aria-pressed={editingVariables} onClick={toggleVariableEditing}>변수 편집</Button>
+          <Button type="button" variant="secondary" icon={<Octicon name="pencil" size={16} />} disabled={!onEditVariables || !onUpdateVariable} aria-pressed={editingVariables} onClick={toggleVariableEditing}>변수 편집</Button>
         </PanelHeading>
         {variables.map(variable => (
           <VariableRow key={variable.name}>
@@ -505,13 +506,20 @@ export function ServerlessEnvironmentPage({
           <Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} disabled={!canEdit} onClick={() => { setName(''); setValue(''); setSecret(false); }}>이 행 삭제</Button>
         </PanelHeading>
         <FieldGroup htmlFor="serverless-new-variable-name">키
-          <Input id="serverless-new-variable-name" value={name} onChange={event => setName(event.currentTarget.value)} disabled={!canEdit} />
+          <Input id="serverless-new-variable-name" placeholder="SERVICE_NAME" value={name} onChange={event => setName(event.currentTarget.value)} disabled={!canEdit} />
         </FieldGroup>
         <FieldGroup htmlFor="serverless-new-variable-value">값
-          <Input id="serverless-new-variable-value" value={value} onChange={event => setValue(event.currentTarget.value)} disabled={!canEdit} />
+          <Input id="serverless-new-variable-value" placeholder="GSM SV" value={value} onChange={event => setValue(event.currentTarget.value)} disabled={!canEdit} />
         </FieldGroup>
-        <Switch label="비밀로 저장" checked={secret} disabled={!canEdit} onChange={setSecret} />
-        {onAddVariable && <Button type="submit" variant="secondary" disabled={!name.trim()}>변수 추가</Button>}
+        <ToggleRow>
+          <ToggleCopy>
+            <ToggleTitle>비밀로 저장</ToggleTitle>
+            <CaptionText>켜면 저장한 뒤 값을 다시 볼 수 없습니다. 바꾸기와 지우기만 할 수 있습니다.</CaptionText>
+          </ToggleCopy>
+          <Switch label="" ariaLabel="비밀로 저장" checked={secret} disabled={!canEdit} onChange={setSecret} />
+        </ToggleRow>
+        {/* Figma 53:1670에는 카드 안 추가 버튼이 없다. Enter 또는 "변경사항 저장"으로 추가한다. */}
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
       </Panel>
 
       <Panel>
@@ -527,18 +535,18 @@ export function ServerlessEnvironmentPage({
             {databases.map(database => <option key={database.id} value={database.id}>{database.label}</option>)}
           </Select>
         </FieldGroup>
-        <BodyText>고른 Database의 접속 정보가 비밀 변수로 들어갑니다. 코드에 비밀번호를 적지 않아도 됩니다.</BodyText>
+        <CaptionText>고른 Database의 접속 정보가 비밀 변수로 들어갑니다. 코드에 비밀번호를 적지 않아도 됩니다.</CaptionText>
       </Panel>
 
       <Panel>
         <PanelHeading>
-          <PanelTitle><Octicon name="code" size={16} /> 코드에서 사용하기</PanelTitle>
+          <PanelTitle><TitleIcon aria-hidden="true"><Octicon name="code" size={16} /></TitleIcon> 코드에서 사용하기</PanelTitle>
         </PanelHeading>
         <Code aria-label="환경변수 사용 예시">
           <CodeLine><LineNumber>1</LineNumber><code>const greeting = env.GREETING;</code></CodeLine>
           <CodeLine><LineNumber>2</LineNumber><code>const serviceName = env.SERVICE_NAME;</code></CodeLine>
         </Code>
-        <BodyText>바꾼 값은 다음 실행부터 반영됩니다.</BodyText>
+        <CaptionText>바꾼 값은 다음 실행부터 반영됩니다.</CaptionText>
       </Panel>
       {secretUpdate && <UpdateOverlay onMouseDown={event => { if (event.currentTarget === event.target) setSecretUpdate(null); }}>
         <UpdateDialog role="dialog" aria-modal="true" aria-labelledby="secret-variable-update-title" onSubmit={updateSecretVariable}>

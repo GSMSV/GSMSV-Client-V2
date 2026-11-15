@@ -131,7 +131,9 @@ const Tabs = styled.nav`
 
 const TabButton = styled(NavigationItem)<{ $selected?: boolean }>`
   width: auto;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  padding: 0 16px;
+  white-space: nowrap;
   ${({ $selected, theme }) => $selected ? `color: ${theme.colors.primary}; background: ${theme.colors.primarySoft};` : ''}
 `;
 

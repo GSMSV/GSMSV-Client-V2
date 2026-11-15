@@ -79,6 +79,12 @@ function getFunctionAccess(functionId: string | undefined, demoMode: boolean): {
   const role = fn?.teamId ? teams.find(team => team.id === fn.teamId)?.my_role : undefined;
   return { fn, readOnly: role === 'member' };
 }
+/** 시드의 'YYYY. MM. DD.' 만료일을 Figma 15(52:3378) 배너 형식 'M월 D일 14:00'으로 바꾼다. */
+function formatExpiryLabel(expiresAt: string) {
+  const match = /^\d{4}\. (\d{1,2})\. (\d{1,2})\.$/.exec(expiresAt.trim());
+  return match ? `${Number(match[1])}월 ${Number(match[2])}일 14:00` : expiresAt;
+}
+
 function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(value => value + 1); }
 
 function useServerlessStateRevision(functionId: string | undefined, demoMode: boolean) {
@@ -208,7 +214,7 @@ export function ServerlessFunctionRoute() {
         memoryMb={fn.memoryMb}
         code={fn.code}
         active={fn.active}
-        expiresAtLabel={fn.expiresAt}
+        expiresAtLabel={formatExpiryLabel(fn.expiresAt)}
         suspended={fn.suspended}
         readOnly={readOnly}
         savedVersionLabel={fn.versions[0] ? `${fn.versions[0].label} · ${fn.versions[0].savedAt} 저장` : '저장된 버전 없음'}
@@ -276,7 +282,7 @@ export function ServerlessTriggersRoute() {
         dailyExecutions={quota.daily_executions}
         triggers={fn.triggers}
         nextCronExecution={nextCronExecution ? formatCronExecution(nextCronExecution) : undefined}
-        domain={fn.domain}
+        domain={fn.domain ?? null}
         enabledTabs={allTabs as readonly ServerlessTriggerTab[]}
         onSelectTab={tab => void navigate(tabPath(fn.id, tab))}
         onAddTrigger={readOnly ? undefined : async trigger => {

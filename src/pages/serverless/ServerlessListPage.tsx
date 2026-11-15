@@ -194,39 +194,12 @@ const EmptyNotice = styled.div`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const Guide = styled.aside`
-  display: flex;
+const Guide = styled(Banner)`
   width: 100%;
-  min-height: 68px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
 
   @media (max-width: 600px) {
-    align-items: flex-start;
     flex-wrap: wrap;
   }
-`;
-
-const GuideText = styled.div`
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-`;
-
-const GuideTitle = styled.strong`
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-
-const GuideDescription = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
 const FunctionLoading = styled(LoadingCard)`
@@ -296,7 +269,7 @@ export default function ServerlessListPage() {
           id: fn.id,
           name: fn.name,
           description: fn.description,
-          method: fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'Cron' ? 'Cron' : `HTTP ${trigger.schedule}`).join(' · ') || '트리거 연결 전',
+          method: fn.triggers.map(trigger => trigger.type === 'Cron' ? 'Cron' : `HTTP ${trigger.schedule}`).join(' · ') || '트리거 연결 전',
           expires: fn.expiresAt,
           active: fn.active,
           runtime: fn.runtime === 'javascript' ? 'JavaScript' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
@@ -463,13 +436,13 @@ export default function ServerlessListPage() {
           )}
         </Section>
 
-        {!quota.loading && !quota.error && <Guide>
-          <GuideText>
-            <GuideTitle>작게 만들고, 바로 테스트하세요</GuideTitle>
-            <GuideDescription>요청 하나당 예약 한 번을 처리하고 끝나는 코드에 맞습니다. 계속 떠 있어야 하는 웹 앱은 Apps에서 배포하세요.</GuideDescription>
-          </GuideText>
-          <Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => void navigate('/help')}>사용 Docs</Button>
-        </Guide>}
+        {!quota.loading && !quota.error && <Guide
+          tone="neutral"
+          icon={<Octicon name="info" size={20} />}
+          title="작게 만들고, 바로 테스트하세요"
+          description="요청 하나당 예약 한 번을 처리하고 끝나는 코드에 맞습니다. 계속 떠 있어야 하는 웹 앱은 Apps에서 배포하세요."
+          action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => void navigate('/help')}>사용 Docs</Button>}
+        />}
       </Page>
       {limitDialogOpen && count && <ServerlessFunctionLimitDialog used={count.used} limit={count.limit} onClose={() => setLimitDialogOpen(false)} />}
     </ServerlessShell>
