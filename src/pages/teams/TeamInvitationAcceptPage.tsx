@@ -19,7 +19,7 @@ const Screen = styled.main`
 const IntroductionPanel = styled.aside`
   display: flex;
   width: 600px;
-  min-height: 1080px;
+  min-height: 100svh;
   flex: 0 0 600px;
   flex-direction: column;
   align-items: flex-start;
