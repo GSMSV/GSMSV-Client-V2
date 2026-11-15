@@ -206,6 +206,7 @@ export function VmMonitoringPage() {
     }
     const next = { ...latest, vms: latest.vms.map(item => item.id === target.id ? { ...item, status: 'running' as const } : item) };
     if (!saveDemoVmState(next)) {
+      setState(latest);
       setNotice('전원 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }

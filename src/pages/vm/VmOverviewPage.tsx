@@ -353,6 +353,7 @@ export function VmOverviewPage() {
       setPermissionAction(action);
       return;
     }
+    if (expired || vmRecord.status === 'queued') return;
     run();
   }
 
