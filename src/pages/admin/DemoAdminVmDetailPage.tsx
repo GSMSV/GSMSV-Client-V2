@@ -19,6 +19,10 @@ const InfoGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 const InfoItem = styled.div`
   display: flex;
@@ -28,6 +32,9 @@ const InfoItem = styled.div`
 `;
 const Code = styled.code`
   display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
   padding: 16px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.raised};
@@ -109,9 +116,19 @@ const SshActions = styled.div`
   justify-content: space-between;
   gap: 16px;
   margin-top: 16px;
+
+  @media (max-width: 720px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 `;
 const SshButtons = styled(Actions)`
   flex: 0 0 auto;
+
+  @media (max-width: 720px) {
+    justify-content: flex-start;
+    width: 100%;
+  }
 `;
 
 type DetailPanel = 'purpose' | 'snapshot' | null;

@@ -22,6 +22,21 @@ const GraduationControls = styled.div`
   }
 `;
 
+const ExternalAccountGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+
+    > button { width: 100%; }
+  }
+`;
+
 export default function DemoAdminAccountsPage() {
   const [accounts, setAccounts] = useState(() => getDemoAccounts());
   const [selectedId, setSelectedId] = useState(() => accounts[0]?.id ?? '');
@@ -210,7 +225,7 @@ export default function DemoAdminAccountsPage() {
     {notice && <Alert $tone="success" role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <Card><CardHeader><SectionTitle>계정 목록</SectionTitle></CardHeader><TableWrap><Table><thead><tr><th>이름 · 학번</th><th>학교 이메일</th><th>역할</th><th>소속 팀</th><th>GitHub</th><th>Discord</th></tr></thead><tbody>{accounts.map((account) => <tr key={account.id} aria-selected={account.id === current?.id} onClick={() => setSelectedId(account.id)}><td>{account.name} · {account.studentId}</td><td>{account.email}</td><td>{account.role}</td><td>{account.team}</td><td>{account.github}</td><td>{account.discord}</td></tr>)}</tbody></Table></TableWrap><Hint>{accounts.length}개 중 1–{accounts.length}</Hint></Card>
     {current && <Card><CardHeader><SectionTitle>{current.name} · 외부 계정</SectionTitle>{current.role === '관리자' && <Button variant="danger" icon={<Octicon name="shield" size={16} />} onClick={() => openRevokeDialog(current)}>권한 회수</Button>}</CardHeader><Muted>학교 정보는 DataGSM에서 와서 여기서 고칠 수 없습니다. 연결을 강제로 해제하면 그 사람이 다시 연결해야 합니다.</Muted>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 16, marginTop: 20 }}><div><Hint>GitHub</Hint><Muted>{current.github} · {current.github === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.github === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('github')}>연결 강제 해제</Button><div><Hint>Discord</Hint><Muted>{current.discord} · {current.discord === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.discord === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('discord')}>연결 강제 해제</Button></div>
+      <ExternalAccountGrid><div><Hint>GitHub</Hint><Muted>{current.github} · {current.github === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.github === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('github')}>연결 강제 해제</Button><div><Hint>Discord</Hint><Muted>{current.discord} · {current.discord === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.discord === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('discord')}>연결 강제 해제</Button></ExternalAccountGrid>
     </Card>}
     <SectionTitle>확정이 필요한 보호 규칙</SectionTitle><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 16 }}><Card><Octicon name="lock" size={20} /><SectionTitle style={{ marginTop: 16 }}>자기 권한 보호</SectionTitle><Muted>현재 로그인한 관리자는 자신의 권한을 회수할 수 없습니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" onClick={() => { const actor = admins.find(account => account.id === 'account-4'); if (actor) openRevokeDialog(actor); }}>권한 회수</Button></div></Card><Card><Octicon name="people" size={20} /><SectionTitle style={{ marginTop: 16 }}>마지막 관리자 보호</SectionTitle><Muted>관리자가 한 명만 남았다면 권한 회수를 막습니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" disabled={admins.length !== 1} onClick={openLastAdminProtection}>권한 회수</Button></div></Card><Card><Octicon name="checklist" size={20} /><SectionTitle style={{ marginTop: 16 }}>졸업 후 계정 점검</SectionTitle><Muted>졸업한 관리자의 접근은 유지됩니다. 인수인계 이후의 회수 절차가 필요합니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" onClick={() => graduationCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>회수 절차 검토</Button></div></Card></div>
     <Card ref={graduationCardRef}><CardHeader><SectionTitle>졸업일 등록</SectionTitle></CardHeader><Muted>· 3학년 사용자에게 D-30, D-7에 안내합니다.<br />· 졸업 처리 후 개인 VM·함수는 3일 뒤 삭제됩니다.</Muted><GraduationControls><DateField label="졸업일" value={graduationDateDraft} onChange={value => { setGraduationDateDraft(value); setGraduationError(''); }} /><Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={graduationDateDraft === graduationDate} onClick={saveGraduationSchedule}>저장</Button></GraduationControls>{graduationError && <Alert $tone="warning" role="alert">{graduationError}</Alert>}</Card>
