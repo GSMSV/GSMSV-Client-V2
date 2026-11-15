@@ -547,7 +547,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       scopeOptions={scopeOptions}
-      userName={user?.name ?? "김민수"}
+      userName={user?.name ?? "김지민"}
       onNavigate={navigateFromShell}
       onCreateTeam={() => navigate("/teams/new")}
       onOpenStatus={() => navigate("/status")}
@@ -652,7 +652,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
         const current = service.deployments.find(item => item.status === "running");
         const deployment: DemoDeployment = current ?? {
           id: crypto.randomUUID().slice(0, 7), status: "previous", commit: "재배포",
-          author: user?.name ?? "김민수", at: formatDemoAppDate(Date.now()), message: "빌드 로그 보기",
+          author: user?.name ?? "김지민", at: formatDemoAppDate(Date.now()), message: "빌드 로그 보기",
         };
         setDialog({ kind: "deploy", deployment });
       }}>재배포</Button>

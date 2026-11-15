@@ -398,8 +398,6 @@ export default function AuthenticatedDocsPage() {
       scopeLabel="내 Resources"
       scopeOptions={scopeOptions}
       disabledNavigationItems={demoMode ? [] : ['vm-create', 'serverless', 'support']}
-      sidebarActionsAtBottom={false}
-      showTopbarDivider
       userName={user?.name ?? '사용자'}
       onNavigate={onNavigate}
       onCreateTeam={() => navigate('/teams/new')}

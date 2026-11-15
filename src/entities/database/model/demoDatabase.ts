@@ -41,11 +41,11 @@ const demoDatabaseSeed: DemoDatabaseState = {
   databases: [
     {
       grn: welcomeGrn, id: 'welcome-db', name: 'welcome-db',
-      owner: { type: 'user', id: 'demo-student', name: '김민수' },
+      owner: { type: 'user', id: 'demo-student', name: '김지민' },
       engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
       connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'welcome_db', username: 'welcome_user', tls: true },
       storage: { used_gb: 0.3, owner_total_used_gb: 0.3, owner_limit_gb: 1 }, max_connections: 10,
-      created_by: { name: '김민수' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-01T04:00:00.000Z', expires_at: '2026-10-06T14:59:59.000Z',
+      created_by: { name: '김지민' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-01T04:00:00.000Z', expires_at: '2026-10-06T14:59:59.000Z',
       permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
@@ -54,7 +54,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
       engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
       connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_db', username: 'connect_admin', tls: true },
       storage: { used_gb: 7.4, owner_total_used_gb: 10.7, owner_limit_gb: 60 }, max_connections: 100,
-      created_by: { name: '김민수' }, created_at: '2026-10-03T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
+      created_by: { name: '김지민' }, created_at: '2026-10-03T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
       permissions: { ...fullPermissions },
     },
     {
@@ -389,7 +389,7 @@ export function createDemoDatabase(
   const state = getDemoDatabaseState();
   const ownerInfo = owner
     ? { type: 'team' as const, id: owner.id, name: owner.name }
-    : { type: 'user' as const, id: 'demo-student', name: '김민수' };
+    : { type: 'user' as const, id: 'demo-student', name: '김지민' };
   const id = `demo-${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   const dedicated = isolation === 'dedicated';
@@ -405,7 +405,7 @@ export function createDemoDatabase(
     connection: { host: dedicated ? 'team-db-demo.gs-msv.local' : 'db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: id.replaceAll('-', '_'), username: `${ownerInfo.id}_user`, tls: true },
     storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 1 },
     max_connections: dedicated ? 100 : 10,
-    created_by: { name: '김민수' },
+    created_by: { name: '김지민' },
     created_at: now,
     updated_at: now,
     expires_at: new Date(Date.now() + (dedicated ? 31 : 7) * 86_400_000).toISOString(),

@@ -56,7 +56,7 @@ export const demoHomeQuota: MyQuota = {
 export const demoHomeTeams: TeamSummary[] = [{ id: 'demo-team', name: 'GSM Connect', status: 'approved', my_role: 'leader', member_count: 4 }];
 
 export const demoHomeApps: AppSummary[] = [{
-  grn: 'grn:gsmsv:app:demo-student:portfolio', id: 'app-portfolio', name: 'portfolio', owner: { type: 'user', id: 'demo-student', name: '김민수' }, status: 'active',
+  grn: 'grn:gsmsv:app:demo-student:portfolio', id: 'app-portfolio', name: 'portfolio', owner: { type: 'user', id: 'demo-student', name: '김지민' }, status: 'active',
   created_by: 'demo-student', created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
   permissions: { view: true, update: true, extend: true, delete: true },
 }];

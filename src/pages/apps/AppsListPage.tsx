@@ -203,7 +203,7 @@ export default function AppsListPage() {
       if (demoMode) {
         await demoRequest;
         const { getDemoAppSummaries } = await import('../../entities/app/demo');
-        const value = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
+        const value = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김지민' });
         if (!signal.aborted) setApps({ value, loading: false, error: false });
         return;
       }

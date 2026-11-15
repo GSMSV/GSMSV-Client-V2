@@ -8,7 +8,7 @@ export function createDemoTeamRequest(name: string, purpose: string) {
     id: `team-request-${team.id}`,
     teamId: team.id,
     name: team.name,
-    leader: '김민수 · 2107',
+    leader: '김지민 · 2107',
     members: team.member_count,
     purpose: purpose.trim(),
     requestedAt: new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short' }).format(new Date()),

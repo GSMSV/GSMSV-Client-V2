@@ -272,7 +272,7 @@ function version(fn: DemoServerlessFunction, state: DemoServerlessState, summary
   const currentId = String(state.sequence + 1);
   const label = `버전 ${currentId}`;
   const now = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date());
-  fn.versions = [{ id: currentId, label, savedAt: now, author: '김민수', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))].slice(0, 10);
+  fn.versions = [{ id: currentId, label, savedAt: now, author: '김지민', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))].slice(0, 10);
 }
 
 export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promise<string> {

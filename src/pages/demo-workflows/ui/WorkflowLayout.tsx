@@ -188,6 +188,14 @@ const AdminContent = styled.main`
   @media (max-width: 720px) { padding: 24px 16px; }
 `;
 
+const StudentContent = styled.div`
+  width: 100%;
+  max-width: 1224px;
+  padding: 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px 40px; }
+`;
+
 export const PageStack = styled.div`
   display: flex;
   flex-direction: column;
@@ -472,7 +480,7 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
       onSelect: () => void navigate(`/teams/${encodeURIComponent(team.id)}`),
     })),
   ];
-  return <StudentShell activeItem={activeStudentItem} scopeLabel={scopeLabel} scopeOptions={scopeOptions} userName="김지민" onNavigate={onNavigate} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>{children}</StudentShell>;
+  return <StudentShell activeItem={activeStudentItem} scopeLabel={scopeLabel} scopeOptions={scopeOptions} userName="김지민" onNavigate={onNavigate} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}><StudentContent>{children}</StudentContent></StudentShell>;
 }
 
 export function DemoOnlyGate({ children, admin = false }: { children: ReactNode; admin?: boolean }) {

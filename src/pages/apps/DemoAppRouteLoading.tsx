@@ -36,7 +36,7 @@ export function DemoAppRouteLoading({ page }: { page: 'overview' | 'app-settings
     <StudentShell
       activeItem="apps"
       scopeLabel="내 Resources"
-      userName={getSessionUser()?.name ?? '김민수'}
+      userName={getSessionUser()?.name ?? '김지민'}
       onNavigate={() => false}
       onCreateTeam={() => navigate('/teams/new')}
       onOpenStatus={() => navigate('/status')}
