@@ -10,7 +10,15 @@ import { Button, TextField } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard, RevealableSecret } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { DatabaseTab as Tab, DatabaseTabs as Tabs } from './DatabaseTabs';
 
+// 을/를: Hangul batchim, otherwise the usual reading of a trailing Latin letter or digit.
+function objectParticle(word: string) {
+  const last = word.trim().slice(-1);
+  const code = last.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 ? '을' : '를';
+  return /[lmn013678]/i.test(last) ? '을' : '를';
+}
 const Page = styled.div`
   display:flex;width:100%;max-width:1224px;flex-direction:column;gap:24px;padding:40px;
   @media (max-width: 720px) { padding: 24px 16px; }
@@ -33,14 +41,6 @@ const TabsRow = styled.div`
   display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
   @media (max-width: 720px) { align-items:flex-start;flex-direction:column; }
 `;
-const Tabs = styled.nav`display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;`;
-const Tab = styled.button<{ $active?: boolean }>`
-  display:inline-flex;min-height:42px;align-items:center;padding:0 12px;border:0;border-radius:${({ theme }) => theme.radii.base}px;
-  background:${({ theme,$active }) => $active ? theme.colors.primarySoft:'transparent'};color:${({ theme,$active }) => $active ? theme.colors.primary:theme.colors.muted};
-  font:${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family},sans-serif;
-  cursor:pointer;&:hover:not(:disabled){background:${({ theme,$active }) => $active ? theme.colors.primarySoft:theme.colors.overlayHover};color:${({ theme }) => theme.colors.text};}
-  &:disabled{opacity:1;cursor:not-allowed;}&:focus-visible{outline:2px solid ${({ theme }) => theme.colors.primary};outline-offset:2px;}
-`;
 const Card = styled.section`display:flex;width:100%;flex-direction:column;gap:16px;padding:24px;border-radius:${({ theme }) => theme.radii.base}px;background:${({ theme }) => theme.colors.surface};`;
 const CardHeader = styled.div`
   display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
@@ -55,12 +55,16 @@ const FieldHint = styled.p`
   margin:0;color:${({ theme }) => theme.colors.faint};
   font:${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family},sans-serif;
 `;
-const InfoRow = styled.div`display:flex;align-items:flex-start;gap:16px;width:100%;`;
+const InfoRow = styled.div`display:flex;align-items:center;gap:16px;width:100%;`;
 const InfoIcon = styled.span<{ $tone?: 'danger' | 'muted' }>`
   display:inline-flex;flex:0 0 16px;align-items:center;justify-content:center;width:16px;height:22px;
   color:${({ theme,$tone }) => $tone === 'danger' ? theme.colors.danger:theme.colors.muted};
 `;
 const InfoText = styled.div`display:flex;min-width:0;flex:1;flex-direction:column;gap:4px;`;
+const InfoLabel = styled.span`
+  color:${({ theme }) => theme.colors.faint};
+  font:${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family},sans-serif;
+`;
 const InfoTitle = styled.span`
   color:${({ theme }) => theme.colors.text};
   font:${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family},sans-serif;
@@ -260,7 +264,7 @@ export default function DatabaseSettingsPage(){
     finally{setDeleting(false);}
   };
 
-  return <StudentShell activeItem="database" scopeLabel={value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources'} scopeOptions={scopeOptions} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} hasUnsavedInput={Boolean((value && name !== value.name) || (showDeleteDialog && confirmName))}>
+  return <StudentShell activeItem="database" scopeLabel={scopeOptions.find(option=>option.selected)?.label??(value?.owner.type==='team'?`${value.owner.name} · 팀`:'내 Resources')} scopeOptions={scopeOptions} userName={user?.name??'사용자'} onNavigate={navigateFromShell} onCreateTeam={()=>navigate('/teams/new')} onOpenStatus={()=>navigate('/status')} onSelectScope={()=>undefined} onSearch={()=>undefined} onOpenNotifications={()=>undefined} hasUnsavedInput={Boolean((value && name !== value.name) || (showDeleteDialog && confirmName))}>
     <Page>
       <Breadcrumb type="button" onClick={()=>navigate(value?databaseListPath(value):'/databases')}>Database</Breadcrumb>
       {detail.loading&&!value?<LoadingCard width="100%" height={174}/>:detail.error||!value?<ErrorCard onRetry={()=>setRetryKey(key=>key+1)}/>:<>
@@ -280,7 +284,7 @@ export default function DatabaseSettingsPage(){
           <CardTitle>기본 정보</CardTitle>
           <Field>
             <TextField label="이름" value={name} maxLength={30} required disabled={!value.permissions.update||Boolean(deleteOperation)} onChange={event=>{setName(event.currentTarget.value);setSaved(false);setSaveError(false);}}/>
-            <FieldHint>이름은 화면에만 표시됩니다. 서버의 database·계정 이름 {value.connection.database}은 바뀌지 않습니다.</FieldHint>
+            <FieldHint>이름은 화면에만 쓰입니다. 서버의 database·계정 이름 {value.connection.database}는 바뀌지 않습니다.</FieldHint>
           </Field>
           <Field>
             <TextField label="엔진 · 격리 방식" value={engineIsolation(value)} disabled readOnly/>
@@ -288,12 +292,12 @@ export default function DatabaseSettingsPage(){
         </Card>
         <Card>
           <CardHeader><CardTitle>비밀번호 교체</CardTitle>{value.permissions.rotate_password&&<Button variant="secondary" icon={<Octicon name="sync" size={16}/>} disabled={Boolean(deleteOperation)} onClick={()=>{setRotationError(false);setShowRotationDialog(true);}}>비밀번호 교체</Button>}</CardHeader>
-          <InfoRow><InfoIcon><Octicon name="link" size={16}/></InfoIcon><InfoText><InfoTitle>{connectedFunctions.length?'연결된 곳':'연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다'}</InfoTitle><InfoDescription>{connectedFunctions.length?`${connectedFunctions.join(', ')} 함수 · 다음 실행부터 새 비밀번호를 받습니다.`:'실제 연결 대상 목록은 Database 상세 API에서 제공되지 않습니다. 교체하면 기존 DB 접속이 끊기며 새 비밀번호를 접속 정보 탭에서 확인할 수 있습니다.'}</InfoDescription></InfoText></InfoRow>
+          <InfoRow><InfoIcon><Octicon name="link" size={16}/></InfoIcon><InfoText><InfoLabel>연결된 곳</InfoLabel><InfoTitle>{connectedFunctions.length?`${connectedFunctions.join(', ')} 함수 · 다음 실행부터 새 비밀번호를 받습니다`:'연결된 앱과 함수의 접속 정보는 자동으로 갱신됩니다'}</InfoTitle><InfoDescription>교체하면 지금 이 비밀번호로 붙어 있는 앱과 접속이 바로 끊깁니다. 새 비밀번호는 접속 정보 탭에서 다시 볼 수 있습니다.</InfoDescription></InfoText></InfoRow>
           {rotationError&&<FormError role="alert">비밀번호를 교체하지 못했습니다. 다시 시도해 주세요.</FormError>}
         </Card>
         <Card>
           <CardHeader><CardTitle>Database 삭제</CardTitle>{value.permissions.delete&&<Button variant="danger" icon={<Octicon name="trashcan" size={16}/>} disabled={Boolean(deleteOperation)} onClick={()=>{setDeleteError(false);setConfirmName('');deleteIdempotencyKey.current=crypto.randomUUID();setShowDeleteDialog(true);}}>Database 삭제</Button>}</CardHeader>
-          <InfoRow><InfoIcon $tone="danger"><Octicon name="alert" size={16}/></InfoIcon><InfoText><InfoTitle>Database와 접속 계정이 삭제됩니다</InfoTitle><InfoDescription>백업 파일은 7일 동안 보관되며 관리자만 복구할 수 있습니다. 이 동작은 비동기로 처리됩니다.</InfoDescription></InfoText></InfoRow>
+          <InfoRow><InfoIcon><Octicon name="alert" size={16}/></InfoIcon><InfoText><InfoLabel>삭제하면</InfoLabel><InfoTitle>Database와 접속 계정이 지워집니다</InfoTitle><InfoDescription>백업 파일은 7일 동안 남고, 그 안에 문의하면 되살릴 수 있습니다. 연결된 함수의 DB 연결도 풀립니다.</InfoDescription></InfoText></InfoRow>
         </Card>
         {deleteOperation&&<Banner title="삭제 작업을 시작했습니다" description={`작업 상태: ${deleteOperation.operation.status} · 작업 ID: ${deleteOperation.operation.id}. 삭제 완료를 의미하지 않습니다.`} tone="warning" icon={<Octicon name="clock" size={20}/>}/>}
         {deleteError&&<Banner title="Database 삭제를 시작하지 못했습니다" description="이름을 정확히 입력했는지 확인하고 다시 시도해 주세요." tone="danger" icon={<Octicon name="alert" size={20}/>}/>}
@@ -308,25 +312,25 @@ export default function DatabaseSettingsPage(){
     </Overlay>}
     {rotationResult&&<Overlay onMouseDown={event=>{if(event.target===event.currentTarget)setRotationResult(null);}}>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="rotation-result-title">
-        <DialogHeader><DialogIcon $tone="success"><Octicon name="check-circle" size={24}/></DialogIcon><DialogTitle id="rotation-result-title">새 비밀번호를 만들었습니다</DialogTitle></DialogHeader>
-        <DialogCopy><span>이전 비밀번호로 연결되어 있던 기존 접속은 끊겼습니다.</span>{connectedFunctions.length?<ResultLine>{connectedFunctions.join(', ')} 함수는 다음 실행부터 새 비밀번호를 씁니다.</ResultLine>:<ResultLine>연결 갱신: 함수 {rotationResult.reconnected.functions}개 · 앱 {rotationResult.reconnected.app_cells}개</ResultLine>}<ResultLine>교체 시각: {new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(rotationResult.rotated_at))}</ResultLine></DialogCopy>
+        <DialogHeader><DialogIcon $tone="warning"><Octicon name="check-circle" size={24}/></DialogIcon><DialogTitle id="rotation-result-title">새 비밀번호를 만들었습니다</DialogTitle></DialogHeader>
+        <DialogCopy><span>이전 비밀번호로 붙어 있던 연결은 모두 끊었습니다.</span>{isDemoMode()?null:connectedFunctions.length?<ResultLine>{connectedFunctions.join(', ')} 함수는 다음 실행부터 새 비밀번호를 씁니다.</ResultLine>:<ResultLine>연결 갱신: 함수 {rotationResult.reconnected.functions}개 · 앱 {rotationResult.reconnected.app_cells}개</ResultLine>}{!isDemoMode()&&<ResultLine>교체 시각: {new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(rotationResult.rotated_at))}</ResultLine>}</DialogCopy>
         <RevealableSecret label="새 비밀번호" value={rotationResult.password} initiallyShown/>
-        <DialogActions><Button variant="secondary" onClick={()=>setRotationResult(null)}>닫기</Button></DialogActions>
+        <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16}/>} onClick={()=>setRotationResult(null)}>닫기</Button></DialogActions>
       </Dialog>
     </Overlay>}
     {showDeleteDialog&&value&&<Overlay onMouseDown={event=>{if(event.target===event.currentTarget&&!deleting){setShowDeleteDialog(false);setConfirmName('');}}}>
       <DeleteConfirmDialog
         open
-        title={`${value.name}을(를) 삭제하시겠습니까?`}
-        description="Database와 접속 계정을 지웁니다. 백업 파일은 7일 동안 보관되며 관리자만 복구할 수 있습니다."
-        items={<div>· Database 크기 {new Intl.NumberFormat('ko-KR',{maximumFractionDigits:2}).format(value.storage.used_gb)} GB<br/>· 접속 계정 {value.connection.database}{deleteError&&<FormError role="alert">삭제 요청에 실패했습니다. 다시 시도해 주세요.</FormError>}</div>}
+        title={`${value.name}${objectParticle(value.name)} 삭제하시겠습니까?`}
+        description={isDemoMode()?'Database와 접속 계정을 지웁니다. 백업 파일은 7일 동안 남습니다.':'Database와 접속 계정을 지웁니다. 백업 파일은 7일 동안 보관되며 관리자만 복구할 수 있습니다.'}
+        items={<div>· {isDemoMode()?'테이블과 데이터':'Database 크기'} {new Intl.NumberFormat('ko-KR',{maximumFractionDigits:2}).format(value.storage.used_gb)} GB<br/>· 접속 계정 {value.connection.database}{connectedFunctions.map(fn=><span key={fn}><br/>· {fn} 함수의 DB 연결</span>)}{deleteError&&<FormError role="alert">삭제 요청에 실패했습니다. 다시 시도해 주세요.</FormError>}</div>}
         fieldLabel="확인하려면 Database 이름을 입력하세요"
         confirmationName={value.name}
         value={confirmName}
         onValueChange={text=>{setConfirmName(text);setDeleteError(false);}}
         onConfirm={()=>void deleteResource()}
         onCancel={()=>{if(!deleting){setShowDeleteDialog(false);setConfirmName('');deleteIdempotencyKey.current=null;}}}
-        caption="삭제 요청은 비동기로 처리되며 즉시 완료되지 않을 수 있습니다."
+        caption={isDemoMode()?'삭제한 뒤 7일 안에 문의하면 백업으로 되살릴 수 있습니다.':'삭제 요청은 비동기로 처리되며 즉시 완료되지 않을 수 있습니다.'}
         cancelLabel="취소"
         confirmLabel={deleting?'삭제 요청 중':'Database 삭제'}
         confirmIcon={<Octicon name="trashcan" size={16}/>}

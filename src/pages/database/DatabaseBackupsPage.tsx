@@ -10,6 +10,7 @@ import { Button } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { DatabaseTab as Tab, DatabaseTabs as Tabs } from './DatabaseTabs';
 
 const Page = styled.div`
   display: flex; width: 100%; max-width: 1224px; flex-direction: column; gap: 24px; padding: 40px;
@@ -32,17 +33,6 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
-`;
-const Tabs = styled.nav`display: flex; width: 100%; flex-wrap: wrap; gap: 8px;`;
-const Tab = styled.button<{ $active?: boolean }>`
-  display: inline-flex; min-height: 42px; align-items: center; padding: 0 12px; border: 0; border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
-  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  cursor: pointer;
-  &:hover:not(:disabled) { background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : theme.colors.overlayHover}; color: ${({ theme }) => theme.colors.text}; }
-  &:disabled { opacity: 1; cursor: not-allowed; }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 `;
 const Section = styled.section`display: flex; width: 100%; flex-direction: column; gap: 16px;`;
 const BackupCard = styled.section`display: flex; width: 100%; min-height: 416px; flex-direction: column; gap: 16px; padding: 24px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.surface};`;
@@ -69,8 +59,8 @@ const QuietAction = styled(Button)`padding-right: 10px; padding-left: 10px;`;
 const EmptyState = styled.div`display: grid; min-height: 330px; flex: 1; place-items: center; color: ${({ theme }) => theme.colors.muted}; text-align: center;`;
 const NoticeCopy = styled.div`display: flex; flex-direction: column; gap: 8px; width: 100%;`;
 const NoticeTitle = styled.p`
-  margin: 0; color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  margin: 0; color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
 `;
 const NoticeDescription = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
@@ -102,8 +92,14 @@ function dateTime(value: string) {
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' }).format(date);
 }
+function monthDayTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Seoul' }).formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.month}월 ${parts.day}일 ${parts.hour}:${parts.minute}`;
+}
 function fileSize(value: number) {
-  return value >= 1024 ? `${(value / 1024).toFixed(1)} GB` : `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value)} MB`;
+  return value >= 100 ? `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(Math.round(value / 1024 * 10) / 10)} GB` : `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value)} MB`;
 }
 function backupKind(kind: DatabaseBackup['kind']) { return kind === 'pre_restore' ? '복원 직전' : '매일 자동'; }
 
@@ -296,7 +292,7 @@ export default function DatabaseBackupsPage() {
   const backupTable = backups.value && backups.value.length > 0;
 
   return (
-    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} hasUnsavedInput={Boolean(selectedBackup && confirmName)}>
+    <StudentShell activeItem="database" scopeLabel={scopeOptions.find(option => option.selected)?.label ?? (detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources')} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined} hasUnsavedInput={Boolean(selectedBackup && confirmName)}>
       <Page>
         <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard width="100%" height={416} /> : detail.error || !detail.value ? (
@@ -342,7 +338,7 @@ export default function DatabaseBackupsPage() {
         <DialogWrap>
           <DeleteConfirmDialog
             open
-            title={`${dateTime(selectedBackup.created_at)} 백업으로 되돌리시겠습니까?`}
+            title={`${monthDayTime(selectedBackup.created_at)} 백업으로 되돌리시겠습니까?`}
             description="지금 데이터를 이 백업으로 덮어씁니다. 덮어쓰기 전 상태는 「복원 직전」 백업으로 먼저 남깁니다."
             items={<ModalItems><span>· 백업 시각 {dateTime(selectedBackup.created_at)}</span><span>· 크기 {fileSize(selectedBackup.size_mb)}</span>{restoreError && <RestoreError role="alert">복원을 시작하지 못했습니다. 다시 시도해 주세요.</RestoreError>}</ModalItems>}
             fieldLabel="확인하려면 Database 이름을 입력하세요"

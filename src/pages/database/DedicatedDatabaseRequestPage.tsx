@@ -22,10 +22,69 @@ const Columns = styled.div`
 `;
 const InfoRow = styled.div`
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
   padding: 16px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.muted};
+`;
+const PageBreadcrumb = styled(Breadcrumb)`
+  margin: 0;
+`;
+const FieldHint = styled(Hint)`
+  margin: 0;
+`;
+const FormFields = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+`;
+const EngineChoices = styled.div`
+  display: flex;
+  height: ${({ theme }) => theme.size.control}px;
+  gap: 4px;
+  padding: 4px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.field};
+`;
+const EngineButton = styled.button<{ $selected: boolean }>`
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme, $selected }) => $selected ? theme.colors.primarySoft : 'transparent'};
+  color: ${({ theme, $selected }) => $selected ? theme.colors.primary : theme.colors.muted};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
+  cursor: pointer;
+  &:hover:not([aria-pressed='true']) { background: ${({ theme }) => theme.colors.overlayHover}; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 1px; }
+`;
+const SelectWrap = styled.span`
+  position: relative;
+  display: block;
+  color: ${({ theme }) => theme.colors.muted};
+  > svg { position: absolute; top: 50%; right: 16px; transform: translateY(-50%); pointer-events: none; }
+`;
+const ReasonSelect = styled(Select)`
+  appearance: none;
+  padding-right: 44px;
+`;
+const FixedSpec = styled(Input)`
+  &:disabled { color: ${({ theme }) => theme.colors.faint}; opacity: 1; -webkit-text-fill-color: ${({ theme }) => theme.colors.faint}; }
+`;
+const PeriodCard = styled(Card)`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  color: ${({ theme }) => theme.colors.muted};
+`;
+const PeriodTitle = styled.strong`
+  display: block;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
 `;
 const InfoText = styled.div`
   display: flex;
@@ -82,7 +141,7 @@ export default function DedicatedDatabaseRequestPage() {
       setNotice(`${teamName} 팀은 전용 Database를 이미 사용 중이라 추가 신청할 수 없습니다.`);
       return;
     }
-    if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
+    if (!description.trim()) { setNotice('설명을 입력해 주세요.'); return; }
     const requester = team?.members.find(member => member.member_id === getSessionUser()?.id);
     const applicationDate = new Date().toISOString().slice(0, 10).replaceAll('-', '.');
     const request: DedicatedDatabaseRequest = {
@@ -104,8 +163,9 @@ export default function DedicatedDatabaseRequestPage() {
     return <Navigate to={`/teams/${encodeURIComponent(teamScopeId)}`} replace />;
   }
 
-  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
-    <Breadcrumb>{teamName} / Database / 전용형 신청</Breadcrumb>
+  const roleLabel = team?.my_role === 'devops' ? 'DevOps' : team?.my_role === 'leader' ? '팀장' : '팀';
+  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · ${roleLabel}`} teamScopeId={teamScopeId}><PageStack>
+    <PageBreadcrumb>{teamName} / Database / 전용형 신청</PageBreadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
     {loadState === 'loading' ? <><LoadingCard height={574} /><Columns><LoadingCard height={338} /><LoadingCard height={338} /></Columns></>
       : loadState === 'error' ? <><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><Columns><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /></Columns></>
@@ -114,32 +174,32 @@ export default function DedicatedDatabaseRequestPage() {
     {!pending && latestRequest?.status === '거절' && <Banner tone="danger" icon={<Octicon name="x" size={20} />} title="전용형 신청이 거절됐습니다" description={`사유: ${latestRequest.rejectReason || '관리자가 사유를 남기지 않았습니다.'} 고쳐서 다시 신청해 주세요.`} action={<Button variant="secondary" icon={<Octicon name="pencil" size={16} />} onClick={() => { descriptionRef.current?.focus(); descriptionRef.current?.scrollIntoView({ block: 'center' }); }}>고쳐서 다시 신청</Button>} />}
     {pending && <Banner tone="primary" icon={<Octicon name="clock" size={20} />} title="전용형 신청을 보냈습니다" description="관리자가 확인하면 알림으로 알려 드립니다. 결과가 나오기 전에는 다시 신청할 수 없습니다." />}
     <Card>
-      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={Boolean(pending) || latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>{latestRequest?.status === '거절' ? '고쳐서 다시 신청' : '신청'}</Button></CardHeader>
+      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>{latestRequest?.status === '거절' ? '고쳐서 다시 신청' : '신청'}</Button></CardHeader>
       <Muted>팀당 1개까지이고, 팀 Database 4개 안에 들어갑니다. 팀장과 DevOps만 신청할 수 있습니다.</Muted>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
-        <Field>엔진<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 8, background: '#403d45' }}>{(['MySQL', 'PostgreSQL'] as const).map((item) => <button key={item} type="button" onClick={() => setEngine(item)} style={{ minHeight: 34, border: 0, borderRadius: 6, background: engine === item ? '#203d30' : 'transparent', color: engine === item ? '#00ff90' : '#c0bbc6', cursor: 'pointer' }}>{item}</button>)}</div></Field>
-        <Field>이유<Select value={reason} onChange={(event) => setReason(event.target.value)}><option>다른 학생의 부하와 성능을 떼어 놓아야 합니다</option><option>팀 서비스의 DB 관리자 권한이 필요합니다</option><option>운영 중인 서비스에 전용 서버가 필요합니다</option></Select></Field>
-        <Field>사용 목적<Textarea ref={descriptionRef} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} /><Hint>꼭 적어야 합니다. 관리자가 승인할 때 참고합니다.</Hint></Field>
-        <Field>사양<Input value="vCPU 2 · RAM 4 GB · SSD 20 GB" disabled /><Hint>팀이 고를 수 없는 고정 사양입니다.</Hint></Field>
-      </div>
+      <FormFields>
+        <Field as="div" role="group" aria-label="엔진">엔진<EngineChoices>{(['MySQL', 'PostgreSQL'] as const).map((item) => <EngineButton key={item} type="button" $selected={engine === item} aria-pressed={engine === item} onClick={() => setEngine(item)}>{item}</EngineButton>)}</EngineChoices></Field>
+        <Field>이유<SelectWrap><ReasonSelect value={reason} onChange={(event) => setReason(event.target.value)}><option>다른 학생의 부하와 성능을 떼어 놓아야 합니다</option><option>팀 서비스의 DB 관리자 권한이 필요합니다</option><option>운영 중인 서비스에 전용 서버가 필요합니다</option></ReasonSelect><Octicon name="chevron-down" size={16} aria-hidden="true" /></SelectWrap></Field>
+        <Field>설명<Textarea ref={descriptionRef} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} /><FieldHint>꼭 적어야 합니다. 관리자가 승인할 때 참고합니다.</FieldHint></Field>
+        <Field>사양<FixedSpec value="vCPU 2 · RAM 4 GB · SSD 20 GB" disabled /><FieldHint>팀이 고를 수 없는 고정 사양입니다.</FieldHint></Field>
+      </FormFields>
     </Card>
     <Columns>
       <Card><CardHeader><SectionTitle>공유형과 다른 점</SectionTitle></CardHeader>
-        <InfoRow><Octicon name="database" size={20} /><InfoText><strong>DB 서버를 팀만 씁니다</strong><span>다른 학생의 부하에 영향을 받지 않습니다.</span></InfoText></InfoRow>
-        <InfoRow><Octicon name="shield" size={20} /><InfoText><strong>DB 관리자 권한</strong><span>계정과 database를 팀이 직접 만들 수 있습니다.</span></InfoText></InfoRow>
-        <InfoRow><Octicon name="cpu" size={20} /><InfoText><strong>고정 사양</strong><span>사양은 한 가지로 정해져 있고 바꿀 수 없습니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="database" size={16} /><InfoText><strong>DB 서버를 팀만 씁니다</strong><span>다른 학생의 부하에 영향을 받지 않습니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="shield" size={16} /><InfoText><strong>DB 관리자 권한</strong><span>계정과 database를 팀이 직접 만들 수 있습니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="cpu" size={16} /><InfoText><strong>고정 사양</strong><span>사양은 한 가지로 정해져 있고 바꿀 수 없습니다.</span></InfoText></InfoRow>
       </Card>
       <Card><CardHeader><SectionTitle>신청 뒤 순서</SectionTitle></CardHeader>
-        <InfoRow><Octicon name="checklist" size={20} /><InfoText><strong>1. 관리자 승인</strong><span>거절되면 사유를 보고 고쳐서 다시 신청할 수 있습니다.</span></InfoText></InfoRow>
-        <InfoRow><Octicon name="database" size={20} /><InfoText><strong>2. 전용 DB 서버 만들기</strong><span>승인되면 바로 만들어집니다.</span></InfoText></InfoRow>
-        <InfoRow><Octicon name="key" size={20} /><InfoText><strong>3. 접속 정보 확인</strong><span>팀장과 DevOps에게 접속 정보를 보여 드립니다. 쿼리 콘솔은 없습니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="checklist" size={16} /><InfoText><strong>1. 관리자 승인</strong><span>거절되면 사유를 보고 고쳐서 다시 신청할 수 있습니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="database" size={16} /><InfoText><strong>2. 전용 DB 서버 만들기</strong><span>승인되면 바로 만들어집니다.</span></InfoText></InfoRow>
+        <InfoRow><Octicon name="key" size={16} /><InfoText><strong>3. 접속 정보 확인</strong><span>팀장과 DevOps에게 접속 정보를 보여 드립니다. 쿼리 콘솔은 없습니다.</span></InfoText></InfoRow>
       </Card>
     </Columns>
-    <Card style={{ display: 'flex', alignItems: 'center', gap: 16 }}><Octicon name="calendar" size={18} /><div><strong style={{ color: '#f7f6f8', fontSize: 14 }}>전용형 Database의 사용 기간</strong><Muted style={{ marginTop: 4 }}>첫 31일 뒤 만료되고, 이후 2주마다 팀원 누구나 연장할 수 있습니다.</Muted></div></Card>
-    {latestRequest && <Card>
-      <CardHeader><SectionTitle>신청 결과</SectionTitle><Badge $tone={latestRequest.status === '승인 완료' ? 'success' : latestRequest.status === '거절' ? 'danger' : 'warning'}>{latestRequest.status}</Badge></CardHeader>
+    <PeriodCard><Octicon name="calendar" size={16} /><div><PeriodTitle>전용형 Database의 사용 기간</PeriodTitle><Muted style={{ marginTop: 4 }}>첫 31일 뒤 만료되고, 이후 2주마다 팀원 누구나 연장할 수 있습니다.</Muted></div></PeriodCard>
+    {latestRequest?.status === '승인 완료' && <Card>
+      <CardHeader><SectionTitle>신청 결과</SectionTitle><Badge $tone="success">{latestRequest.status}</Badge></CardHeader>
       <Muted>{latestRequest.engine} · {latestRequest.requestedAt}</Muted>
-      {latestRequest.status === '승인 완료' && latestRequest.databaseGrn && <>
+      {latestRequest.databaseGrn && <>
         <Muted>{latestRequest.databaseName ?? '전용 Database'}가 생성되었습니다. 상세 화면에서 접속 정보를 확인할 수 있습니다.</Muted>
         <Button variant="secondary" icon={<Octicon name="database" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(latestRequest.databaseGrn!)}`)}>접속 정보 확인</Button>
       </>}
