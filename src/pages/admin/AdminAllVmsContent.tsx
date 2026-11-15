@@ -48,6 +48,7 @@ const Page = styled.div`
 
 const Tabs = styled.nav`
   display: flex;
+  flex-wrap: wrap;
   min-height: 42px;
   align-items: center;
   gap: 8px;
@@ -104,11 +105,17 @@ const FilterActions = styled.div`
   justify-content: flex-end;
 `;
 
+const TableViewport = styled.div`
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+`;
+
 const Table = styled.div`
   display: flex;
   width: 100%;
+  min-width: 760px;
   flex-direction: column;
-  overflow: hidden;
 `;
 
 const TableRow = styled.div<{ $header?: boolean; $selected?: boolean }>`
@@ -175,6 +182,10 @@ const DetailGrid = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 
 const DetailCard = styled.section`
@@ -441,29 +452,31 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
           <Helper>일부 Node의 VM 목록을 확인할 수 없습니다. 표시된 결과는 확인이 끝난 Node 기준입니다.</Helper>
         )}
         {visibleRows.length > 0 ? (
-          <Table role="table" aria-label="전체 VM 목록">
-            <TableRow role="row" $header>
-              <HeaderCell role="columnheader">VM / 소유자</HeaderCell>
-              <HeaderCell role="columnheader">Node</HeaderCell>
-              <HeaderCell role="columnheader">상태</HeaderCell>
-              <HeaderCell role="columnheader">만료일</HeaderCell>
-              <HeaderCell role="columnheader">사용 목적</HeaderCell>
-              <HeaderCell role="columnheader">관리</HeaderCell>
-            </TableRow>
-            {visibleRows.map(row => (
-              <TableRow role="row" key={row.key} $selected={selectedRow?.key === row.key}>
-                <Cell role="cell"><RowSelect type="button" aria-label={`${row.name}, ${row.ownerEmail} 선택`} aria-pressed={selectedRow?.key === row.key} onClick={() => setSelectedKey(row.key)}>{row.name} · {row.resource?.owner_email === 'GSM Connect' ? '팀 GSM Connect' : row.ownerEmail}</RowSelect></Cell>
-                <Cell role="cell" $muted>{row.node ?? '—'}</Cell>
-                <Cell role="cell" title={row.status}><StatusBadge tone={getStatusTone(row.status)}>{row.status}</StatusBadge></Cell>
-                <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.expiresAt?.slice(0, 10) ?? <MissingValue title="현재 VM API 응답에 만료일이 없습니다">—</MissingValue>}</Cell>
-                <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.purpose ?? <MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue>}</Cell>
-                <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => {
-                  setSelectedKey(row.key);
-                  if (row.resource && onOpenDetails) onOpenDetails(row.name);
-                }}>상세 열기</Button></Cell>
+          <TableViewport>
+            <Table role="table" aria-label="전체 VM 목록">
+              <TableRow role="row" $header>
+                <HeaderCell role="columnheader">VM / 소유자</HeaderCell>
+                <HeaderCell role="columnheader">Node</HeaderCell>
+                <HeaderCell role="columnheader">상태</HeaderCell>
+                <HeaderCell role="columnheader">만료일</HeaderCell>
+                <HeaderCell role="columnheader">사용 목적</HeaderCell>
+                <HeaderCell role="columnheader">관리</HeaderCell>
               </TableRow>
-            ))}
-          </Table>
+              {visibleRows.map(row => (
+                <TableRow role="row" key={row.key} $selected={selectedRow?.key === row.key}>
+                  <Cell role="cell"><RowSelect type="button" aria-label={`${row.name}, ${row.ownerEmail} 선택`} aria-pressed={selectedRow?.key === row.key} onClick={() => setSelectedKey(row.key)}>{row.name} · {row.resource?.owner_email === 'GSM Connect' ? '팀 GSM Connect' : row.ownerEmail}</RowSelect></Cell>
+                  <Cell role="cell" $muted>{row.node ?? '—'}</Cell>
+                  <Cell role="cell" title={row.status}><StatusBadge tone={getStatusTone(row.status)}>{row.status}</StatusBadge></Cell>
+                  <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.expiresAt?.slice(0, 10) ?? <MissingValue title="현재 VM API 응답에 만료일이 없습니다">—</MissingValue>}</Cell>
+                  <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.purpose ?? <MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue>}</Cell>
+                  <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => {
+                    setSelectedKey(row.key);
+                    if (row.resource && onOpenDetails) onOpenDetails(row.name);
+                  }}>상세 열기</Button></Cell>
+                </TableRow>
+              ))}
+            </Table>
+          </TableViewport>
         ) : (
           <EmptyState>
             {nodeListsLoading ? 'Node별 VM 목록을 불러오는 중입니다.'
