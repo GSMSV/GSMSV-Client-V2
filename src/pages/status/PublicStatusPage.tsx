@@ -299,6 +299,8 @@ export default function PublicStatusPage() {
     let active = true;
     void import('./statusDemoData').then(data => {
       if (active) setDemoData(data);
+    }).catch(() => {
+      if (active) setHealth({ value: null, checkedAt: null, loading: false, error: true });
     });
     return () => { active = false; };
   }, [demoMode]);

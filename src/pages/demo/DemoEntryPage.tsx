@@ -63,7 +63,7 @@ export default function DemoEntryPage() {
       const { resumeDemoProfile } = await import('../../entities/profile');
       if (!startDemoSession(role) || !resumeDemoProfile()) return;
     } else if (!startDemoSession(role)) return;
-    if (role === 'user' && import.meta.env.DEV) {
+    if (role === 'user') {
       const [{ setDemoFirstVisit }, vm, serverless] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),

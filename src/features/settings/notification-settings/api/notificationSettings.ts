@@ -21,7 +21,10 @@ const demoSettingsKey = 'notificationSettings';
 async function readDemoNotificationSettings(): Promise<NotificationSettings> {
   const { getDemoProfile } = await import('../../../../entities/profile');
   const profile = getDemoProfile();
-  const savedItems = readDemoState<NotificationSettingItem[] | null>(demoSettingsKey, null);
+  const storedItems = readDemoState<unknown>(demoSettingsKey, null);
+  const savedItems = Array.isArray(storedItems) && storedItems.every(item =>
+    item && typeof item.email === 'boolean' && typeof item.discord === 'boolean' && typeof item.locked === 'boolean',
+  ) ? storedItems as NotificationSettingItem[] : null;
   const legacy = readDemoState<NotificationSettings | NotificationSettingItem[] | null>('notifications', null);
   const legacyItems = Array.isArray(legacy) ? legacy : legacy?.items;
   const recognizablePreferences = legacyItems?.length && legacyItems.every(item =>

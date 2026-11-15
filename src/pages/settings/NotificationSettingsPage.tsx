@@ -125,7 +125,7 @@ export default function NotificationSettingsPage() {
     setLogoutError(false);
     try {
       if (isDemoMode()) {
-        if (!signOutDemoProfile()) throw new Error('Demo profile could not be signed out');
+        signOutDemoProfile();
       } else await logout();
       clearSessionUser();
       void navigate('/login', { replace: true });

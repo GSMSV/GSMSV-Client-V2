@@ -82,7 +82,8 @@ function useServerlessStateRevision(functionId: string | undefined, demoMode: bo
         setResult({ id: functionId, error: false });
         refresh(setRevision);
       }).catch(() => {
-        if (active) setResult({ id: functionId, error: true });
+        // 이미 불러온 화면은 백그라운드 동기화 실패로 덮어쓰지 않는다.
+        if (active) setResult(current => current?.id === functionId && !current.error ? current : { id: functionId, error: true });
       });
     };
     const unsubscribe = subscribeDemoServerlessState(sync);
