@@ -12,7 +12,7 @@ import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
-import { isDemoMode } from '../../shared/demo';
+import { consumeDemoFailure, isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -223,6 +223,12 @@ const DialogCopy = styled.p`
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
 
+const DialogLine = styled.span`
+  display: block;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
 const DialogActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -251,7 +257,6 @@ export default function DatabaseCreatePage() {
   const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const invalidOwner = owner !== 'me' && !teamId;
   const listPath = teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases';
-  const demoMode = isDemoMode();
   const user = getSessionUser();
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
@@ -290,7 +295,9 @@ export default function DatabaseCreatePage() {
     }
     if (isDemoMode()) {
       let cancelled = false;
-      void Promise.all([import('../../entities/database/demo'), import('../../entities/team/demo')]).then(([demo, teams]) => {
+      setDatabases(current => ({ ...current, loading: true, error: false }));
+      setQuota(current => ({ ...current, loading: true, error: false }));
+      void simulateDemoRequest('database-new').then(() => Promise.all([import('../../entities/database/demo'), import('../../entities/team/demo')])).then(([demo, teams]) => {
         if (cancelled) return;
         setDatabases({ value: demo.listDemoDatabases(teamId ?? 'me'), loading: false, error: false });
         if (teamId) {
@@ -342,8 +349,8 @@ export default function DatabaseCreatePage() {
     ? team.loading || databases.loading || team.error || databases.error
     : quota.loading || databases.loading || quota.error || databases.error);
   const nameIsValid = name.trim().length >= 1 && name.trim().length <= 30;
-  const teamApproved = !teamId || team.value?.status === 'approved';
-  const canSubmit = useMemo(() => nameIsValid && !submitting && !needsQuotaCheck && teamApproved, [nameIsValid, needsQuotaCheck, submitting, teamApproved]);
+  // 승인 전 팀도 발급을 누를 수 있어야 '팀이 승인되면 발급할 수 있습니다' 안내가 열린다.
+  const canSubmit = useMemo(() => nameIsValid && !submitting && !needsQuotaCheck, [nameIsValid, needsQuotaCheck, submitting]);
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'database') navigate(listPath);
@@ -375,6 +382,7 @@ export default function DatabaseCreatePage() {
       }
       let createdGrn: string;
       try {
+        if (consumeDemoFailure('database-issue')) throw new Error('DEMO_DATABASE_CREATE_FAILED');
         const { createDemoDatabase, getDemoDatabaseCredentials, listDemoDatabases } = await import('../../entities/database/demo');
         if (teamId && listDemoDatabases(teamId).length >= 4) {
           setDialog('teamLimit');
@@ -447,14 +455,15 @@ export default function DatabaseCreatePage() {
     return options;
   }, [navigate, team.value, teamId, teams]);
 
-  const dialogContent = {
-    count: { title: 'Database를 더 발급할 수 없습니다', copy: `개인 Database 발급 한도 ${count ? `${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}에 도달했습니다. 사용하지 않는 Database를 정리한 뒤 다시 시도해 주세요.` },
+  const storageLimit = storage ? `${formatNumber(storage.limit)} GB` : '한도';
+  const dialogContent: Record<Exclude<DialogState, null>, { title: string; copy: string; lines?: string[] }> = {
+    count: { title: 'Database를 더 발급할 수 없습니다', copy: `내 Database ${count ? formatNumber(count.limit) : ''}개를 모두 쓰고 있습니다.${count ? ` 개인 ${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}`, lines: ['쓰지 않는 Database를 지우면 다시 발급할 수 있습니다.', '더 필요하면 팀을 만들어 팀 Database를 쓰세요.'] },
     teamLimit: { title: '팀 Database를 더 발급할 수 없습니다', copy: '현재 팀의 Database 발급 한도에 도달했습니다. 기존 Database를 확인한 뒤 다시 시도해 주세요.' },
-    storage: { title: '용량을 먼저 줄여 주세요', copy: teamId ? '팀에서 사용할 수 있는 공유 용량을 초과했거나 쓰기 잠금 상태입니다. 기존 Database의 용량을 확인한 뒤 다시 시도해 주세요.' : `공유 용량을 초과했거나 쓰기 잠금 상태입니다. 현재 사용량 ${storage ? `${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB` : '정보 확인 필요'}을 확인하고 기존 Database의 용량을 줄여 주세요.` },
-    postgres: { title: '지금은 MySQL만 발급할 수 있습니다', copy: 'PostgreSQL 발급은 아직 준비 중입니다. MySQL을 선택해 주세요.' },
+    storage: { title: '용량을 먼저 줄여 주세요', copy: '쓰기 금지 중인 Database가 있어서 새 Database를 발급할 수 없습니다.', lines: [...(!teamId && storage ? [`사용 용량 ${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB`] : []), `${teamId ? '용량을' : storageLimit} 아래로 줄이면 쓰기 금지가 풀리고 다시 발급할 수 있습니다.`] },
+    postgres: { title: 'PostgreSQL은 준비 중입니다', copy: '지금은 MySQL만 발급할 수 있습니다.' },
     permission: { title: 'Database를 발급할 권한이 없습니다', copy: '팀장 또는 DevOps만 팀 Database를 발급할 수 있습니다.' },
-    notApproved: { title: '팀 승인이 필요합니다', copy: '팀이 승인된 뒤 Database를 발급할 수 있습니다.' },
-    failure: { title: 'Database 발급 요청에 실패했습니다', copy: '잠시 후 다시 시도해 주세요. 문제가 계속되면 Database 목록에서 상태를 확인해 주세요.' },
+    notApproved: { title: '팀이 승인되면 발급할 수 있습니다', copy: '승인을 기다리는 팀은 Database를 만들 수 없습니다.', lines: ['팀원 초대와 팀장 넘기기는 지금도 할 수 있습니다.'] },
+    failure: { title: '발급하지 못했습니다', copy: '잠깐 문제가 생겨 만들던 Database와 계정을 정리했습니다.', lines: ['개수와 용량은 그대로입니다. 다시 시도해 주세요.'] },
     accepted: { title: '발급 요청을 보냈습니다', copy: 'Database가 준비되는 동안 목록에서 상태를 확인할 수 있습니다. 준비가 끝나면 상세 화면에서 접속 정보를 확인하세요.' },
   };
 
@@ -530,9 +539,9 @@ export default function DatabaseCreatePage() {
                 type="button"
                 $selected={engine === 'postgresql'}
                 aria-pressed={engine === 'postgresql'}
-                aria-disabled={!demoMode}
-                onClick={() => demoMode ? setEngine('postgresql') : setDialog('postgres')}
-              >PostgreSQL</EngineButton>
+                aria-disabled="true"
+                onClick={() => setDialog('postgres')}
+              >PostgreSQL · 준비 중</EngineButton>
             </EngineChoices>
           </FormSection>
           <FormSection>
@@ -558,10 +567,22 @@ export default function DatabaseCreatePage() {
         <Dialog role="dialog" aria-modal="true" aria-labelledby="database-dialog-title" aria-describedby="database-dialog-copy">
           <DialogTitle id="database-dialog-title">{dialogContent[dialog].title}</DialogTitle>
           <DialogCopy id="database-dialog-copy">{dialogContent[dialog].copy}</DialogCopy>
+          {dialogContent[dialog].lines?.map(line => <DialogLine key={line}>· {line}</DialogLine>)}
           <DialogActions>
-            {dialog === 'storage' && <Button variant="secondary" onClick={() => { setDialog(null); navigate(listPath); }}>Database 목록</Button>}
-            {dialog === 'accepted' && <Button variant="primary" onClick={() => navigate(listPath)}>Database 목록</Button>}
-            {dialog !== 'accepted' && <Button variant={dialog === 'failure' ? 'secondary' : 'primary'} onClick={() => setDialog(null)}>{dialog === 'failure' ? '닫기' : '확인'}</Button>}
+            {dialog === 'count' ? <>
+              <Button variant="secondary" icon={<Octicon name="database" size={16} />} onClick={() => { setDialog(null); navigate(listPath); }}>Database 목록</Button>
+              <Button variant="primary" icon={<Octicon name="people" size={16} />} onClick={() => { setDialog(null); navigate('/teams/new'); }}>팀 만들기</Button>
+            </> : dialog === 'storage' ? <>
+              <Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => { setDialog(null); navigate('/docs'); }}>용량 줄이는 방법</Button>
+              <Button variant="primary" icon={<Octicon name="database" size={16} />} onClick={() => { setDialog(null); navigate(listPath); }}>Database 목록</Button>
+            </> : dialog === 'notApproved' && teamId ? (
+              <Button variant="primary" icon={<Octicon name="gear" size={16} />} onClick={() => { setDialog(null); navigate(`/teams/${encodeURIComponent(teamId)}/settings`); }}>팀 설정</Button>
+            ) : dialog === 'failure' ? <>
+              <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => setDialog(null)}>닫기</Button>
+              <Button variant="primary" icon={<Octicon name="sync" size={16} />} onClick={() => { setDialog(null); void submit(); }}>다시 시도</Button>
+            </> : dialog === 'accepted' ? (
+              <Button variant="primary" onClick={() => navigate(listPath)}>Database 목록</Button>
+            ) : <Button variant="primary" onClick={() => setDialog(null)}>확인</Button>}
           </DialogActions>
         </Dialog>
       </DialogBackdrop>}

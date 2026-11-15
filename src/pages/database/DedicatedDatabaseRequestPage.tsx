@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
 import { getDemoTeam } from '../../entities/team/demo';
 import { getDemoTeamDedicatedDatabaseQuota } from '../../entities/database/demo';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
-import { Banner } from '../../shared/ui/feedback';
+import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Breadcrumb, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
@@ -47,7 +47,22 @@ export default function DedicatedDatabaseRequestPage() {
   const [reason, setReason] = useState('다른 학생의 부하와 성능을 떼어 놓아야 합니다');
   const [description, setDescription] = useState('실시간 매칭 기능 때문에 쿼리가 많습니다. 공유 서버의 다른 학생 Database에 영향을 주지 않도록 따로 쓰고 싶습니다.');
   const [notice, setNotice] = useState('');
-  const [requests, setRequests] = useState(() => getDemoDbRequests());
+  const [requests, setRequests] = useState<DedicatedDatabaseRequest[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [retryKey, setRetryKey] = useState(0);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadState('loading');
+    simulateDemoRequest('database-dedicated', controller.signal).then(() => {
+      if (controller.signal.aborted) return;
+      setRequests(getDemoDbRequests());
+      setLoadState('ready');
+    }).catch(() => {
+      if (!controller.signal.aborted) setLoadState('error');
+    });
+    return () => controller.abort();
+  }, [retryKey]);
   const isTeamRequest = (request: DedicatedDatabaseRequest) => request.teamId
     ? request.teamId === teamScopeId
     : request.team === teamName;
@@ -92,7 +107,11 @@ export default function DedicatedDatabaseRequestPage() {
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>{teamName} / Database / 전용형 신청</Breadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
+    {loadState === 'loading' ? <><LoadingCard height={574} /><Columns><LoadingCard height={338} /><LoadingCard height={338} /></Columns></>
+      : loadState === 'error' ? <><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><Columns><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /></Columns></>
+      : <>
     {notice && <Alert $tone="warning" role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
+    {!pending && latestRequest?.status === '거절' && <Banner tone="danger" icon={<Octicon name="x" size={20} />} title="전용형 신청이 거절됐습니다" description={`사유: ${latestRequest.rejectReason || '관리자가 사유를 남기지 않았습니다.'} 고쳐서 다시 신청해 주세요.`} action={<Button variant="secondary" icon={<Octicon name="pencil" size={16} />} onClick={() => { descriptionRef.current?.focus(); descriptionRef.current?.scrollIntoView({ block: 'center' }); }}>고쳐서 다시 신청</Button>} />}
     {pending && <Banner tone="primary" icon={<Octicon name="clock" size={20} />} title="전용형 신청을 보냈습니다" description="관리자가 확인하면 알림으로 알려 드립니다. 결과가 나오기 전에는 다시 신청할 수 없습니다." />}
     <Card>
       <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={Boolean(pending) || latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>{latestRequest?.status === '거절' ? '고쳐서 다시 신청' : '신청'}</Button></CardHeader>
@@ -100,7 +119,7 @@ export default function DedicatedDatabaseRequestPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
         <Field>엔진<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 8, background: '#403d45' }}>{(['MySQL', 'PostgreSQL'] as const).map((item) => <button key={item} type="button" onClick={() => setEngine(item)} style={{ minHeight: 34, border: 0, borderRadius: 6, background: engine === item ? '#203d30' : 'transparent', color: engine === item ? '#00ff90' : '#c0bbc6', cursor: 'pointer' }}>{item}</button>)}</div></Field>
         <Field>이유<Select value={reason} onChange={(event) => setReason(event.target.value)}><option>다른 학생의 부하와 성능을 떼어 놓아야 합니다</option><option>팀 서비스의 DB 관리자 권한이 필요합니다</option><option>운영 중인 서비스에 전용 서버가 필요합니다</option></Select></Field>
-        <Field>사용 목적<Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} /><Hint>꼭 적어야 합니다. 관리자가 승인할 때 참고합니다.</Hint></Field>
+        <Field>사용 목적<Textarea ref={descriptionRef} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} /><Hint>꼭 적어야 합니다. 관리자가 승인할 때 참고합니다.</Hint></Field>
         <Field>사양<Input value="vCPU 2 · RAM 4 GB · SSD 20 GB" disabled /><Hint>팀이 고를 수 없는 고정 사양입니다.</Hint></Field>
       </div>
     </Card>
@@ -120,11 +139,11 @@ export default function DedicatedDatabaseRequestPage() {
     {latestRequest && <Card>
       <CardHeader><SectionTitle>신청 결과</SectionTitle><Badge $tone={latestRequest.status === '승인 완료' ? 'success' : latestRequest.status === '거절' ? 'danger' : 'warning'}>{latestRequest.status}</Badge></CardHeader>
       <Muted>{latestRequest.engine} · {latestRequest.requestedAt}</Muted>
-      {latestRequest.status === '거절' && latestRequest.rejectReason && <Alert $tone="warning" role="status"><Octicon name="info" size={16} />거절 사유: {latestRequest.rejectReason}</Alert>}
       {latestRequest.status === '승인 완료' && latestRequest.databaseGrn && <>
         <Muted>{latestRequest.databaseName ?? '전용 Database'}가 생성되었습니다. 상세 화면에서 접속 정보를 확인할 수 있습니다.</Muted>
         <Button variant="secondary" icon={<Octicon name="database" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(latestRequest.databaseGrn!)}`)}>접속 정보 확인</Button>
       </>}
     </Card>}
+    </>}
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }

@@ -5,7 +5,7 @@ import { downloadDatabaseBackup, getDatabase, listDatabaseBackups, restoreDataba
 import type { DatabaseBackup, DatabaseDetail, RestoreDatabaseBackupResponse } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -127,6 +127,10 @@ export default function DatabaseBackupsPage() {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
     if (isDemoMode()) {
+      try { await simulateDemoRequest('database-backups', signal); } catch {
+        if (!signal.aborted) { setDetail({ value: null, loading: false, error: true }); setBackups({ value: null, loading: false, error: true }); }
+        return;
+      }
       const demo = await import('../../entities/database/demo');
       if (signal.aborted) return;
       const value = demo.getDemoDatabase(databaseGrn);
