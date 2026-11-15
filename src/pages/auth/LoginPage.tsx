@@ -9,11 +9,21 @@ import { Octicon } from '../../shared/ui/icons';
 const Screen = styled.main`
   position: relative;
   width: 100%;
-  min-width: 1200px;
+  min-width: 0;
   min-height: 1080px;
   height: max(100vh, 1080px);
   overflow: hidden;
   background: ${({ theme }) => theme.colors.canvas};
+
+  @media (max-width: 1024px) {
+    display: flex;
+    min-height: 100svh;
+    height: auto;
+    overflow: visible;
+    padding: 32px 24px;
+  }
+
+  @media (max-width: 480px) { padding: 24px 16px; }
 `;
 
 const IntroductionPanel = styled.aside`
@@ -22,6 +32,8 @@ const IntroductionPanel = styled.aside`
   width: 320px;
   min-height: 1080px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media (max-width: 1024px) { display: none; }
 `;
 
 const BrandMark = styled.img`
@@ -32,18 +44,31 @@ const BrandMark = styled.img`
   width: 800px;
   height: 800px;
   transform: translateY(-50%);
+
+  @media (max-width: 1024px) { display: none; }
 `;
 
 const Content = styled.section`
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: min(50%, calc(100% - 704px));
   display: flex;
   width: 480px;
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
   transform: translateY(-50%);
+
+  @media (max-width: 1024px) {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(680px, 100%);
+    margin: auto;
+    transform: none;
+  }
+
+  @media (max-width: 480px) { gap: ${({ theme }) => theme.space[24]}px; }
 `;
 
 const BrandTitle = styled.h1`
@@ -62,6 +87,8 @@ const Introduction = styled.div`
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
   color: ${({ theme }) => theme.colors.muted};
+
+  @media (max-width: 1024px) { width: 100%; }
 `;
 
 const Tagline = styled.p`
@@ -104,6 +131,8 @@ const BenefitsCard = styled.section`
   padding: ${({ theme }) => theme.space[24]}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 480px) { padding: 20px 16px; }
 `;
 
 const BenefitsTitle = styled.h2`
@@ -120,6 +149,8 @@ const BenefitRow = styled.div`
   width: 424px;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 1024px) { width: 100%; }
 `;
 
 const BenefitIcon = styled.span`
@@ -161,6 +192,8 @@ const Divider = styled.div`
   height: 1px;
   flex: 0 0 1px;
   background: ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 1024px) { width: 100%; }
 `;
 
 const Actions = styled.div`
@@ -169,6 +202,13 @@ const Actions = styled.div`
   align-items: center;
   justify-content: flex-end;
   gap: ${({ theme }) => theme.space[8]}px;
+
+  @media (max-width: 620px) {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  > button { min-width: 0; }
 `;
 
 export function LoginPage() {

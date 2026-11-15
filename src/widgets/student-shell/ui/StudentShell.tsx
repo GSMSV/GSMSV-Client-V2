@@ -5,11 +5,13 @@ import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
 import { StudentTopbar } from './StudentTopbar';
 import { getDemoProfile } from '../../../entities/profile';
 import { isDemoMode } from '../../../shared/demo';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { UnsavedChangesDialog } from '../../../shared/ui/feedback';
 
 const Layout = styled.div`
   display: flex;
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
 `;
@@ -24,6 +26,22 @@ const MainColumn = styled.div`
 const PageContent = styled.main`
   min-width: 0;
   flex: 1;
+`;
+
+const NavigationOverlay = styled.button`
+  display: none;
+
+  @media ${mobileNavigationMedia} {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 55%);
+  }
 `;
 
 export interface StudentShellProps {
@@ -78,6 +96,7 @@ export function StudentShell({
   const navigate = useNavigate();
   const [logoutPending, setLogoutPending] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const navigation = useResponsiveNavigation();
 
   const requestNavigation = (action: () => void) => {
     if (logoutPending) return;
@@ -90,6 +109,7 @@ export function StudentShell({
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
+      navigation.close();
       if (item === 'serverless') {
         void navigate('/serverless');
         return;
@@ -110,15 +130,21 @@ export function StudentShell({
   return (
     <Layout>
       <StudentSidebar
+        sidebarRef={navigation.sidebarRef}
+        open={navigation.open}
+        onKeyDown={navigation.onKeyDown}
         activeItem={activeItem}
         onNavigate={handleNavigate}
-        onCreateTeam={() => requestNavigation(onCreateTeam)}
-        onOpenStatus={() => requestNavigation(onOpenStatus)}
+        onCreateTeam={() => requestNavigation(() => { navigation.close(); onCreateTeam(); })}
+        onOpenStatus={() => requestNavigation(() => { navigation.close(); onOpenStatus(); })}
         disabledItems={disabledNavigationItems}
         actionsAtBottom={sidebarActionsAtBottom}
       />
-      <MainColumn>
+      <MainColumn inert={navigation.open}>
         <StudentTopbar
+          navigationOpen={navigation.open}
+          navigationTriggerRef={navigation.triggerRef}
+          onToggleNavigation={navigation.toggle}
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
@@ -137,6 +163,7 @@ export function StudentShell({
         />
         <PageContent>{children}</PageContent>
       </MainColumn>
+      {navigation.open && <NavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
       {pendingNavigation && (
         <UnsavedChangesDialog
           onLeave={() => {

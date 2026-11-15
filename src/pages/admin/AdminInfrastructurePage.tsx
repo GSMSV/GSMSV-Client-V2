@@ -8,18 +8,20 @@ import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../shared/ui/controls/useResponsiveNavigation';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon, type OcticonName } from '../../shared/ui/icons';
 import { NotificationPanel } from '../../widgets/notification-panel';
 
 const Layout = styled.div`
   display: flex;
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
 `;
 
-const Sidebar = styled.aside`
+const Sidebar = styled.aside<{ $open: boolean }>`
   position: sticky;
   top: 0;
   display: flex;
@@ -31,6 +33,23 @@ const Sidebar = styled.aside`
   gap: ${({ theme }) => theme.space[8]}px;
   padding: 28px ${({ theme }) => theme.space[16]}px ${({ theme }) => theme.space[16]}px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media ${mobileNavigationMedia} {
+    position: fixed;
+    z-index: 80;
+    inset: 0 auto 0 0;
+    width: min(280px, calc(100vw - 48px));
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+    transform: translateX(${({ $open }) => $open ? '0' : '-105%'});
+    visibility: ${({ $open }) => $open ? 'visible' : 'hidden'};
+    transition: transform 180ms ease, visibility 180ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 const Brand = styled.div`
@@ -112,6 +131,18 @@ const Header = styled.header`
   align-items: center;
   padding: ${({ theme }) => theme.space[16]}px 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 1200px) { padding-inline: 24px; }
+  @media ${mobileNavigationMedia} {
+    display: grid;
+    grid-template-areas: 'menu label identity' 'search search search';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 0;
+    flex-basis: auto;
+    padding: 12px 16px;
+  }
+  @media (max-width: 480px) { padding-inline: 12px; }
 `;
 
 const HeaderContent = styled.div`
@@ -130,6 +161,8 @@ const HeaderStart = styled.div`
   flex: 1 1 auto;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media ${mobileNavigationMedia} { display: contents; }
 `;
 
 const ConsoleLabel = styled.span`
@@ -139,6 +172,8 @@ const ConsoleLabel = styled.span`
   align-items: center;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+
+  @media ${mobileNavigationMedia} { grid-area: label; width: auto; flex: 0 1 auto; }
 `;
 
 const SearchAction = styled(Button)`
@@ -146,6 +181,9 @@ const SearchAction = styled(Button)`
   min-width: 180px;
   justify-content: flex-start;
   color: ${({ theme }) => theme.colors.text};
+
+  @media (max-width: 1200px) { width: auto; min-width: 0; flex: 1 1 240px; }
+  @media ${mobileNavigationMedia} { grid-area: search; width: 100%; min-height: 40px; }
 `;
 
 const HeaderActions = styled.div`
@@ -153,6 +191,47 @@ const HeaderActions = styled.div`
   flex: 0 0 auto;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media ${mobileNavigationMedia} { grid-area: identity; gap: 8px; }
+`;
+
+const MenuToggle = styled.button`
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+  @media ${mobileNavigationMedia} { display: inline-flex; grid-area: menu; }
+`;
+
+const MenuGlyph = styled.span`
+  display: flex;
+  width: 18px;
+  flex-direction: column;
+  gap: 4px;
+  i { display: block; width: 100%; height: 2px; border-radius: 2px; background: currentColor; }
+`;
+
+const NavigationOverlay = styled.button`
+  display: none;
+  @media ${mobileNavigationMedia} {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 55%);
+  }
 `;
 
 const MainColumn = styled.div`
@@ -174,6 +253,9 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 1200px) { padding: 32px; }
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -189,6 +271,12 @@ const Heading = styled.div`
   justify-content: space-between;
   gap: 24px;
   width: 100%;
+
+  @media (max-width: 720px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 const TitleGroup = styled.div`
@@ -212,7 +300,7 @@ const Subtitle = styled.p`
 
 const Summary = styled.section`
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 152px), 1fr));
   gap: 16px;
   width: 100%;
 `;
@@ -271,6 +359,10 @@ const NodeGrid = styled.div`
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 224px), 1fr));
+  }
 `;
 
 const NodeCard = styled.article`
@@ -336,6 +428,7 @@ const NodeVmRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
+  overflow-wrap: anywhere;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
@@ -352,7 +445,7 @@ const CardFooter = styled.div`
 
 const TwoColumns = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 16px;
   width: 100%;
 `;
@@ -478,6 +571,7 @@ function summarizeMemory(node: InfraNode) {
 export default function AdminInfrastructurePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const navigation = useResponsiveNavigation();
   const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
   const [demoSnapshot, setDemoSnapshot] = useState<DemoInfraSnapshot | null>(null);
@@ -620,7 +714,7 @@ export default function AdminInfrastructurePage() {
 
   return (
     <Layout>
-      <Sidebar aria-label="관리자 메뉴">
+      <Sidebar id="admin-navigation" ref={navigation.sidebarRef} $open={navigation.open} onKeyDown={navigation.onKeyDown} aria-label="관리자 메뉴">
         <Brand><Logo src="/assets/gsmsv-logo.svg" alt="" /><BrandText>GSM SV</BrandText></Brand>
         <WorkspaceLabel>관리자 워크스페이스</WorkspaceLabel>
         <Navigation aria-label="관리자 메뉴">
@@ -642,7 +736,7 @@ export default function AdminInfrastructurePage() {
                 disabled={!href}
                 aria-current={active ? 'page' : undefined}
                 title={!href ? '해당 화면은 아직 연결되지 않았습니다' : undefined}
-                onClick={href ? () => navigate(href) : undefined}
+                onClick={href ? () => { navigation.close(); void navigate(href); } : undefined}
               >{icon(item.icon)}{item.label}</NavigationItem>
             );
           })}
@@ -652,13 +746,22 @@ export default function AdminInfrastructurePage() {
           <NavigationItem type="button" disabled>{icon('gear')}설정</NavigationItem>
         </Navigation>
         <SidebarFooter>
-          <NavigationItem type="button" onClick={() => navigate('/status')}>{icon('pulse')}서비스 상태</NavigationItem>
+          <NavigationItem type="button" onClick={() => { navigation.close(); void navigate('/status'); }}>{icon('pulse')}서비스 상태</NavigationItem>
         </SidebarFooter>
       </Sidebar>
+      {navigation.open && <NavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
 
-      <MainColumn>
+      <MainColumn inert={navigation.open}>
         <Header>
           <HeaderContent>
+            <MenuToggle
+              ref={navigation.triggerRef}
+              type="button"
+              aria-label={navigation.open ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={navigation.open}
+              aria-controls="admin-navigation"
+              onClick={navigation.toggle}
+            ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></MenuToggle>
             <HeaderStart>
               <ConsoleLabel>관리자 콘솔</ConsoleLabel>
               <SearchAction variant="secondary" icon={icon('search')} disabled>이름 또는 GRN으로 검색</SearchAction>

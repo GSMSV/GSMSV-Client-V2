@@ -11,6 +11,19 @@ import { Octicon } from '../../../shared/ui/icons';
 
 const Profile = styled.div`
   position: relative;
+
+  @media (max-width: 480px) {
+    > button {
+      width: 40px;
+      padding-inline: 0;
+    }
+  }
+`;
+
+const ProfileName = styled.span`
+  @media (max-width: 480px) {
+    display: none;
+  }
 `;
 
 const Panel = styled.aside`
@@ -245,9 +258,10 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequ
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
+        aria-label={`${userName} 계정 메뉴`}
         onClick={toggle}
       >
-        {userName}
+        <ProfileName>{userName}</ProfileName>
       </Button>
       {open && (
         <Panel id={panelId} ref={panelRef} role="dialog" aria-labelledby={`${panelId}-title`} tabIndex={-1}>

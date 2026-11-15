@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
+import { mobileNavigationMedia } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { Octicon } from '../../../shared/ui/icons';
 import { ResourceSearchPanel } from '../../../features/global-resource-search';
 import { NotificationPanel } from '../../notification-panel';
@@ -17,6 +18,20 @@ const Header = styled.header<{ $showBottomBorder: boolean }>`
   justify-content: space-between;
   padding: ${({ theme }) => theme.space[16]}px 40px;
   border-bottom: ${({ theme, $showBottomBorder }) => $showBottomBorder ? `1px solid ${theme.colors.border}` : '0'};
+
+  @media (max-width: 1200px) {
+    padding-inline: 24px;
+  }
+
+  @media ${mobileNavigationMedia} {
+    min-height: 0;
+    flex-basis: auto;
+    padding: 12px 16px;
+  }
+
+  @media (max-width: 480px) {
+    padding-inline: 12px;
+  }
 `;
 
 const HeaderContent = styled.div`
@@ -27,6 +42,17 @@ const HeaderContent = styled.div`
   justify-content: space-between;
   gap: ${({ theme }) => theme.space[16]}px;
   margin: 0 auto;
+
+  @media (max-width: 1200px) {
+    gap: 12px;
+  }
+
+  @media ${mobileNavigationMedia} {
+    display: grid;
+    grid-template-areas: 'menu scope actions' 'search search search';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
 `;
 
 const HeaderStart = styled.div`
@@ -36,11 +62,58 @@ const HeaderStart = styled.div`
   flex: 1;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media ${mobileNavigationMedia} {
+    display: contents;
+  }
+`;
+
+const MenuToggle = styled.button`
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+
+  @media ${mobileNavigationMedia} {
+    display: inline-flex;
+    grid-area: menu;
+  }
+`;
+
+const MenuGlyph = styled.span`
+  display: flex;
+  width: 18px;
+  flex-direction: column;
+  gap: 4px;
+
+  i {
+    display: block;
+    width: 100%;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
 `;
 
 const ScopeSelector = styled.div`
   position: relative;
   flex: 0 0 220px;
+
+  @media ${mobileNavigationMedia} {
+    grid-area: scope;
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
+  }
 `;
 
 const ScopeTrigger = styled.button<{ $disabled: boolean }>`
@@ -61,6 +134,11 @@ const ScopeTrigger = styled.button<{ $disabled: boolean }>`
   text-align: left;
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
   opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
+
+  @media ${mobileNavigationMedia} {
+    width: 100%;
+    min-width: 0;
+  }
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
@@ -100,6 +178,10 @@ const ScopeMenu = styled.div`
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
   box-shadow: 0 8px 24px #0005;
+
+  @media ${mobileNavigationMedia} {
+    width: min(320px, calc(100vw - 80px));
+  }
 `;
 
 const ScopeOption = styled.button<{ $selected: boolean }>`
@@ -130,10 +212,29 @@ const OptionLabel = styled.span`
 
 const SearchAction = styled(Button)`
   width: 520px;
-  min-width: 180px;
+  min-width: 0;
+  flex: 0 1 520px;
   justify-content: flex-start;
   overflow: hidden;
   color: ${({ theme }) => theme.colors.text};
+
+  @media (max-width: 1200px) {
+    width: auto;
+    flex: 1 1 240px;
+  }
+
+  @media ${mobileNavigationMedia} {
+    grid-area: search;
+    width: 100%;
+    min-height: 40px;
+    flex: 1 1 auto;
+  }
+`;
+
+const SearchLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const RightActions = styled.div`
@@ -141,12 +242,28 @@ const RightActions = styled.div`
   flex: 0 0 auto;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 1200px) {
+    gap: 8px;
+  }
+
+  @media ${mobileNavigationMedia} {
+    grid-area: actions;
+  }
+
+  @media (max-width: 480px) {
+    gap: 0;
+  }
 `;
 
 const ActionLabel = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+
+  @media (max-width: 480px) {
+    display: none;
+  }
 `;
 
 const Count = styled.span`
@@ -154,6 +271,9 @@ const Count = styled.span`
 `;
 
 export interface StudentTopbarProps {
+  navigationOpen: boolean;
+  navigationTriggerRef: RefObject<HTMLButtonElement | null>;
+  onToggleNavigation: () => void;
   scopeLabel: string;
   teamScopeId?: string;
   userName: string;
@@ -172,6 +292,9 @@ export interface StudentTopbarProps {
 }
 
 export function StudentTopbar({
+  navigationOpen,
+  navigationTriggerRef,
+  onToggleNavigation,
   scopeLabel,
   teamScopeId,
   userName,
@@ -265,6 +388,16 @@ export function StudentTopbar({
   return (
     <Header $showBottomBorder={showBottomBorder}>
       <HeaderContent>
+        <MenuToggle
+          ref={navigationTriggerRef}
+          type="button"
+          aria-label={navigationOpen ? '메뉴 닫기' : '메뉴 열기'}
+          aria-expanded={navigationOpen}
+          aria-controls="student-navigation"
+          onClick={onToggleNavigation}
+        >
+          <MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph>
+        </MenuToggle>
         <HeaderStart>
           <ScopeSelector onBlur={onScopeBlur} onKeyDown={onScopeKeyDown}>
             <ScopeTrigger
@@ -330,7 +463,7 @@ export function StudentTopbar({
               setSearchOpen(value => !value);
             }}
           >
-            이름 또는 GRN으로 검색
+            <SearchLabel>이름 또는 GRN으로 검색</SearchLabel>
           </SearchAction>
         </HeaderStart>
         <RightActions>
@@ -340,13 +473,14 @@ export function StudentTopbar({
             icon={<Octicon name="bell" size={16} />}
             aria-expanded={notificationsOpen}
             aria-controls="notification-panel"
+            aria-label={`알림${unreadCount > 0 ? ` ${unreadCount}` : ''}`}
             onClick={() => {
               onOpenNotifications();
               setSearchOpen(false);
               setNotificationsOpen(open => !open);
             }}
           >
-            <ActionLabel>알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
+            <ActionLabel aria-hidden="true">알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
           </Button>
           <StudentProfile
             userName={userName}

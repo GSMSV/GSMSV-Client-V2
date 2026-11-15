@@ -1,22 +1,24 @@
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Navigate } from 'react-router';
 import styled from 'styled-components';
 import { isDemoMode } from '../../../shared/demo';
 import type { StudentNavigationKey } from '../../../widgets/student-shell';
 import { StudentShell } from '../../../widgets/student-shell';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { Octicon } from '../../../shared/ui/icons';
 import { getSessionUser } from '../../../entities/session';
 import { listDemoTeams } from '../../../entities/team/demo';
 
 const AdminLayout = styled.div`
   display: flex;
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
   color: ${({ theme }) => theme.colors.text};
 `;
-const AdminSidebar = styled.aside`
+const AdminSidebar = styled.aside<{ $open: boolean }>`
   position: sticky;
   top: 0;
   display: flex;
@@ -27,6 +29,22 @@ const AdminSidebar = styled.aside`
   gap: ${({ theme }) => theme.space[8]}px;
   padding: 28px 16px 16px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media ${mobileNavigationMedia} {
+    position: fixed;
+    z-index: 80;
+    inset: 0 auto 0 0;
+    width: min(280px, calc(100vw - 48px));
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+    transform: translateX(${({ $open }) => $open ? '0' : '-105%'});
+    visibility: ${({ $open }) => $open ? 'visible' : 'hidden'};
+    transition: transform 180ms ease, visibility 180ms;
+  }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 const Brand = styled.div`
   display: flex;
@@ -64,6 +82,8 @@ const AdminNavButton = styled.button<{ $active: boolean }>`
   font: 500 14px/20px ${({ theme }) => theme.typography.body.family}, sans-serif;
   text-align: left;
   cursor: pointer;
+
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 `;
 const AdminDivider = styled.div`
   height: 1px;
@@ -84,10 +104,22 @@ const AdminHeader = styled.header`
   gap: 24px;
   padding: 16px 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 1200px) { padding-inline: 24px; }
+  @media ${mobileNavigationMedia} {
+    display: grid;
+    grid-template-areas: 'menu label identity' 'search search search';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 0;
+    padding: 12px 16px;
+  }
+  @media (max-width: 480px) { padding-inline: 12px; }
 `;
 const AdminHeaderLabel = styled.span`
   color: ${({ theme }) => theme.colors.muted};
   font: 500 12px/18px ${({ theme }) => theme.typography.label.family}, sans-serif;
+  @media ${mobileNavigationMedia} { grid-area: label; }
 `;
 const AdminSearch = styled.div`
   display: flex;
@@ -100,16 +132,63 @@ const AdminSearch = styled.div`
   background: ${({ theme }) => theme.colors.field};
   color: ${({ theme }) => theme.colors.muted};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
+  @media ${mobileNavigationMedia} { grid-area: search; width: 100%; min-width: 0; }
 `;
 const AdminIdentity = styled.span`
   color: ${({ theme }) => theme.colors.text};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
+  @media ${mobileNavigationMedia} { grid-area: identity; }
+`;
+const AdminMenuToggle = styled.button`
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+  @media ${mobileNavigationMedia} { display: inline-flex; grid-area: menu; }
+`;
+const MenuGlyph = styled.span`
+  display: flex;
+  width: 18px;
+  flex-direction: column;
+  gap: 4px;
+  i { display: block; width: 100%; height: 2px; border-radius: 2px; background: currentColor; }
+`;
+const AdminNavigationOverlay = styled.button`
+  display: none;
+  @media ${mobileNavigationMedia} {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 55%);
+  }
+`;
+const AdminHeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space[16]}px;
+  @media ${mobileNavigationMedia} { grid-area: identity; gap: 4px; }
+  @media (max-width: 480px) { gap: 0; }
 `;
 const AdminContent = styled.main`
   width: 100%;
   max-width: 1300px;
   flex: 1;
   padding: 40px;
+  @media (max-width: 1200px) { padding: 32px; }
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 
 export const PageStack = styled.div`
@@ -283,6 +362,8 @@ export const Stat = styled.div`
 
 export function WorkflowLayout({ children, admin = false, activeAdminItem = '승인', activeStudentItem = 'none', scopeLabel = '내 Resources', teamScopeId }: { children: ReactNode; admin?: boolean; activeAdminItem?: string; activeStudentItem?: StudentNavigationKey; scopeLabel?: string; teamScopeId?: string }) {
   const navigate = useNavigate();
+  const navigation = useResponsiveNavigation();
+
   if (admin) {
     const primary = [
       ['인프라 현황', 'pulse', '/admin/infra'],
@@ -296,7 +377,37 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
       ['문의', 'comment-discussion', '/support/inquiries'],
       ['설정', 'gear', '/settings'],
     ] as const;
-    return <AdminLayout><AdminSidebar><Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand><Workspace>관리자 워크스페이스</Workspace><AdminNav>{primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => navigate(href)}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}<AdminDivider />{secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => navigate(href)}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}</AdminNav><div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div></AdminSidebar><AdminMain><AdminHeader><AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel><AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch><AdminIdentity>♙ 관리자</AdminIdentity></AdminHeader><AdminContent>{children}</AdminContent></AdminMain></AdminLayout>;
+    return (
+      <AdminLayout>
+        <AdminSidebar id="workflow-admin-navigation" ref={navigation.sidebarRef} $open={navigation.open} onKeyDown={navigation.onKeyDown} aria-label="관리자 메뉴">
+          <Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand>
+          <Workspace>관리자 워크스페이스</Workspace>
+          <AdminNav>
+            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            <AdminDivider />
+            {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+          </AdminNav>
+          <div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div>
+        </AdminSidebar>
+        {navigation.open && <AdminNavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
+        <AdminMain inert={navigation.open}>
+          <AdminHeader>
+            <AdminMenuToggle
+              ref={navigation.triggerRef}
+              type="button"
+              aria-label={navigation.open ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={navigation.open}
+              aria-controls="workflow-admin-navigation"
+              onClick={navigation.toggle}
+            ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></AdminMenuToggle>
+            <AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel>
+            <AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch>
+            <AdminHeaderActions><AdminIdentity>♙ 관리자</AdminIdentity></AdminHeaderActions>
+          </AdminHeader>
+          <AdminContent>{children}</AdminContent>
+        </AdminMain>
+      </AdminLayout>
+    );
   }
 
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
