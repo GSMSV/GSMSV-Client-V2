@@ -51,6 +51,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -96,6 +100,8 @@ const TabsAndActions = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const Tabs = styled.nav`
@@ -104,6 +110,13 @@ const Tabs = styled.nav`
   align-items: center;
   gap: 8px;
   overflow: hidden;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -142,6 +155,8 @@ const Surface = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const SurfaceTitle = styled.h2`
@@ -154,17 +169,23 @@ const Table = styled.div`
   display: flex;
   width: 100%;
   flex-direction: column;
-  overflow: hidden;
+`;
+
+const TableViewport = styled.div`
+  width: 100%;
+  min-width: 0;
+  overflow: auto;
+  max-height: 262px;
+  scrollbar-width: thin;
 `;
 
 const RunRows = styled.div`
-  overflow: auto;
-  max-height: 220px;
   scrollbar-color: ${({ theme }) => `${theme.colors.faint} ${theme.colors.sidebar}`};
 `;
 
 const Row = styled.div`
   display: grid;
+  min-width: 650px;
   grid-template-columns: 219px 300px 200px 180px minmax(120px, 1fr);
   align-items: stretch;
   width: 100%;
@@ -228,6 +249,16 @@ const EmptyRow = styled.div`
 
 const PaginationRow = styled.div`
   padding-top: 0;
+
+  @media (max-width: 600px) {
+    > nav {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    > nav > span { flex-basis: 100%; }
+    > nav > div { max-width: 100%; overflow-x: auto; }
+  }
 `;
 
 const EmptyOutput = styled.p`
@@ -369,38 +400,40 @@ export function ServerlessLogsPage({
       <Surface>
         <SurfaceTitle>최근 실행</SurfaceTitle>
         <Table role="table" aria-label="최근 함수 실행">
-          <TableHeader role="row">
-            <HeaderCell role="columnheader">결과</HeaderCell>
-            <HeaderCell role="columnheader">실행 시각</HeaderCell>
-            <HeaderCell role="columnheader">실행 경로</HeaderCell>
-            <HeaderCell role="columnheader">걸린 시간</HeaderCell>
-            <HeaderCell role="columnheader">상세</HeaderCell>
-          </TableHeader>
-          <RunRows role="rowgroup">
-          {runs.length === 0 ? (
-            <EmptyRow role="row">{emptyMessage}</EmptyRow>
-          ) : runs.map(run => {
-            const selected = currentSelection === run.id;
-            const tone = run.result === 'success' ? 'success' : run.result === 'timeout' || run.result === 'failure' ? 'failure' : 'neutral';
-            return (
-              <DataRow
-                key={run.id}
-                type="button"
-                role="row"
-                $selected={selected}
-                aria-selected={selected}
-                aria-label={`${getResultLabel(run.result)} ${run.startedAt} ${run.path}`}
-                onClick={() => selectRun(run.id)}
-              >
-                <Cell role="cell" $tone={tone}>{getResultLabel(run.result)}</Cell>
-                <Cell role="cell">{run.startedAt}</Cell>
-                <Cell role="cell">{run.path}</Cell>
-                <Cell role="cell">{run.duration}</Cell>
-                <Cell role="cell">{selected ? '접기' : '펼치기'}</Cell>
-              </DataRow>
-            );
-          })}
-          </RunRows>
+          <TableViewport>
+            <TableHeader role="row">
+              <HeaderCell role="columnheader">결과</HeaderCell>
+              <HeaderCell role="columnheader">실행 시각</HeaderCell>
+              <HeaderCell role="columnheader">실행 경로</HeaderCell>
+              <HeaderCell role="columnheader">걸린 시간</HeaderCell>
+              <HeaderCell role="columnheader">상세</HeaderCell>
+            </TableHeader>
+            <RunRows role="rowgroup">
+              {runs.length === 0 ? (
+                <EmptyRow role="row">{emptyMessage}</EmptyRow>
+              ) : runs.map(run => {
+                const selected = currentSelection === run.id;
+                const tone = run.result === 'success' ? 'success' : run.result === 'timeout' || run.result === 'failure' ? 'failure' : 'neutral';
+                return (
+                  <DataRow
+                    key={run.id}
+                    type="button"
+                    role="row"
+                    $selected={selected}
+                    aria-selected={selected}
+                    aria-label={`${getResultLabel(run.result)} ${run.startedAt} ${run.path}`}
+                    onClick={() => selectRun(run.id)}
+                  >
+                    <Cell role="cell" $tone={tone}>{getResultLabel(run.result)}</Cell>
+                    <Cell role="cell">{run.startedAt}</Cell>
+                    <Cell role="cell">{run.path}</Cell>
+                    <Cell role="cell">{run.duration}</Cell>
+                    <Cell role="cell">{selected ? '접기' : '펼치기'}</Cell>
+                  </DataRow>
+                );
+              })}
+            </RunRows>
+          </TableViewport>
         </Table>
         {pageCount > 1 && onPageChange && (
           <PaginationRow>

@@ -45,6 +45,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -93,12 +97,22 @@ const TabsRow = styled.nav`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const Tabs = styled.div`
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -127,6 +141,8 @@ const Surface = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const SurfaceHeading = styled.header`
@@ -135,6 +151,8 @@ const SurfaceHeading = styled.header`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 520px) { flex-wrap: wrap; }
 `;
 
 const SurfaceTitle = styled.h2`
@@ -200,11 +218,13 @@ const Table = styled.div`
   display: flex;
   width: 100%;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: thin;
 `;
 
 const TableRow = styled.div`
   display: grid;
+  min-width: 560px;
   min-height: 66px;
   grid-template-columns: 14% 40% 18% 28%;
   align-items: center;

@@ -42,6 +42,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -88,6 +92,8 @@ const TabsRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const Tabs = styled.nav`
@@ -95,6 +101,13 @@ const Tabs = styled.nav`
   min-width: 0;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -126,6 +139,8 @@ const Panel = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const PanelHeading = styled.div`
@@ -134,6 +149,8 @@ const PanelHeading = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 520px) { flex-wrap: wrap; }
 `;
 
 const PanelTitle = styled.h2`
@@ -195,6 +212,8 @@ const VariableRow = styled.div`
   align-items: center;
   gap: 16px;
   padding: 8px 0;
+
+  @media (max-width: 520px) { flex-wrap: wrap; }
 `;
 
 const VariableIcon = styled.span`
@@ -236,6 +255,8 @@ const RowActions = styled.div`
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 520px) { width: 100%; justify-content: flex-end; }
 `;
 
 const FieldGroup = styled.label`
