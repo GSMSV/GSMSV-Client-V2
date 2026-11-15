@@ -1,8 +1,8 @@
 # Figma Coverage Ledger
 
-Date: 2026-11-15 · Figma file `d3n2l7KHBLxonJS5d7djL7` ("SV"), read-only via `get_metadata` (one low-res screenshot to confirm hover-frame structure) · Code: `origin/develop` @ `cc72e2e` (includes merged PR #142 Apps), plus open PR #143 (`codex/mock-vm-cli-flows`, VM/CLI) and PR #144 (`codex/mock-cross-cutting-flows`, account/docs/status/serverless/teams/shell).
+Date: 2026-11-16 · Figma file `d3n2l7KHBLxonJS5d7djL7` ("SV"), read-only via the Figma MCP · Code: `origin/develop` @ `4bc169e` (PRs #140–#162 merged). The node inventory is mapped, but Figma screenshots were checked only for selected frames and the integrated production app has not had a browser walkthrough.
 
-Companion to `2026-11-15-production-mock-flows-design.md`. Judgements come from reading code (route tables, `navigate()`/`Link` targets, `onClick` handlers, dialog open state, demo store seeds). The app was not run.
+Companion to `2026-11-15-production-mock-flows-design.md`. Judgements come from Figma metadata and code inspection (route tables, `navigate()`/`Link` targets, `onClick` handlers, dialog open state, demo store seeds). The integrated app was not run in a browser.
 
 ## Scope and inventory
 
@@ -26,31 +26,30 @@ The States & dialogs page holds the same dialogs as component sheets. Most panel
 
 ## Status legend
 
-- **OK**: implemented and reachable in mock mode (`?demo=1`) through the specified action.
+- **OK**: implemented and reachable through the specified UI action or an explicitly documented mock-state trigger.
 - **PARTIAL**: implemented, but differs in form (inline instead of dialog, wrong copy or limit) or is only partly reachable.
 - **WRONG-DESTINATION**: the control exists but goes somewhere else; the row says where.
 - **DEAD-END**: the control renders but does nothing, or is disabled.
 - **MISSING**: no code renders the state or control.
-- **UNREACHABLE**: code exists, but nothing in mock mode triggers it (only a real-API failure, an unseeded data condition, or a direct URL).
-- **PENDING-PR #143 / #144**: missing or wrong on develop, but clearly fixed by that open PR.
-- `OK†` (Teams): OK on the DEV server only; a production `?demo=1` build needs PR #143/#144.
+- **UNREACHABLE**: code exists, but the state has no in-product action or mock trigger; direct URL inspection alone does not count as reachable.
+- URL and query-based mock triggers are listed in Notes; they help inspect exceptional states but are not discoverable controls for ordinary users.
 
 ## Cross-cutting findings
 
-1. **The DEV gate breaks production mock mode on develop.** 68 `import.meta.env.DEV` checks remain in `src/`. Home, shell, search, account settings, team pages, the Serverless list, status and network still fall back to real-API paths in a production `?demo=1` build. PR #143 and PR #144 remove most of these checks. Rows written while those PRs are open were judged in mock mode as the DEV server runs it, and are flagged.
-2. **Loading and error frames.** 108 Flows frames are `로딩` or `오류` states (and 62 are `호버` frames). Mock mode has no demo delay and no failure toggle. So loading states only flash during lazy-chunk Suspense (or are missing), and most error states are UNREACHABLE (Database, Apps, Admin 26/28) or MISSING (VM, Snapshot/Settings, Inquiry, Teams 24, Admin 27/29/30/31, Apps service tabs).
-3. **No catch-all route.** `src/app/router.tsx` has no `*` route and no `errorElement`, so the shared "찾을 수 없어요" state (S03) is MISSING.
-4. **The admin workflow sidebar has wrong targets.** `src/pages/demo-workflows/ui/WorkflowLayout.tsx:383-385` sends 승인 to `/admin/database-approvals` (screen 49) instead of `/admin/team-approvals` (27), and 전체 VM to `/admin/vms/demo-vm-1` (31) instead of `/admin/vms` (28). This affects screens 27/29/30/31.
-5. **Hidden triggers.** Several states can only be opened through URL parameters or secret inputs (`/login?error=…`, `/settings?github=…|discord=…`, `?status=` (PR #144), SQL comments `-- demo:timeout` / `-- demo:row-cap`). They are counted OK or PARTIAL as noted, but no visible UI control opens them.
+1. **Production mock mode is available.** `?demo=1` enables mock routes and stores in production. Two `import.meta.env.DEV` checks remain: the router also registers mock routes in development, and the session gate preserves development behavior. The former 68-check blocker listed by the initial audit is resolved by PRs #140, #143, and #144.
+2. **Loading and error frames are wired to mock behavior.** The 108 loading/error Flow frames use `simulateDemoRequest` delays and documented `?demoError=...` triggers where applicable. There are 62 hover frames. Some states still require a query trigger or a domain-specific seed/action; see each row and the gaps below.
+3. **Shared not-found handling is implemented** by the `*` route and root `errorElement` in PR #147.
+4. **Admin workflow navigation targets are corrected** in PR #148: approvals open `/admin/team-approvals`, all VMs open `/admin/vms`.
+5. **Some exceptional states require QA-only triggers.** Examples include `/login?error=…`, `/settings?github=…|discord=…`, `?status=…`, `?demoServerless=…`, and SQL comments such as `-- demo:timeout` / `-- demo:row-cap`. These triggers are documented for inspection; they do not add new design controls.
 
 ## Totals
 
-Recounted after PRs #145–#151 from the status column of every ledger row (Product, States panel and Flows rows together).
+Recounted against all 695 mapped rows on `origin/develop` @ `4bc169e`, after PRs #140–#162. The two generic Flows text nodes are N/A. The same expired OAuth dialog appears as two separately mapped rows (Auth flow 01-05 and VM panel 52:2689); both are UNREACHABLE in mock mode because no in-product mock flow triggers them.
 
 | Domain | Rows | OK | Not OK |
 |---|---|---|---|
-| Auth/Home | 38 | 36 | 0 (2 orphan text nodes, N/A) |
-| VM (A+B) | 158 | 158 | 0 |
+| Auth/Home | 38 | 35 | 1 UNREACHABLE, 2 orphan text nodes (N/A) |
+| VM (A+B) | 158 | 157 | 1 UNREACHABLE |
 | Serverless | 90 | 90 | 0 |
 | Database (incl. 49) | 82 | 80 | 2 PARTIAL (48, 48-05) |
 | Apps | 115 | 115 | 0 |
@@ -59,7 +58,7 @@ Recounted after PRs #145–#151 from the status column of every ledger row (Prod
 | Docs/Support/Status/CLI | 47 | 47 | 0 |
 | Account/Settings | 49 | 49 | 0 |
 | Shell/navigation | 11 | 11 | 0 |
-| **Total** | **695** | **691** | **2 PARTIAL + 2 N/A** |
+| **Total** | **695** | **689** | **2 UNREACHABLE + 2 PARTIAL + 2 N/A** |
 
 The two PARTIAL rows are a design conflict, not missing work: Figma 49 needs GSM Connect's dedicated request seeded as 검토 중, so screen 48 opens on its submitted state (48-01) instead of the empty form until an admin rejects the request.
 
@@ -67,14 +66,14 @@ The two PARTIAL rows are a design conflict, not missing work: Figma 49 needs GSM
 
 ### Auth/Home
 
-Mock mode is judged under the dev server (`import.meta.env.DEV`) with `?demo=1`. On develop, the home demo branch (`PersonalResourcesPage.tsx:501`), the shell demo flags (`StudentShell.tsx:100`, `StudentProfile.tsx:156,239`) and the demo account page (`AccountSettingsPage.tsx:14,312`) also need `import.meta.env.DEV`. That means a production build with `?demo=1` shows the non-demo pages. PR #143 removes the DEV check from home and PR #144 removes it from shell and settings.
+Production mock mode is enabled by `?demo=1` (PR #140). PRs #143–#144 removed the home, shell, profile, and account-settings development-only mock gates.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
 | 01 | DataGSM 로그인 | 407:36883 | 1440x1080 | `/login` | `src/pages/auth/LoginPage.tsx` | OK | Intro panel, benefits card, 서비스 상태 + DataGSM으로 계속하기 match |
 | 02 | 역할 선택 | 407:36910 | 1440x1080 | `/__demo/role-selection` | `src/pages/auth/RoleSelectionDemoPage.tsx` | OK | Demo-only route; the real login never shows role selection |
-| 03 | 홈 · 내 Resources | 48:16 | 1440x1658 | `/` | `src/pages/home/PersonalResourcesPage.tsx` | OK | Demo branch is DEV-only on develop (PR #143 removes the gate) |
+| 03 | 홈 · 내 Resources | 48:16 | 1440x1658 | `/` | `src/pages/home/PersonalResourcesPage.tsx` | OK | `?demo=1` uses local mock resources in production (#143) |
 | 04 | 홈 · 첫 방문 | 52:174 | 1440x1080 | `/` (firstVisit branch) | `src/pages/home/PersonalResourcesPage.tsx` | OK | firstVisit is derived from having no personal VMs or functions (#143) |
 
 #### States & dialogs
@@ -93,7 +92,7 @@ Mock mode is judged under the dev server (`import.meta.env.DEV`) with `?demo=1`.
 | 01-02 · 재학생만 이용할 수 있어요 | 405:31240 | 01 + not-enrolled dialog | `?error=NOT_ENROLLED` | OK |
 | 01-03 · 현재 사용할 수 없는 계정이에요 | 405:31282 | 01 + inactive dialog | `?error=ACCOUNT_INACTIVE` | OK |
 | 01-04 · DataGSM이 응답하지 않아요 | 405:31324 | 01 + unavailable dialog | `?error=UPSTREAM_UNAVAILABLE` | OK |
-| 01-05 · 인증 시간이 지났어요 | 405:31366 | 01 + expired dialog | `?error=GONE` / `OAUTH_STATE_INVALID` → kind `expired` | OK |
+| 01-05 · 인증 시간이 지났어요 | 405:31366 | 01 + expired dialog | `?error=GONE` / `OAUTH_STATE_INVALID` → kind `expired` | UNREACHABLE | Direct query can inspect it, but mock login has no in-product OAuth expiry path |
 | 01-06 · 호버 · DataGSM으로 계속하기 | 405:31408 | click → 02 역할 선택 | In demo, `resumeDemoProfile()` then navigate to `/__demo/role-selection`, or to a whitelisted `returnTo` (`LoginPage.tsx:252`) | OK |
 | 02 · 역할 선택 | 405:31450 | entry: 01 primary → 02 | As above | OK |
 | 02-01 · 호버 · 관리자로 선택 | 407:31508 | select 관리자 → admin console | Card selects the role; 계속 calls `selectDemoRole('admin')` → `/admin/infra` | OK |
@@ -144,7 +143,7 @@ Basis: re-verified on `codex/figma-vm` (develop 781dc44 + this PR) in a producti
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
 | VM 생성 · 입력 확인 (52:2583) | 입력 내용을 확인해 주세요 | 52:2638 | VmCreatePage `validation` dialog with VM 이름 / 사용 목적 fields and per-field errors | /vms/new/details: clear 사용 목적 (or type "-bad") → "다음: 확인" | OK | |
-| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (src/pages/auth/LoginPage.tsx) | /login?error=OAUTH_STATE_INVALID | OK | Reachable directly at `/login?error=OAUTH_STATE_INVALID` (same dialog the real OAuth state-expiry redirect opens); no mock OAuth round-trip exists to trigger it naturally |
+| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (src/pages/auth/LoginPage.tsx) | /login?error=OAUTH_STATE_INVALID | UNREACHABLE | Direct query can inspect the dialog, but mock mode has no in-product action or OAuth round-trip that triggers it naturally |
 | 전원·VM 삭제 (52:4019) | VM을 강제로 정지할까요? | 52:4023 | VmOverviewPage powerDialog='force-confirm' | /vms/portfolio-api → "강제 정지" | OK | |
 | 전원·VM 삭제 (52:4019) | 종료 요청 후 응답을 기다리고 있어요 | 52:4049 | powerDialog='graceful-progress' (2.2 s) | "정상 종료" | OK | |
 | 전원·VM 삭제 (52:4019) | 영구 삭제 typed confirm | 52:4084 | VmSettingsPage → DeleteConfirmDialog | /vms/:id/settings → "VM 삭제" | OK | |
@@ -229,7 +228,7 @@ Basis: re-verified on `codex/figma-vm` (develop 781dc44 + this PR) in a producti
 | 38-04 · 호버 · 팀 VM 생성 요청 | 241:32018 | "팀 VM 생성 요청" → team VM list with queued VM | Saves the request, navigates to /teams/:id/vms | OK |
 
 #### Counts
-Product: 9 total (OK 9). States panels: 24 total (OK 23 / UNREACHABLE 1 — 52:2689, Auth domain; 104:1851 is filed under Teams and is now also opened from the team-quota dialog). Flows: 56 total (OK 56).
+Product: 9 total (OK 9). States panels: 24 total (OK 23 / UNREACHABLE 1 — 52:2689, mirrored by Auth flow 01-05; 104:1851 is filed under Teams and is now also opened from the team-quota dialog). Flows: 56 total (OK 56).
 
 ### VM (part B: Network, Snapshot, Settings)
 
@@ -317,7 +316,7 @@ Basis: re-verified on `codex/figma-vm`. PR #143 removed the DEV guard from `netw
 | 12-13 · 호버 · VM 삭제 | 226:27293 | Click "VM 삭제" → 12-09 | Opens the delete dialog | OK |
 
 #### Counts
-Product: 3 total (OK 3). States panels: 25 total (OK 25). Flows: 41 total (OK 41).
+Product: 3 total (OK 3). States panels: 25 total (OK 24 / UNREACHABLE 1). Flows: 41 total (OK 41).
 
 ### Serverless
 
@@ -533,11 +532,11 @@ Mock data: `src/entities/database/model/demoDatabase.ts`. Personal scope seeds o
 | 49-03 · 호버 · 승인 | 693:53944 | click 승인 → approved, DB created | approve() creates dedicated DB, notification, success notice, filter=done | OK |
 
 #### Counts
-Product: 8 total (OK 7 / PARTIAL 1); States panels: 21 total (OK 21); Flows: 53 total (OK 50 / PARTIAL 1, MISSING 2 owned by Admin: 49-01, 49-02).
+Product: 8 total (OK 7 / PARTIAL 1); States panels: 21 total (OK 21); Flows: 53 total (OK 52 / PARTIAL 1). The two Admin loading/error states for screen 49 were added in PR #152.
 
 ### Apps
 
-Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode the list/cards send users to the demo routes in `src/pages/apps/demoRoutes.tsx`. The real `/apps/:appGrn` and `/apps/:appGrn/settings` pages redirect to `/apps/:id/demo` and `/apps/:id/demo-settings` (`AppOverviewPage.tsx:317`, `AppSettingsPage.tsx:316`). Seed data is in `src/entities/app/model/demoAppState.ts`:
+Paths are relative to the repository root at `origin/develop` @ `4bc169e`. In mock mode the list/cards send users to the demo routes in `src/pages/apps/demoRoutes.tsx`. The real `/apps/:appGrn` and `/apps/:appGrn/settings` pages redirect to `/apps/:id/demo` and `/apps/:id/demo-settings` (`AppOverviewPage.tsx`, `AppSettingsPage.tsx`). Seed data is in `src/entities/app/model/demoAppState.ts`:
 - personal app: `demo-portfolio-web` (web and nightly-report services)
 - team `demo-team` apps: `demo-team-portal` (web stopped after 11 restarts; the cron service has an expired shell), `demo-expired-app` and `demo-read-only-app`
 - `demo-team` starts as **pending**
@@ -565,7 +564,7 @@ Paths are relative to `dev/` (develop cc72e2e, includes PR #142). In mock mode t
 | 50 Apps 만들기·배포 (664:2956) | 앱을 더 만들 수 없어요 | 664:3461 | `AppsListPage` quotaOpen dialog (:379); also the `quota` dialog in `AppCreateSourcePage` and `AppCreateServicePage` | Create 1 personal app (seed has 1 of 2), then click 새 앱 on /apps | OK | Copy matches ("내 앱 2개를 모두 쓰고 있습니다") |
 | 664:2956 | 메모리 할당량이 모자라요 | 664:3487 | `AppCreateServicePage` dialog='memory' (:414) | Team scope only: admin approves demo-team, then /teams/demo-team/apps → 새 앱 → 512 MB → 앱 만들기 (free memory is 256 MB) | OK | Can't happen in personal scope: the quota check fires first, and the slider max (1 GB) is below the 1280 MB free |
 | 664:2956 | 팀이 승인되면 앱을 만들 수 있어요 | 664:3516 | `AppCreateServicePage` dialog='team-pending' (:288) | /teams/demo-team/apps (pending) → 새 앱 → 다음: 서비스 | OK | |
-| 664:2956 | GitHub 계정을 먼저 연결해 주세요 | 664:3569 | `AppCreateSourcePage` dialog='github-disconnected' (:332) | Unlink GitHub in /settings (demo account page), then /apps/new → 다음 | OK | The demo account page is loaded only when `import.meta.env.DEV` (`AccountSettingsPage.tsx:14`) |
+| 664:2956 | GitHub 계정을 먼저 연결해 주세요 | 664:3569 | `AppCreateSourcePage` dialog='github-disconnected' (:332) | Unlink GitHub in /settings (demo account page), then /apps/new → 다음 | OK | PR #144 enables the demo account page in production mock mode |
 | 664:2956 | 저장소에 접근할 수 없어요 | 664:3595 | `AppCreateSourcePage` dialog='repository-inaccessible' (:333) | /apps/new → pick repo gsm-jimin/study-log (not installed) → 다음 | OK | |
 | 664:2956 | 앱을 찾을 수 없어요 | 664:3621 | not-found card in `DemoAppOverviewPage` (:450), `DemoServicePage` (:550) | Open /apps/unknown/demo or a deleted app | OK | |
 | 664:2956 | 빌드에 실패했어요 | 664:3679 | Deployments banner via `deploymentFailureCopy` (`features/apps/demoServiceOperations.ts:57`) | portfolio-web › web › 배포 → click row 7c6b5a4 (실패) | OK | Can also be produced with a start command of `exit 1` + 재배포 |
@@ -979,7 +978,7 @@ Product: 0; States panels: 11 (OK 11); Flows: 0 (covered under Auth/Home). Updat
 
 ## Gaps
 
-Every non-OK item, grouped by domain, with the file(s) that would need to change. `PENDING-PR #143/#144` items are listed for completeness; they need no new work if those PRs merge as-is.
+Remaining non-OK items and verification caveats, grouped by domain. PRs #140–#162 are already merged.
 
 ### Auth/Home
 
@@ -992,7 +991,7 @@ All gaps fixed in `codex/figma-auth-shell-docs` (re-verified after #143/#144):
 
 ### VM (part A: create, overview, monitoring, team VM)
 
-- `52:2689` 인증 시간이 지났어요 — UNREACHABLE (left): rendered by `src/pages/auth/LoginPage.tsx` only after the real OAuth state-expiry redirect (`/login?error=OAUTH_STATE_INVALID`). Auth domain file, not changed here.
+- `405:31366` Auth flow 01-05 and `52:2689` VM state panel both depict the expired OAuth dialog. The query renders it for QA, but the mock product has no in-product OAuth expiry path; both rows are UNREACHABLE until a realistic trigger exists.
 - All other part A gaps are fixed in `codex/figma-vm` (create-failure, validation dialog, quota/pool/permission dialogs, team extension states, deleted team VM lookup, loading/error frames). See the section above.
 
 ### VM (part B: Network, Snapshot, Settings)
@@ -1009,7 +1008,6 @@ All Serverless gaps were closed on `codex/figma-serverless`; see the Serverless 
 ### Database
 
 - `608:7781` 48 전용형 신청 / `693:53628` 48-05 — PARTIAL (kept on purpose): Figma 49 needs the seeded GSM Connect request in 검토 중, and 48 reads the same request store, so the first visit to 48 shows 48-01 (신청 disabled). After the admin rejects, the form is editable again and "고쳐서 다시 신청" submits. Files: `src/entities/demo-workflows/model/demoData.ts`
-- `741:60870` 49-01, `747:68333` 49-02 — MISSING, owned by the Admin domain (`src/pages/admin/AdminDatabaseApprovalsDemoPage.tsx`).
 - All other Database gaps fixed (codex/figma-database).
 
 ### Apps
