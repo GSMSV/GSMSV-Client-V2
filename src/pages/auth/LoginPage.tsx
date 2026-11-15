@@ -219,7 +219,15 @@ export function LoginPage() {
   async function login() {
     if (import.meta.env.DEV && isDemoMode()) {
       const { resumeDemoProfile } = await import('../../entities/profile');
-      if (resumeDemoProfile()) void navigate('/__demo/role-selection', { replace: true });
+      if (resumeDemoProfile()) {
+        const returnTo = getCliReturnPath(searchParams.get('returnTo'));
+        if (returnTo) {
+          const { selectDemoRole } = await import('../../features/auth/select-demo-role');
+          if (selectDemoRole('user')) void navigate(returnTo, { replace: true });
+        } else {
+          void navigate('/__demo/role-selection', { replace: true });
+        }
+      }
       return;
     }
     startDataGsmLogin();
@@ -277,6 +285,22 @@ export function LoginPage() {
       {errorKind && <LoginErrorDialog kind={errorKind} onClose={() => window.location.assign('/login')} onRetry={() => void login()} />}
     </Screen>
   );
+}
+
+function getCliReturnPath(value: string | null): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+  try {
+    const target = new URL(value, window.location.origin);
+    if (target.origin !== window.location.origin) return null;
+    if (target.pathname === '/cli') return '/cli';
+    if (target.pathname === '/cli/approve') {
+      if (!target.searchParams.get('code')?.trim()) return '/cli';
+      return `${target.pathname}${target.search}`;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function getLoginErrorKind(error: string | null): LoginErrorKind | null {

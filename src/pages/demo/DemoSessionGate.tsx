@@ -4,7 +4,8 @@ import { getDemoProfile } from '../../entities/profile';
 import { getSessionUser } from '../../entities/session';
 
 export default function DemoSessionGate() {
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const [, refreshSession] = useState(0);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
@@ -23,6 +24,9 @@ export default function DemoSessionGate() {
     || (pathname === '/settings' && profile?.accountDeleted)
     || (pathname.startsWith('/admin/') && getSessionUser()?.id === 'demo-admin');
 
-  if (profile?.signedOut && !canVisitSignedOut) return <Navigate to="/login" replace />;
+  if (profile?.signedOut && !canVisitSignedOut) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+  }
   return <Outlet />;
 }

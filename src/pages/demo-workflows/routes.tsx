@@ -10,6 +10,7 @@ const AdminInquiriesDemoPage = lazy(() => import('../admin/AdminInquiriesDemoPag
 const DemoAdminAccountsPage = lazy(() => import('../admin/DemoAdminAccountsPage'));
 const DemoAdminVmDetailPage = lazy(() => import('../admin/DemoAdminVmDetailPage'));
 const CliLoginApprovalDemoPage = lazy(() => import('../auth/CliLoginApprovalDemoPage'));
+const CliLoginEntryDemoPage = lazy(() => import('../auth/CliLoginEntryDemoPage'));
 
 function screen(Element: typeof DatabaseQueryDemoPage) {
   return <Suspense fallback={null}><Element /></Suspense>;
@@ -17,6 +18,7 @@ function screen(Element: typeof DatabaseQueryDemoPage) {
 
 /** Routes for frontend-only Figma preview flows; merge into the central router after this slice lands. */
 export const demoDatabaseSupportRoutes: RouteObject[] = [
+  { path: '/cli', element: screen(CliLoginEntryDemoPage) },
   { path: '/databases/:databaseId/query', element: screen(DatabaseQueryDemoPage) },
   { path: '/databases/dedicated/new', element: screen(DedicatedDatabaseRequestPage) },
   { path: '/teams/:teamId/databases/dedicated/new', element: screen(DedicatedDatabaseRequestPage) },
