@@ -11,7 +11,10 @@ import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard, RevealableSecret }
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
-const Page = styled.div`display:flex;width:100%;max-width:1224px;flex-direction:column;gap:24px;padding:40px;`;
+const Page = styled.div`
+  display:flex;width:100%;max-width:1224px;flex-direction:column;gap:24px;padding:40px;
+  @media (max-width: 720px) { padding: 24px 16px; }
+`;
 const Breadcrumb = styled.button`
   width:fit-content;padding:0;border:0;background:transparent;color:${({ theme }) => theme.colors.faint};
   font:${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family},sans-serif;
@@ -26,8 +29,11 @@ const Subtitle = styled.p`
   margin:0;color:${({ theme }) => theme.colors.muted};
   font:${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family},sans-serif;
 `;
-const TabsRow = styled.div`display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;`;
-const Tabs = styled.nav`display:flex;align-items:center;gap:8px;min-width:0;`;
+const TabsRow = styled.div`
+  display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
+  @media (max-width: 720px) { align-items:flex-start;flex-direction:column; }
+`;
+const Tabs = styled.nav`display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;`;
 const Tab = styled.button<{ $active?: boolean }>`
   display:inline-flex;min-height:42px;align-items:center;padding:0 12px;border:0;border-radius:${({ theme }) => theme.radii.base}px;
   background:${({ theme,$active }) => $active ? theme.colors.primarySoft:'transparent'};color:${({ theme,$active }) => $active ? theme.colors.primary:theme.colors.muted};
@@ -36,7 +42,10 @@ const Tab = styled.button<{ $active?: boolean }>`
   &:disabled{opacity:1;cursor:not-allowed;}&:focus-visible{outline:2px solid ${({ theme }) => theme.colors.primary};outline-offset:2px;}
 `;
 const Card = styled.section`display:flex;width:100%;flex-direction:column;gap:16px;padding:24px;border-radius:${({ theme }) => theme.radii.base}px;background:${({ theme }) => theme.colors.surface};`;
-const CardHeader = styled.div`display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;`;
+const CardHeader = styled.div`
+  display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
+  @media (max-width: 480px) { align-items:flex-start;flex-wrap:wrap; }
+`;
 const CardTitle = styled.h2`
   margin:0;color:${({ theme }) => theme.colors.text};
   font:${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family},sans-serif;

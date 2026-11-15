@@ -19,6 +19,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 const Breadcrumb = styled.button`
   width: fit-content;
@@ -41,7 +43,7 @@ const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
-const Tabs = styled.nav`display: flex; width: 100%; gap: 8px;`;
+const Tabs = styled.nav`display: flex; width: 100%; flex-wrap: wrap; gap: 8px;`;
 const Tab = styled.button<{ $active?: boolean }>`
   display: inline-flex; min-height: 42px; align-items: center; padding: 0 12px; border: 0; border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
@@ -51,7 +53,10 @@ const Tab = styled.button<{ $active?: boolean }>`
   &:hover:not(:disabled) { background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : theme.colors.overlayHover}; color: ${({ theme }) => theme.colors.text}; }
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 `;
-const Summary = styled.section`display: flex; align-items: stretch; gap: 16px; width: 100%;`;
+const Summary = styled.section`
+  display: flex; align-items: stretch; gap: 16px; width: 100%;
+  @media (max-width: 720px) { flex-wrap: wrap; }
+`;
 const FlexibleUsageCard = styled(UsageCard)`width: auto; min-width: 0; flex: 1 1 0;`;
 const Section = styled.section`display: flex; flex-direction: column; gap: 16px; width: 100%;`;
 const SectionTitle = styled.h2`
@@ -63,7 +68,10 @@ const CardHeading = styled.h3`
   margin: 0; color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
-const DetailGrid = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 40px;`;
+const DetailGrid = styled.div`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 40px;
+  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
+`;
 const Field = styled.div`display: flex; min-width: 0; flex-direction: column; gap: 6px;`;
 const Label = styled.span`
   color: ${({ theme }) => theme.colors.faint};

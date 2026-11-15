@@ -13,6 +13,7 @@ import { StudentShell, type StudentNavigationKey } from '../../widgets/student-s
 
 const Page = styled.div`
   display: flex; width: 100%; max-width: 1224px; flex-direction: column; gap: 24px; padding: 40px;
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 const Breadcrumb = styled.button`
   width: fit-content; padding: 0; border: 0; background: transparent; color: ${({ theme }) => theme.colors.faint};
@@ -32,7 +33,7 @@ const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
-const Tabs = styled.nav`display: flex; width: 100%; gap: 8px;`;
+const Tabs = styled.nav`display: flex; width: 100%; flex-wrap: wrap; gap: 8px;`;
 const Tab = styled.button<{ $active?: boolean }>`
   display: inline-flex; min-height: 42px; align-items: center; padding: 0 12px; border: 0; border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
