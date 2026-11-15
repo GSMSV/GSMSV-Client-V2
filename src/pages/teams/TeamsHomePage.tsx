@@ -6,7 +6,10 @@ import { listDatabases } from '../../entities/database';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary, type TeamQuotaUsage } from '../../entities/team';
 import type { DemoVm } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import type { DemoTeamDetail } from '../../entities/team/demo';
+import { AccountDialog } from '../../features/settings/demo-account/ui/AccountDialog';
+import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
 import { listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
@@ -540,6 +543,13 @@ function TeamAppsCard({ teamId }: { teamId: string }) {
   );
 }
 
+function quotaTierLabel(vcpuLimit: number | undefined) {
+  if (vcpuLimit === 4) return '소형';
+  if (vcpuLimit === 8) return '중형';
+  if (vcpuLimit === 16) return '대형';
+  return '맞춤';
+}
+
 function getStatusMessage(team: TeamDetail) {
   if (team.status === 'pending') return { tone: 'warning' as const, title: '팀 승인 대기 중입니다', description: '팀 승인이 완료되면 팀 Resources를 사용할 수 있습니다.' };
   if (team.status === 'rejected') return { tone: 'danger' as const, title: '팀 승인이 거절되었습니다', description: team.rejection_reason || '팀 설정에서 거절 사유를 확인해 주세요.' };
@@ -561,7 +571,35 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const [demoVmQuota, setDemoVmQuota] = useState<TeamDetail['quota']>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null);
   const [retryKey, setRetryKey] = useState(0);
+  const [showQuotaRequest, setShowQuotaRequest] = useState(false);
+  // null = 아직 확인 전. 확인 전에는 버튼을 눌러 중복 요청하지 못하게 막는다.
+  const [quotaRequestSent, setQuotaRequestSent] = useState<boolean | null>(null);
+  const [dismissedDecision, setDismissedDecision] = useState<string | null>(null);
   const demoMode = isDemoMode();
+
+  useEffect(() => {
+    if (!demoMode || !selectedTeamId) { setQuotaRequestSent(false); return; }
+    setQuotaRequestSent(null);
+    let cancelled = false;
+    void import('../../entities/team/demo').then(({ listDemoTeamQuotaRequests }) => {
+      if (!cancelled) setQuotaRequestSent(listDemoTeamQuotaRequests(selectedTeamId).length > 0);
+    });
+    return () => { cancelled = true; };
+  }, [demoMode, retryKey, selectedTeamId]);
+
+  const submitQuotaRequest = async (tier: '소형' | '중형' | '대형', reason: string) => {
+    if (!demoMode || !selectedTeamId) return false;
+    const { createDemoTeamQuotaRequest } = await import('../../entities/team/demo');
+    if (!createDemoTeamQuotaRequest(selectedTeamId, tier, reason)) return false;
+    setQuotaRequestSent(true);
+    setShowQuotaRequest(false);
+    return true;
+  };
+
+  const dismissDecision = (teamIdToDismiss: string) => {
+    setDismissedDecision(teamIdToDismiss);
+    void import('../../entities/team/demo').then(({ dismissDemoTeamDecisionNotice }) => dismissDemoTeamDecisionNotice(teamIdToDismiss));
+  };
 
   useEffect(() => {
     if (!(demoMode && selectedTeamId)) {
@@ -628,14 +666,17 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       return;
     }
     if (demoMode) {
-      let cancelled = false;
+      const controller = new AbortController();
       setDetail(current => ({ ...current, loading: true, error: false }));
-      void import('../../entities/team/demo').then(({ getDemoTeam }) => {
-        if (cancelled) return;
+      // 목데이터에서도 Figma 25-03/32-05 로딩과 25-04/32-06 오류(?demoError=team)를 볼 수 있게 한다.
+      void Promise.all([import('../../entities/team/demo'), simulateDemoRequest('team', controller.signal)]).then(([{ getDemoTeam }]) => {
+        if (controller.signal.aborted) return;
         const value = getDemoTeam(selectedTeamId);
         setDetail(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      }, () => {
+        if (!controller.signal.aborted) setDetail({ value: null, loading: false, error: true });
       });
-      return () => { cancelled = true; };
+      return () => controller.abort();
     }
     const controller = new AbortController();
     setDetail(current => ({ ...current, loading: true, error: false }));
@@ -777,6 +818,11 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
             ? '팀 SSD 할당량이 부족합니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
             : undefined;
     const teamVmCreateDisabled = !canCreateTeamVm || Boolean(createQuotaReason);
+    // Figma 25-01/25-02: 관리자 결정 뒤 팀장이 처음 팀 홈을 열면 결과 안내를 한 번 띄운다.
+    const pendingDecision = demoMode && currentTeam.my_role === 'leader' && dismissedDecision !== currentTeam.id
+      ? (currentTeam as DemoTeamDetail).demoDecisionNotice
+      : undefined;
+    const decision = pendingDecision === currentTeam.status ? pendingDecision : undefined;
     content = (
       <Page>
         <Breadcrumb>{currentTeam.name} / 팀 Resources</Breadcrumb>
@@ -807,7 +853,10 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
           <QuotaFoot>
             <span>{quota ? (quota.vcpu.used >= quota.vcpu.limit ? 'vCPU를 모두 쓰고 있습니다. 더 필요하면 팀 설정에서 할당량 늘리기를 요청하세요.' : 'VM 할당량 사용량') : '승인된 팀의 VM 할당량이 표시됩니다.'}</span>
             {currentTeam.status === 'approved' && currentTeam.my_role === 'leader' && (
-              <Button variant="secondary" icon={<Octicon name="graph" size={16} />} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/settings?tab=quota`)}>할당량 늘리기 요청</Button>
+              <Button variant="secondary" icon={<Octicon name="graph" size={16} />} disabled={demoMode && quotaRequestSent !== false}
+                onClick={() => demoMode ? setShowQuotaRequest(true) : navigate(`/teams/${encodeURIComponent(currentTeam.id)}/settings`)}>
+                {demoMode && quotaRequestSent ? '요청 검토 중' : '할당량 늘리기 요청'}
+              </Button>
             )}
           </QuotaFoot>
         </QuotaPanel>
@@ -864,6 +913,15 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
             icon={<Octicon name="calendar" size={20} />}
           />
         </BottomGrid>
+        {demoMode && showQuotaRequest && <TeamQuotaRequestDialog onDismiss={() => setShowQuotaRequest(false)} onSubmit={submitQuotaRequest} />}
+        {decision === 'approved' && <AccountDialog title={`${currentTeam.name} 팀이 승인됐습니다`} icon="check-circle"
+          description={`· 할당량 · ${quotaTierLabel(currentTeam.quota?.vm.vcpu.limit)} · vCPU ${currentTeam.quota?.vm.vcpu.limit ?? '—'} · RAM ${currentTeam.quota?.vm.ram_gb.limit ?? '—'}GB · SSD ${currentTeam.quota?.vm.ssd_gb.limit ?? '—'}GB\n· 이제 팀장과 DevOps가 팀 VM을 만들 수 있습니다.`}
+          onDismiss={() => dismissDecision(currentTeam.id)}
+          actions={<Button icon={<Octicon name="plus" size={16} />} onClick={() => { dismissDecision(currentTeam.id); navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/new`); }}>팀 VM 만들기</Button>} />}
+        {decision === 'rejected' && <AccountDialog title="팀 승인이 거절됐습니다" icon="alert"
+          description={`${currentTeam.rejection_reason ? `사유: ${currentTeam.rejection_reason}\n` : ''}· 팀원과 보낸 초대가 해제됐고, 팀은 7일 뒤 삭제됩니다.`}
+          onDismiss={() => dismissDecision(currentTeam.id)}
+          actions={<Button icon={<Octicon name="people" size={16} />} onClick={() => { dismissDecision(currentTeam.id); navigate('/teams/new'); }}>새 팀 만들기</Button>} />}
       </Page>
     );
   }

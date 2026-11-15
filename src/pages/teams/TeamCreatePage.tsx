@@ -10,6 +10,7 @@ import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell } from '../../widgets/student-shell';
 import { getSessionUser } from '../../entities/session';
+import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 
 const Page = styled.div`
   display: flex;
@@ -221,6 +222,7 @@ function createErrorMessage(error: unknown) {
 export default function TeamCreatePage() {
   const navigate = useNavigate();
   const user = getSessionUser();
+  const pageLoad = useDemoPageLoad('team-create');
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -305,6 +307,7 @@ export default function TeamCreatePage() {
           <Subtitle>친구와 함께 VM을 관리할 팀을 만듭니다. 관리자가 승인하면 팀 VM을 만들 수 있습니다.</Subtitle>
         </Intro>
 
+        {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[280, [235, 235]]} label="팀 만들기 화면을 불러오는 중" /> : <>
         <FormCard onSubmit={submit} noValidate>
           <CardHeading>
             <CardTitle>팀 정보</CardTitle>
@@ -394,6 +397,7 @@ export default function TeamCreatePage() {
           title="새 팀은 관리자 승인 대기 상태로 만들어집니다."
           description="승인 전에는 팀 자원을 만들 수 없지만, 팀원 초대와 팀 정보 확인은 할 수 있습니다."
         />
+        </>}
       </Page>
     </StudentShell>
   );

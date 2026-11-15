@@ -5,6 +5,7 @@ import { getDemoTeamRequests, saveDemoTeamRequests, type TeamRequest } from '../
 import { listDemoDisbandRequests, setDemoTeamApproval, type DemoTeamDetail } from '../../entities/team/demo';
 import { AccountDialog, DialogCopy, approveDemoTeamDisband, getDemoDisbandResources } from '../../features/settings/demo-account';
 import { Button } from '../../shared/ui/controls';
+import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Select, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
@@ -85,6 +86,7 @@ const EmptyState = styled(Muted)`
 
 export default function AdminTeamApprovalsDemoPage() {
   const navigate = useNavigate();
+  const pageLoad = useDemoPageLoad('admin-team-approvals');
   const [disbandRequests, setDisbandRequests] = useState(listDemoDisbandRequests);
   const [confirmDisband, setConfirmDisband] = useState<DemoTeamDetail | null>(null);
   const disbandResources = confirmDisband ? getDemoDisbandResources(confirmDisband.id) : null;
@@ -158,7 +160,8 @@ export default function AdminTeamApprovalsDemoPage() {
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 승인</p>
     <Heading><TitleGroup><Title>승인</Title><Muted>팀의 사용 목적을 확인하고 할당량을 정해 승인하세요.</Muted></TitleGroup></Heading>
     {notice && <Alert $tone={notice.includes('입력') || notice.includes('저장하지 못') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
-    <Toolbar><Tabs><Button variant="primary">팀 <Badge>3</Badge></Button><Button variant="ghost" onClick={() => navigate('/admin/database-approvals')}>전용형 Database <Badge>1</Badge></Button></Tabs><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setRequests(getDemoTeamRequests()); setDisbandRequests(listDemoDisbandRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button></Toolbar>
+    <Toolbar><Tabs><Button variant="primary">팀 <Badge>3</Badge></Button><Button variant="ghost" onClick={() => navigate('/admin/database-approvals')}>전용형 Database <Badge>1</Badge></Button></Tabs><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { if (pageLoad.status !== 'ready') { pageLoad.retry(); return; } setRequests(getDemoTeamRequests()); setDisbandRequests(listDemoDisbandRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button></Toolbar>
+    {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[280, 392, 238, [120, 120, 120]]} label="승인 신청을 불러오는 중" /> : <>
     <ApprovalCard><ApprovalHeader><SectionTitle>승인 대기 팀</SectionTitle><FilterControls><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => changeFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => changeFilter('done')}>처리 완료</Button></FilterControls></ApprovalHeader>
       <ApprovalTableWrap><ApprovalTable><thead><tr><th>팀</th><th>팀장</th><th>팀원</th><th>사용 목적</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} tabIndex={0} aria-selected={item.id === selected?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedId(item.id); setRejectReason(item.rejectReason); } }}><td>{item.name}</td><td>{item.leader}</td><td>{item.members}명</td><td>{item.purpose}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></ApprovalTable></ApprovalTableWrap>
       {visible.length ? <Hint>{visible.length}개 중 1–{visible.length}</Hint> : <EmptyState role="status">선택한 상태의 팀 신청이 없습니다.</EmptyState>}
@@ -193,6 +196,7 @@ export default function AdminTeamApprovalsDemoPage() {
         }}>{disbandBusy ? '처리 중…' : '해체 승인'}</Button>
       </>}>{disbandFailed && <DialogCopy role="alert">해체를 승인하지 못했습니다.</DialogCopy>}</AccountDialog>}
     <Stats><Stat>팀 룸 사용<strong>38%</strong><Muted>vCPU 36 / 96 할당</Muted></Stat><Stat>승인된 팀<strong>9개</strong><Muted>해체 요청 {disbandRequests.length}건</Muted></Stat><Stat>할당량 늘리기 요청<strong>2건</strong><Muted>확인이 필요합니다</Muted></Stat></Stats>
+    </>}
     <Muted>할당량 등급 기준 · 소형 4/8/60 · 팀원 5명 이하 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</Muted>
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }

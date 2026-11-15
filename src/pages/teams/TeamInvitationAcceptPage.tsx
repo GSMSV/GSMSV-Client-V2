@@ -1,7 +1,9 @@
-import { useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getSessionUser } from '../../entities/session';
+import type { DemoTeamInvitationPreview } from '../../entities/team/demo';
+import { AccountDialog } from '../../features/settings/demo-account/ui/AccountDialog';
 import { acceptInvitation, getInvitationAcceptanceError } from '../../features/team/accept-invitation';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
@@ -353,6 +355,10 @@ const LoginLink = styled.a`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 `;
 
+const PreviewCount = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
 export default function TeamInvitationAcceptPage() {
   const navigate = useNavigate();
   const demoMode = isDemoMode();
@@ -361,6 +367,21 @@ export default function TeamInvitationAcceptPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loginRequired, setLoginRequired] = useState(false);
   const currentUser = getSessionUser();
+  const [preview, setPreview] = useState<DemoTeamInvitationPreview | null>(null);
+  const [account, setAccount] = useState<{ name: string; email: string } | null>(null);
+  const [linkUnavailable, setLinkUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (!demoMode) return;
+    let cancelled = false;
+    void Promise.all([import('../../entities/team/demo'), import('../../entities/profile')]).then(([team, profile]) => {
+      if (cancelled) return;
+      setPreview(team.getDemoTeamInvitationPreview(token) ?? null);
+      const demoProfile = profile.getDemoProfile();
+      if (demoProfile) setAccount({ name: demoProfile.name, email: demoProfile.email });
+    });
+    return () => { cancelled = true; };
+  }, [demoMode, token]);
 
   useLayoutEffect(() => {
     if (demoMode) return;
@@ -387,9 +408,12 @@ export default function TeamInvitationAcceptPage() {
         setErrorMessage('학교 계정으로 로그인한 뒤 이 탭으로 돌아와 초대를 다시 수락해 주세요. 초대 정보는 이 탭에만 유지됩니다.');
         return;
       }
-      setErrorMessage(isDemoMode() && error instanceof Error && error.message === 'GONE'
-        ? '이 초대는 만료되었거나 이미 사용 또는 취소되었습니다.'
-        : getInvitationAcceptanceError(error));
+      if (isDemoMode() && error instanceof Error && error.message === 'GONE') {
+        // Figma 35-01: 쓸 수 없는 초대 링크는 대화상자로 안내한다.
+        setLinkUnavailable(true);
+        return;
+      }
+      setErrorMessage(getInvitationAcceptanceError(error));
     } finally {
       setPending(false);
     }
@@ -404,7 +428,7 @@ export default function TeamInvitationAcceptPage() {
       if (!rejected) throw new Error('GONE');
       navigate('/teams', { replace: true });
     } catch {
-      setErrorMessage('이 초대는 만료되었거나 이미 사용 또는 취소되었습니다.');
+      setLinkUnavailable(true);
     } finally {
       setPending(false);
     }
@@ -445,8 +469,8 @@ export default function TeamInvitationAcceptPage() {
 
       <Content aria-labelledby="invitation-title">
         <Heading>
-          <Title id="invitation-title">팀 초대가 도착했습니다</Title>
-          <Subtitle>초대를 수락하면 일반 팀원으로 팀에 참여합니다.</Subtitle>
+          <Title id="invitation-title">{preview ? `${preview.teamName} 팀에 초대됐습니다` : '팀 초대가 도착했습니다'}</Title>
+          <Subtitle>{preview ? `${preview.inviterName} 님이 일반 팀원으로 초대했습니다. 수락하면 팀 VM을 함께 볼 수 있습니다.` : '초대를 수락하면 일반 팀원으로 팀에 참여합니다.'}</Subtitle>
         </Heading>
 
         <DetailsCard aria-labelledby="invitation-details-title">
@@ -455,28 +479,32 @@ export default function TeamInvitationAcceptPage() {
             <DetailIcon aria-hidden="true"><Octicon name="people" size={16} /></DetailIcon>
             <DetailValue>
               <DetailLabel>팀</DetailLabel>
-              <UnknownValue>초대 내용을 미리 보여 주는 API가 없어 확인할 수 없습니다</UnknownValue>
+              {preview
+                ? <DetailText>{preview.teamName} · 팀원 <PreviewCount>{preview.memberCount}명</PreviewCount></DetailText>
+                : <UnknownValue>{demoMode ? '초대 링크에서 팀을 찾을 수 없습니다' : '초대 내용을 미리 보여 주는 API가 없어 확인할 수 없습니다'}</UnknownValue>}
             </DetailValue>
           </DetailRow>
           <DetailRow>
             <DetailIcon aria-hidden="true"><Octicon name="person" size={16} /></DetailIcon>
             <DetailValue>
               <DetailLabel>초대한 사람</DetailLabel>
-              <UnknownValue>초대 내용을 미리 보여 주는 API가 없어 확인할 수 없습니다</UnknownValue>
+              {preview
+                ? <DetailText>{preview.inviterName} · 팀장</DetailText>
+                : <UnknownValue>{demoMode ? '초대 링크에서 초대한 사람을 찾을 수 없습니다' : '초대 내용을 미리 보여 주는 API가 없어 확인할 수 없습니다'}</UnknownValue>}
             </DetailValue>
           </DetailRow>
           <DetailRow>
             <DetailIcon aria-hidden="true"><Octicon name="shield" size={16} /></DetailIcon>
             <DetailValue>
               <DetailLabel>내 역할</DetailLabel>
-              <DetailText>일반 팀원</DetailText>
+              <DetailText>{preview ? '일반 팀원 · 팀장이 DevOps 역할을 줄 수 있습니다' : '일반 팀원'}</DetailText>
             </DetailValue>
           </DetailRow>
           <DetailRow>
             <DetailIcon aria-hidden="true"><Octicon name="clock" size={16} /></DetailIcon>
             <DetailValue>
               <DetailLabel>만료</DetailLabel>
-              <DetailText>발송 후 7일 · 초대 발송일은 확인할 수 없습니다</DetailText>
+              <DetailText>{preview ? `${formatExpiry(preview.expiresAt)} · 1번만 사용할 수 있습니다` : '발송 후 7일 · 초대 발송일은 확인할 수 없습니다'}</DetailText>
             </DetailValue>
           </DetailRow>
         </DetailsCard>
@@ -485,15 +513,13 @@ export default function TeamInvitationAcceptPage() {
           <DetailIcon aria-hidden="true"><Octicon name="info" size={20} /></DetailIcon>
           <AccountCopy>
             <AccountTitle>로그인한 계정으로 합류합니다</AccountTitle>
-            <AccountIdentity>{currentUser?.name ?? '학교 계정으로 로그인한 후 초대를 수락할 수 있습니다'}</AccountIdentity>
+            <AccountIdentity>{account ? `${account.name} · ${account.email}` : currentUser?.name ?? '학교 계정으로 로그인한 후 초대를 수락할 수 있습니다'}</AccountIdentity>
           </AccountCopy>
         </AccountCard>
 
-        <ContractNotice>
-          {isDemoMode()
-            ? '초대 수락과 거절은 현재 로컬 미리보기에서만 적용됩니다.'
-            : '초대 상세 조회와 거절 API가 아직 없습니다. 수락 전에 팀 이름과 초대한 사람을 확인할 수 없으며, 수락은 로그인한 학교 계정으로 요청됩니다.'}
-        </ContractNotice>
+        {!demoMode && <ContractNotice>
+          초대 상세 조회와 거절 API가 아직 없습니다. 수락 전에 팀 이름과 초대한 사람을 확인할 수 없으며, 수락은 로그인한 학교 계정으로 요청됩니다.
+        </ContractNotice>}
         {!hasToken && <FormError role="alert">초대 링크에 유효한 토큰이 없습니다. 초대 링크를 다시 확인해 주세요.</FormError>}
         {errorMessage && <ErrorMessage role="alert">{errorMessage}</ErrorMessage>}
 
@@ -512,8 +538,20 @@ export default function TeamInvitationAcceptPage() {
           </Button>
         </Actions>
       </Content>
+      {linkUnavailable && <AccountDialog title="초대 링크를 사용할 수 없습니다" icon="alert"
+        description={'링크가 만료됐거나 이미 사용됐습니다. 초대한 팀장에게 다시 보내달라고 요청하세요.\n\n· 초대 링크는 7일 동안 1번만 쓸 수 있습니다.'}
+        onDismiss={() => setLinkUnavailable(false)}
+        actions={<Button variant="secondary" icon={<Octicon name="home" size={16} />} onClick={() => navigate('/', { replace: true })}>내 Resources</Button>} />}
     </Screen>
   );
+}
+
+function formatExpiry(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Seoul' }).formatToParts(date);
+  const pick = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+  return `${pick('year')}.${pick('month')}.${pick('day')}`;
 }
 
 function invitationLoginUrl() {

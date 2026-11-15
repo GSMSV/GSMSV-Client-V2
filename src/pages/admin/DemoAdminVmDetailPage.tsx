@@ -5,6 +5,7 @@ import { getDemoInfraSnapshot, saveDemoInfraSnapshot, type DemoInfraSnapshot } f
 import { addDemoNotification } from '../../entities/notification';
 import { getDemoVmState } from '../../entities/vm';
 import { Button } from '../../shared/ui/controls';
+import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Stat, Stats, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
@@ -134,8 +135,16 @@ const SshButtons = styled(Actions)`
 
 type DetailPanel = 'purpose' | 'snapshot' | null;
 
+/** 마지막 글자에 받침이 있으면 '을', 없으면 '를'. 한글이 아니면 영문 발음 대신 '을'을 쓴다. */
+function objectParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '을';
+  return code % 28 === 0 ? '를' : '을';
+}
+
 export default function DemoAdminVmDetailPage() {
   const navigate = useNavigate();
+  const pageLoad = useDemoPageLoad('admin-vm');
   const { vmId = 'portfolio-api' } = useParams<{ vmId: string }>();
   const [snapshot, setSnapshot] = useState<DemoInfraSnapshot>(() => getDemoInfraSnapshot());
   const [notice, setNotice] = useState('');
@@ -225,7 +234,7 @@ export default function DemoAdminVmDetailPage() {
   async function copyValue(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
-      setNotice(`${label}을 복사했습니다.`);
+      setNotice(`${label}${objectParticle(label)} 복사했습니다.`);
     } catch {
       setNotice(`${label}: ${value}`);
     }
@@ -251,6 +260,7 @@ export default function DemoAdminVmDetailPage() {
         <Button variant="danger" icon={actionIcon('trashcan')} onClick={() => { setConfirmName(''); setDeleteReason(''); setShowDelete(true); }}>관리자 삭제</Button>
       </Actions>
     </Heading>
+    {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[[104, 104, 104], [188, 188], 188, 152]} label="VM 정보를 불러오는 중" /> : <>
     <Expiry>◷　{expiryDays <= 0 ? '만료되었습니다' : `만료까지 ${expiryDays}일 남았어요`}<br /><Muted>{details.expiresAt} (KST) · 로컬 미리보기 데이터</Muted></Expiry>
     <Stats>
       <Stat>CPU<strong>{details.vcpu} vCPU</strong><Muted>{details.tier === 'Standard' ? '일반 Node' : details.tier}</Muted></Stat>
@@ -288,6 +298,7 @@ export default function DemoAdminVmDetailPage() {
         </SshButtons>
       </SshActions>
     </Card>
+    </>}
     {showDelete && <ModalSurface labelledBy="admin-vm-delete-title" onDismiss={() => setShowDelete(false)}>
       <AdminDeleteDialog aria-labelledby="admin-vm-delete-title">
         <DialogTitle id="admin-vm-delete-title"><Octicon name="alert" size={24} />{vm.name}를 영구 삭제하시겠습니까?</DialogTitle>

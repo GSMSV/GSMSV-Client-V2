@@ -7,7 +7,8 @@ import { listNotifications } from '../../entities/notification';
 import { getSessionUser } from '../../entities/session';
 import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { DemoPagePlaceholder } from '../demo-workflows/ui/DemoPageState';
 import { Button } from '../../shared/ui/controls';
 import { mobileNavigationMedia, useResponsiveNavigation } from '../../shared/ui/controls/useResponsiveNavigation';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -598,6 +599,7 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
     try {
       if (demoMode) {
         const { getDemoInfraSnapshot } = await import('../../entities/infra-node/demo');
+        await simulateDemoRequest('admin-infra', signal);
         if (signal.aborted) return;
         const snapshot = getDemoInfraSnapshot();
         const checkedAt = new Date();
@@ -697,7 +699,12 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
     { label: '관리자 점검', icon: 'shield' },
   ];
 
+  // Figma 26-01/02, 28-03/04: 본문 카드 자리마다 로딩 막대나 오류 카드를 채운다.
+  const demoPlaceholderRows = isAllVmsView ? [236, 232, [192, 166]] : [[92, 92, 92, 92], { title: 'Node' }, [216, 216, 216], [224, 205]];
   const stateContent = () => {
+    if (demoMode && state.nodes.length === 0 && (state.kind === 'loading' || (state.kind === 'error' && state.status !== 401 && state.status !== 403))) {
+      return <DemoPagePlaceholder status={state.kind === 'loading' ? 'loading' : 'error'} onRetry={refresh} rows={demoPlaceholderRows} label={isAllVmsView ? 'VM 정보를 불러오는 중' : '노드 정보를 불러오는 중'} />;
+    }
     if (state.kind === 'loading' && state.nodes.length === 0) {
       return <StateArea aria-label="노드 정보를 불러오는 중"><LoadingCard height={360} /></StateArea>;
     }
@@ -746,9 +753,9 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
             );
           })}
           <Divider aria-hidden="true" />
-          <NavigationItem type="button" disabled>{icon('book')}Docs</NavigationItem>
-          <NavigationItem type="button" disabled>{icon('comment-discussion')}문의</NavigationItem>
-          <NavigationItem type="button" disabled>{icon('gear')}설정</NavigationItem>
+          {([['book', 'Docs', '/help'], ['comment-discussion', '문의', '/support/inquiries'], ['gear', '설정', '/settings']] as const).map(([iconName, label, href]) => (
+            <NavigationItem key={label} type="button" disabled={!demoMode} onClick={demoMode ? () => { navigation.close(); void navigate(href); } : undefined}>{icon(iconName)}{label}</NavigationItem>
+          ))}
         </Navigation>
         <SidebarFooter>
           <NavigationItem type="button" onClick={() => { navigation.close(); void navigate('/status'); }}>{icon('pulse')}서비스 상태</NavigationItem>
