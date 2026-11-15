@@ -58,5 +58,7 @@ export function consumeDemoFailure(scope: string): boolean {
 /** 목데이터 요청 한 번을 흉내 낸다: 지연 후, 요청된 경우 한 번 실패한다. */
 export async function simulateDemoRequest(scope: string, signal?: AbortSignal): Promise<void> {
   await waitForDemoLatency(signal);
+  // 중단된 요청은 화면에 반영되지 않으므로 1회 실패 기회를 소비하지 않는다.
+  if (signal?.aborted) return;
   if (consumeDemoFailure(scope)) throw new DemoSimulatedError(scope);
 }
