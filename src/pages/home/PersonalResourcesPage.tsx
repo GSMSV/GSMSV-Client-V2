@@ -7,10 +7,12 @@ import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import type { DemoHomeState } from '../../entities/home';
-import type { DemoVm } from '../../entities/vm';
+import type { DemoVm, DemoVmQuota } from '../../entities/vm';
+import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
@@ -215,32 +217,79 @@ const WorkPanel = styled.div`
   background: ${({ theme }) => theme.colors.surface};
 `;
 
-const WorkRow = styled.div`
+const WorkRow = styled.button`
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   min-height: 52px;
   padding: 8px 0;
+  border: 0;
   border-top: 1px solid ${({ theme }) => theme.colors.border};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text};
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover strong { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
 `;
 
-const WorkCopy = styled.div`
+const WorkCopy = styled.span`
   display: flex;
   min-width: 0;
+  flex: 1 1 220px;
   flex-direction: column;
   gap: 4px;
+  overflow-wrap: anywhere;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const WorkDetails = styled.div`
+const WorkDetails = styled.span`
   display: flex;
-  flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+const WorkDialog = styled.div`
+  display: flex;
+  width: min(480px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+
+  p {
+    margin: 0;
+    color: ${({ theme }) => theme.colors.muted};
+    overflow-wrap: anywhere;
+  }
+`;
+
+const WorkDialogTitle = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+
+  svg { flex-shrink: 0; }
+`;
+
+const WorkDialogActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 `;
 
 const ResourceLink = styled.button`
@@ -339,6 +388,15 @@ interface Loadable<T> {
 
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
+function withPersonalVmQuota(current: MyQuota['vm'], quota: DemoVmQuota): MyQuota['vm'] {
+  return {
+    ...current,
+    vcpu: { used: quota.cpu, limit: quota.cpuLimit },
+    ram_gb: { used: quota.memory, limit: quota.memoryLimit },
+    ssd_gb: { used: quota.disk, limit: quota.diskLimit },
+  };
+}
+
 const teamRoleLabel: Record<TeamRole, string> = {
   leader: '팀장',
   devops: 'DevOps 엔지니어',
@@ -384,6 +442,9 @@ export default function PersonalResourcesPage() {
   const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
   const [expiringPersonalVmId, setExpiringPersonalVmId] = useState<string | null>(null);
   const [personalExtensionNotice, setPersonalExtensionNotice] = useState('');
+  const [personalExtensionError, setPersonalExtensionError] = useState('');
+  const [cancelDialog, setCancelDialog] = useState<{ phase: 'confirm'; id: string; name: string } | { phase: 'started' } | null>(null);
+  const [cancelError, setCancelError] = useState('');
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
@@ -392,6 +453,11 @@ export default function PersonalResourcesPage() {
   const [teamsError, setTeamsError] = useState(false);
   const [teamsRetryKey, setTeamsRetryKey] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
+  const vmExtension = useDemoVmExtension({
+    onStateChange: state => setDemoVms(state.vms.filter(vm => vm.owner === 'personal')),
+    onExtended: vm => setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`),
+    onError: setPersonalExtensionError,
+  });
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (import.meta.env.DEV && demoMode) {
@@ -429,12 +495,7 @@ export default function PersonalResourcesPage() {
         value: {
           ...demo.demoHomeQuota,
           db: databaseRepository.getDemoDatabaseQuota().db,
-          vm: {
-            ...demo.demoHomeQuota.vm,
-            vcpu: { ...demo.demoHomeQuota.vm.vcpu, used: vmState.personalQuota.cpu, limit: vmState.personalQuota.cpuLimit },
-            ram_gb: { ...demo.demoHomeQuota.vm.ram_gb, used: vmState.personalQuota.memory, limit: vmState.personalQuota.memoryLimit },
-            ssd_gb: { ...demo.demoHomeQuota.vm.ssd_gb, used: vmState.personalQuota.disk, limit: vmState.personalQuota.diskLimit },
-          },
+          vm: withPersonalVmQuota(demo.demoHomeQuota.vm, vmState.personalQuota),
           fn: serverlessQuota,
         },
         loading: false,
@@ -543,20 +604,29 @@ export default function PersonalResourcesPage() {
   const queuedPersonalVms = demoVms.filter(vm => vm.status === 'queued');
   const activePersonalVms = demoVms.filter(vm => vm.status !== 'queued');
   const expiringPersonalVm = demoVms.find(vm => vm.id === expiringPersonalVmId && vm.status !== 'queued');
+  const initialExpiry = expiringPersonalVm?.expiresAt === '2026.10.03 14:00 (KST)';
 
-  async function extendPersonalVm(vmId: string) {
+  async function cancelQueuedVm(vmId: string) {
     if (!(import.meta.env.DEV && demoMode)) return;
     const repository = await import('../../entities/vm');
-    const state = repository.getDemoVmState();
-    const vm = state.vms.find(item => item.id === vmId && item.owner === 'personal');
-    const match = vm?.expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
-    if (!vm || !match) return;
-    const nextDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14);
-    const expiresAt = `${nextDate.getFullYear()}.${String(nextDate.getMonth() + 1).padStart(2, '0')}.${String(nextDate.getDate()).padStart(2, '0')} 14:00 (KST)`;
-    const nextState = { ...state, vms: state.vms.map(item => item.id === vm.id ? { ...item, expiresAt } : item) };
-    repository.saveDemoVmState(nextState);
-    setDemoVms(current => current.map(item => item.id === vm.id ? { ...item, expiresAt } : item));
-    setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`);
+    const latest = repository.getDemoVmState();
+    const target = latest.vms.find(vm => vm.id === vmId && vm.owner === 'personal');
+    if (target?.status === 'queued' && !repository.cancelDemoVmCreateRequest(vmId)) {
+      setCancelError('생성 요청을 취소하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+
+    const refreshed = repository.getDemoVmState();
+    setDemoVms(refreshed.vms.filter(vm => vm.owner === 'personal'));
+    setQuota(current => current.value ? {
+      ...current,
+      value: {
+        ...current.value,
+        vm: withPersonalVmQuota(current.value.vm, refreshed.personalQuota),
+      },
+    } : current);
+    setCancelError('');
+    setCancelDialog(target && target.status !== 'queued' ? { phase: 'started' } : null);
   }
 
   return (
@@ -595,13 +665,21 @@ export default function PersonalResourcesPage() {
         </div>}
 
         {demoMode && !demoHome?.firstVisit && expiringPersonalVm && <Banner
-          title={personalExtensionNotice || 'portfolio-api · 만료까지 4일'}
-          description={personalExtensionNotice ? `${expiringPersonalVm.expiresAt}까지 사용할 수 있습니다.` : '10월 3일 14:00에 만료됩니다. 지금 연장하면 10월 17일까지 사용할 수 있습니다.'}
+          title={personalExtensionNotice || `${expiringPersonalVm.name} · ${initialExpiry ? '만료까지 4일' : '사용 기간'}`}
+          description={personalExtensionNotice
+            ? `${expiringPersonalVm.expiresAt}까지 사용할 수 있습니다.`
+            : initialExpiry
+              ? '10월 3일 14:00에 만료됩니다. 지금 연장하면 10월 17일까지 사용할 수 있습니다.'
+              : `${expiringPersonalVm.expiresAt}에 만료됩니다. 지금 연장하면 14일 더 사용할 수 있습니다.`}
           tone="primary"
           icon={<Octicon name="clock" size={20} />}
           secondaryAction={<Button variant="secondary" onClick={() => navigate(`/vms/${encodeURIComponent(expiringPersonalVm.id)}`)}>VM 관리</Button>}
-          action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => void extendPersonalVm(expiringPersonalVm.id)}>{personalExtensionNotice ? '연장 완료' : '14일 연장'}</Button>}
+          action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => {
+            setPersonalExtensionError('');
+            void vmExtension.extend(expiringPersonalVm.id);
+          }}>{personalExtensionNotice ? '연장 완료' : '14일 연장'}</Button>}
         />}
+        {demoMode && personalExtensionError && <Notice role="alert">{personalExtensionError}</Notice>}
 
         {demoMode && demoHome?.firstVisit ? <>
           <Notice role="note">
@@ -641,9 +719,13 @@ export default function PersonalResourcesPage() {
           {demoMode && queuedPersonalVms.length > 0 && <Section>
             <SectionTitle>진행 중인 작업 · {queuedPersonalVms.length}</SectionTitle>
             <WorkPanel>
-              {queuedPersonalVms.map(vm => <WorkRow key={vm.id}>
+              {queuedPersonalVms.map(vm => <WorkRow key={vm.id} type="button" aria-label={`${vm.name} 생성 취소`} onClick={() => {
+                setCancelError('');
+                setCancelDialog({ phase: 'confirm', id: vm.id, name: vm.name });
+              }}>
+                <Octicon name="clock" size={20} aria-hidden="true" />
                 <WorkCopy><strong>{vm.name}</strong><span>앞에 2건이 있습니다. 차례가 오면 생성을 시작합니다.</span></WorkCopy>
-                <WorkDetails><span>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</span><State>대기 중</State></WorkDetails>
+                <WorkDetails><span>Standard · {vm.cpu} vCPU · {vm.memory} GB · {vm.disk} GB</span><State>대기 중</State></WorkDetails>
               </WorkRow>)}
             </WorkPanel>
           </Section>}
@@ -749,6 +831,33 @@ export default function PersonalResourcesPage() {
           </Section>
         </Sections>}
       </Page>
+      {demoMode && vmExtension.confirmation && <DemoVmExtensionDialog
+        key={JSON.stringify(vmExtension.confirmation)}
+        initialPurpose={vmExtension.confirmation.purpose}
+        extensionCount={vmExtension.confirmation.extensionCount}
+        error={vmExtension.error}
+        onConfirm={vmExtension.confirm}
+        onDismiss={vmExtension.dismiss}
+      />}
+      {demoMode && cancelDialog && <ModalSurface labelledBy="home-vm-cancel-title" onDismiss={() => setCancelDialog(null)}>
+        <WorkDialog>
+          <WorkDialogTitle id="home-vm-cancel-title">
+            <Octicon name={cancelDialog.phase === 'confirm' ? 'x' : 'clock'} size={24} aria-hidden="true" />
+            {cancelDialog.phase === 'confirm' ? '생성을 취소하시겠습니까?' : '생성이 이미 시작됐습니다'}
+          </WorkDialogTitle>
+          {cancelDialog.phase === 'confirm' ? <>
+            <p>{cancelDialog.name} 생성 요청을 취소합니다. 입력한 이름과 사용 목적은 사라지고, 할당량이 바로 돌아옵니다.</p>
+            {cancelError && <p role="alert">{cancelError}</p>}
+            <WorkDialogActions>
+              <Button variant="secondary" onClick={() => setCancelDialog(null)}>닫기</Button>
+              <Button variant="danger" onClick={() => void cancelQueuedVm(cancelDialog.id)}>생성 취소</Button>
+            </WorkDialogActions>
+          </> : <>
+            <p>지금은 취소할 수 없습니다. 생성이 끝난 뒤 VM을 삭제할 수 있습니다.</p>
+            <WorkDialogActions><Button variant="primary" onClick={() => setCancelDialog(null)}>확인</Button></WorkDialogActions>
+          </>}
+        </WorkDialog>
+      </ModalSurface>}
     </StudentShell>
   );
 }

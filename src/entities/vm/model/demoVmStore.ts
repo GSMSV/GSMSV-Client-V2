@@ -29,6 +29,8 @@ export interface DemoVm {
   disk: number;
   /** Demo-only quota consumption for Figma fixtures; never populated from production/API records. */
   demoQuotaDisk?: number;
+  /** Number of completed demo period extensions. */
+  extensionCount?: number;
   os: 'Linux Ubuntu 22.04 LTS' | 'Ubuntu Server';
   nodeType: string;
   createdAt: string;
@@ -381,6 +383,29 @@ export function saveDemoVmCreateRequest(owner: VmOwner, state: DemoVmState, vm: 
   if (!saveDemoVmState(sharedState)) return false;
   if (saveDemoVmCreateState(owner, state)) return true;
   saveDemoVmState(current);
+  return false;
+}
+
+/** Cancels a queued demo request and returns its quota in both personal VM views. */
+export function cancelDemoVmCreateRequest(vmId: string): boolean {
+  const current = getDemoVmState();
+  const target = current.vms.find(vm => vm.id === vmId);
+  if (!target || target.status !== 'queued' || (target.owner === 'team' && target.role === 'member')) return false;
+
+  let personalCreateState: DemoVmState | null = null;
+  if (target.owner === 'personal') {
+    const createState = getDemoVmCreateState('personal');
+    if (createState.vms.some(vm => vm.id === vmId)) {
+      personalCreateState = createState;
+      const nextCreateState = { ...createState, vms: createState.vms.filter(vm => vm.id !== vmId) };
+      if (!saveDemoVmCreateState('personal', nextCreateState)) return false;
+    }
+  }
+
+  const next = { ...current, vms: current.vms.filter(vm => vm.id !== vmId) };
+  if (saveDemoVmState(next)) return true;
+
+  if (personalCreateState) saveDemoVmCreateState('personal', personalCreateState);
   return false;
 }
 

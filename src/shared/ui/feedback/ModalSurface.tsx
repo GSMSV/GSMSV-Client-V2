@@ -16,12 +16,14 @@ const Dialog = styled.dialog`
   }
 `;
 
-export function ModalSurface({ labelledBy, onDismiss, children }: {
+export function ModalSurface({ labelledBy, onDismiss, dismissOnBackdrop = false, children }: {
   labelledBy: string;
   onDismiss?: () => void;
+  dismissOnBackdrop?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const pressedBackdrop = useRef(false);
 
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -30,10 +32,21 @@ export function ModalSurface({ labelledBy, onDismiss, children }: {
   }, []);
 
   return (
-    <Dialog ref={ref} aria-labelledby={labelledBy} onCancel={event => {
-      event.preventDefault();
-      onDismiss?.();
-    }}>
+    <Dialog
+      ref={ref}
+      aria-labelledby={labelledBy}
+      onCancel={event => {
+        event.preventDefault();
+        onDismiss?.();
+      }}
+      onPointerDown={dismissOnBackdrop ? event => {
+        pressedBackdrop.current = event.target === event.currentTarget;
+      } : undefined}
+      onClick={dismissOnBackdrop ? event => {
+        if (pressedBackdrop.current && event.target === event.currentTarget) onDismiss?.();
+        pressedBackdrop.current = false;
+      } : undefined}
+    >
       {children}
     </Dialog>
   );
