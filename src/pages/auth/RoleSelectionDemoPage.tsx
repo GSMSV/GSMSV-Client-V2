@@ -9,18 +9,18 @@ import { Octicon } from '../../shared/ui/icons';
 
 const Screen = styled.main`
   position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 1080px;
-  height: max(100vh, 1080px);
-  overflow: hidden;
+  min-height: 100svh;
+  padding: 48px 0;
+  overflow-x: hidden;
   background: ${({ theme }) => theme.colors.canvas};
 
   @media (max-width: 1024px) {
     display: flex;
     min-height: 100svh;
-    height: auto;
-    overflow: visible;
     padding: 32px 24px;
   }
   @media (max-width: 480px) { padding: 24px 16px; }
@@ -30,7 +30,7 @@ const IntroductionPanel = styled.aside`
   position: absolute;
   inset: 0 auto 0 0;
   width: 320px;
-  min-height: 1080px;
+  overflow: hidden;
   background: ${({ theme }) => theme.colors.sidebar};
   @media (max-width: 1024px) { display: none; }
 `;
@@ -47,15 +47,13 @@ const BrandMark = styled.img`
 `;
 
 const Authentication = styled.section`
-  position: absolute;
-  top: 50%;
-  left: 50%;
+  position: relative;
+  margin-left: 50%;
   display: flex;
   width: 480px;
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
-  transform: translateY(-50%);
 
   @media (max-width: 1024px) {
     position: relative;
