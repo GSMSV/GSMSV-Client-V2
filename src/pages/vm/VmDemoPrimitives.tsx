@@ -314,6 +314,8 @@ export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Res
       home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/docs', support: '/support/inquiries', settings: '/settings',
     };
     routeTo(paths[item]);
+
+    return true;
   };
   const scopeOptions = [
     { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => routeTo('/') },

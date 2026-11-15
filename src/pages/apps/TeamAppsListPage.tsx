@@ -203,6 +203,8 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
     if (item === 'home' || item === 'team') navigate(`/teams/${encodeURIComponent(teamId)}`);
     if (item === 'apps') navigate(`/teams/${encodeURIComponent(teamId)}/apps`);
     if (item === 'database') navigate(`/databases?owner=${encodeURIComponent(teamId)}`);
+
+    return ['home', 'team', 'apps', 'database'].includes(item);
   };
   const retry = () => setRetryKey(value => value + 1);
   const appCount = apps.value?.length ?? 0;

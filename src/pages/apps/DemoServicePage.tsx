@@ -519,6 +519,8 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
     if (item === "apps") navigate(listPath);
     if (item === "team") navigate(teamPath || "/teams");
     if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
+
+    return ['home', 'apps', 'team', 'database'].includes(item);
   };
   const shell = (children: React.ReactNode) => (
     <StudentShell

@@ -510,6 +510,8 @@ export default function VMNetworkPage() {
     if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
     if (item === 'apps') navigate('/apps');
     if (item === 'database') navigate('/databases');
+
+    return ['home', 'team', 'apps', 'database'].includes(item);
   };
 
   const finishAction = () => {

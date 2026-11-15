@@ -217,6 +217,8 @@ export default function DatabaseBackupsPage() {
     if (item === 'apps') navigate(current?.owner.type === 'team' ? teamPath(current, '/apps') : '/apps');
     if (item === 'home') navigate(current?.owner.type === 'team' ? teamPath(current) : '/');
     if (item === 'team') navigate(current?.owner.type === 'team' ? teamPath(current) : '/teams');
+
+    return ['database', 'apps', 'home', 'team'].includes(item);
   };
 
   const download = async (backup: DatabaseBackup) => {

@@ -55,7 +55,7 @@ export interface StudentShellProps {
   scopeOptions?: Array<{ id: string; label: string; selected: boolean; onSelect: () => void }>;
   scopeDisabled?: boolean;
   scopeDisabledReason?: string;
-  onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => void;
+  onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => boolean;
   onCreateTeam: () => void;
   onOpenStatus: () => void;
   onSelectScope: () => void;
@@ -81,6 +81,7 @@ export function StudentShell({
   scopeDisabled,
   scopeDisabledReason,
   onCreateTeam,
+  onNavigate,
   onOpenStatus,
   onSelectScope,
   onSearch,
@@ -134,7 +135,7 @@ export function StudentShell({
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
       navigation.close();
-      navigateToItem(item);
+      if (!onNavigate(item)) navigateToItem(item);
     });
   };
 

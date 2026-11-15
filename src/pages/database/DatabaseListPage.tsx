@@ -376,6 +376,8 @@ export default function DatabaseListPage() {
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'database') navigate('/databases');
+
+    return ['database'].includes(item);
   };
 
   const availableTeams = teams.value ?? [];

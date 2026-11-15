@@ -259,6 +259,7 @@ function ProductionAccountSettingsPage() {
       onNavigate={item => {
         const path = navigationPaths[item];
         if (path) navigateWithUnsavedCheck(path);
+        return Boolean(path);
       }}
       onCreateTeam={() => navigateWithUnsavedCheck('/teams/new')}
       onOpenStatus={() => navigateWithUnsavedCheck('/status')}

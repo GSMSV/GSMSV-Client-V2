@@ -429,6 +429,8 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
       home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/help', support: '/support/inquiries', settings: '/settings',
     };
     void navigate(paths[item]);
+
+    return true;
   };
   const scopeOptions = [
     { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => void navigate('/') },

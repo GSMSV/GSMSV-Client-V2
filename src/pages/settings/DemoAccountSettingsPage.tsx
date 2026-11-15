@@ -192,7 +192,7 @@ export default function DemoAccountSettingsPage() {
     scopeOptions={scopeOptions}
     userName={profile.name}
     profilePhotoUrl={profile.photoDataUrl}
-    onNavigate={item => { const path = navigationPaths[item]; if (path) navigate(path); }}
+    onNavigate={item => { const path = navigationPaths[item]; if (path) navigate(path); return Boolean(path); }}
     onCreateTeam={() => navigate('/teams/new')}
     onOpenStatus={() => navigate('/status')}
     onSelectScope={() => undefined}

@@ -53,7 +53,7 @@ const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
   database: '/databases',
   apps: '/apps',
   team: '/teams',
-  settings: '/settings',
+  settings: '/settings/notifications',
 };
 
 export default function NotificationSettingsPage() {
@@ -114,6 +114,8 @@ export default function NotificationSettingsPage() {
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const path = navigationPaths[item];
     if (path) navigateWithUnsavedCheck(path);
+
+    return Boolean(path);
   };
 
   const performLogout = async () => {

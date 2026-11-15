@@ -289,6 +289,7 @@ export default function TeamCreatePage() {
         else if (item === 'database') navigate('/databases');
         else if (item === 'apps') navigate('/apps');
         else if (item === 'vm-create') navigate('/vms/new');
+        return ['team', 'database', 'apps', 'vm-create'].includes(item);
       }}
       onCreateTeam={() => navigate('/teams/new')}
       onOpenStatus={() => navigate('/status')}
