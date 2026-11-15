@@ -25,6 +25,7 @@ import {
   shellDuration,
 } from "../../features/apps/demoServiceOperations";
 import { DemoAppDialog } from "./DemoAppDialog";
+import { DemoAppStateCards, useDemoAppRequest } from "./DemoAppRequestState";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
@@ -437,6 +438,16 @@ const tabs = [
 type TabKey = (typeof tabs)[number][0];
 const tabLabel = (value: string): TabKey =>
   tabs.some(([key]) => key === value) ? (value as TabKey) : "deployments";
+/** `?demoError=<scope>`로 각 서비스 탭의 불러오기 오류를 볼 수 있다. */
+const serviceRequestScope: Record<TabKey, string> = {
+  deployments: "apps-deploy",
+  logs: "apps-logs",
+  metrics: "apps-metrics",
+  shell: "apps-shell",
+  variables: "apps-variables",
+  settings: "apps-service-settings",
+  domains: "apps-domains",
+};
 
 function MiniPlot({ restart = false }: { restart?: boolean }) {
   return (
@@ -496,6 +507,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   >({});
   const [domainDraft, setDomainDraft] = useState<string>();
   const [shellInput, setShellInput] = useState("");
+  const request = useDemoAppRequest(serviceRequestScope[tab], `${appId}/${serviceId}/${tab}`);
 
   const expiresAt = service?.shellExpiresAt;
   const [clock, setClock] = useState(Date.now);
@@ -1269,7 +1281,9 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
         </Tabs>
         {actionButton}
       </NavRow>
-      {content}
+      {request.status !== "ready"
+        ? <DemoAppStateCards page="service" tab={tab} status={request.status} onRetry={request.retry} />
+        : content}
       {dialog && (dialog.kind === "deploy" || dialog.kind === "rollback") && <DemoAppDialog
         title={dialog.kind === "rollback" ? `${dialog.deployment.commitId ?? dialog.deployment.id}으로 되돌리시겠습니까?` : "이 커밋을 배포하시겠습니까?"}
         confirmLabel={dialog.kind === "rollback" ? "되돌리기" : "배포"}
@@ -1309,7 +1323,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       </DemoAppDialog>}
       {dialog?.kind === "domain" && <DemoAppDialog title="서브도메인을 쓸 수 없습니다" onClose={() => setDialog(undefined)}
         confirmLabel="다른 이름 쓰기" onConfirm={() => { setDialog(undefined); document.getElementById("demo-service-domain")?.focus(); }}>
-        {"· 이미 다른 앱이 쓰는 이름은 쓸 수 없습니다.\n· GSMSV가 쓰려고 남겨 둔 이름도 쓸 수 없습니다."}
+        {`· ${(domainDraft ?? service.subdomain).trim()}은 이미 다른 앱이 쓰고 있습니다.\n· GSMSV가 쓰려고 남겨 둔 이름도 쓸 수 없습니다.`}
       </DemoAppDialog>}
       {notice && <Alert role="status">{notice}</Alert>}
     </Page>,

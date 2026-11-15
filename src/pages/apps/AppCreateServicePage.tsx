@@ -9,7 +9,7 @@ import { ApiRequestError } from '../../shared/api';
 import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { DemoCreateFormState } from './DemoCreateFormState';
 
 type DemoServiceModules = {
@@ -263,12 +263,13 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   useEffect(() => {
     if (!demoMode) { setDemoModules(null); setSource(null); setDemoServiceDraft(null); return; }
     let active = true;
-    void Promise.all([
+    const controller = new AbortController();
+    void simulateDemoRequest('apps-create', controller.signal).then(() => Promise.all([
       import('../../entities/team/demo'),
       import('../../entities/profile'),
       import('../../entities/app/demo'),
       import('../../features/apps/createDemoAppDraft'),
-    ]).then(([team, profile, app, draftModule]) => {
+    ])).then(([team, profile, app, draftModule]) => {
       if (!active) return;
       const modules = { team, profile, app, draft: draftModule };
       const loadedSource = draftModule.readDemoAppDraft(teamId) ?? null;
@@ -290,7 +291,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     }).catch(() => {
       if (active) setDemoLoadError(true);
     });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [demoMode, demoLoadAttempt, navigate, sourcePath, teamId, teamStatusRetry]);
 
   useEffect(() => () => requestController.current?.abort(), []);
@@ -471,7 +472,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   } : {
     title: '서브도메인을 쓸 수 없습니다',
     description: demoMode
-      ? `· ${subdomainValue}은 사용할 수 없습니다.
+      ? `· ${subdomainValue}은 이미 다른 앱이 쓰고 있습니다.
 · GSMSV가 쓰려고 남겨 둔 이름도 쓸 수 없습니다.`
       : '현재 사용할 수 없는 주소입니다. 다른 이름을 선택해 주세요. 주소를 점유한 사용자나 앱 정보는 공개할 수 없습니다.',
     tone: 'warning' as const,

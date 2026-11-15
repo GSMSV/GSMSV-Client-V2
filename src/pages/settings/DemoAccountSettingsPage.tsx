@@ -7,7 +7,8 @@ import { listDemoTeams } from '../../entities/team/demo';
 import type { TeamRole } from '../../entities/team';
 import { DemoAccountConnections, DemoAccountPhoto, DemoAccountWithdrawal } from '../../features/settings/demo-account';
 import { Button } from '../../shared/ui/controls';
-import { Banner, UnsavedChangesDialog } from '../../shared/ui/feedback';
+import { Banner, ErrorCard, LoadingCard, UnsavedChangesDialog } from '../../shared/ui/feedback';
+import { simulateDemoRequest } from '../../shared/demo';
 import { Octicon } from '../../shared/ui/icons';
 import { NotificationSettingsPanel } from '../../features/settings/notification-settings';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
@@ -126,6 +127,21 @@ const Description = styled.p`
   font: ${({ theme: { typography: { bodySmall } } }) => `${bodySmall.weight} ${bodySmall.size}px/${bodySmall.lineHeight}px ${bodySmall.family}`}, sans-serif;
 `;
 const MutedText = styled.p`margin: 0; color: ${({ theme }) => theme.colors.muted};`;
+const StateError = styled(ErrorCard)<{ $height: number }>`height: ${({ $height }) => $height}px; min-width: 0;`;
+
+type LoadStatus = 'loading' | 'error' | 'ready';
+
+/** Figma 23-22·23-23처럼 본문 카드 자리를 로딩 카드나 오류 카드로 채운다. */
+function SettingsStateCard({ status, height, compact, onRetry }: {
+  status: Exclude<LoadStatus, 'ready'>;
+  height: number;
+  compact?: boolean;
+  onRetry: () => void;
+}) {
+  return status === 'error'
+    ? <StateError $height={height} size={compact ? 'compact' : 'default'} onRetry={onRetry} />
+    : <LoadingCard width="100%" height={height} />;
+}
 
 const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
   home: '/', 'vm-create': '/vms/new', database: '/databases', apps: '/apps', team: '/teams', support: '/support/inquiries', settings: '/settings',
@@ -146,6 +162,19 @@ export default function DemoAccountSettingsPage() {
   const [notificationUnsaved, setNotificationUnsaved] = useState(false);
   const [photoUnsaved, setPhotoUnsaved] = useState(false);
   const [loginConfirmationOpen, setLoginConfirmationOpen] = useState(false);
+  // 목데이터 모드: 짧게 로딩을 보여 주고 `?demoError=settings`면 첫 요청을 실패시킨다.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadResult, setLoadResult] = useState<{ attempt: number; status: LoadStatus }>({ attempt: -1, status: 'loading' });
+  const loadStatus: LoadStatus = loadResult.attempt === loadAttempt ? loadResult.status : 'loading';
+  const retryLoad = () => setLoadAttempt(value => value + 1);
+  useEffect(() => {
+    const controller = new AbortController();
+    simulateDemoRequest('settings', controller.signal).then(
+      () => { if (!controller.signal.aborted) setLoadResult({ attempt: loadAttempt, status: 'ready' }); },
+      () => { if (!controller.signal.aborted) setLoadResult({ attempt: loadAttempt, status: 'error' }); },
+    );
+    return () => controller.abort();
+  }, [loadAttempt]);
   const unsaved = notificationUnsaved || photoUnsaved;
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
     unsaved && nextLocation.pathname !== '/login' && currentLocation.pathname !== nextLocation.pathname,
@@ -210,6 +239,17 @@ export default function DemoAccountSettingsPage() {
       <Page>
         <Breadcrumb>설정</Breadcrumb>
         <PageHeading><Title>계정 설정</Title><Intro>DataGSM 계정 정보와 프로필 사진을 확인하세요.</Intro></PageHeading>
+        {loadStatus !== 'ready' ? <>
+          <SettingsStateCard status={loadStatus} height={150} compact onRetry={retryLoad} />
+          <Guide role="note"><strong>업로드 안내</strong><span>JPG, PNG, WebP 파일을 2MB까지 업로드할 수 있습니다. 사진을 선택한 뒤 원하는 영역으로 잘라 저장하세요.</span></Guide>
+          <Columns>
+            <SettingsStateCard status={loadStatus} height={330} onRetry={retryLoad} />
+            <SettingsStateCard status={loadStatus} height={330} onRetry={retryLoad} />
+          </Columns>
+          <SettingsStateCard status={loadStatus} height={200} onRetry={retryLoad} />
+          <SettingsStateCard status={loadStatus} height={384} onRetry={retryLoad} />
+          <SettingsStateCard status={loadStatus} height={328} onRetry={retryLoad} />
+        </> : <>
         <Panel aria-labelledby="profile-photo-title">
           <PanelTitle id="profile-photo-title">프로필 사진</PanelTitle>
           <ProfileRow>
@@ -261,6 +301,7 @@ export default function DemoAccountSettingsPage() {
             }} onLogin={goToLogin} />
           </ActionRow>
         </DangerPanel>
+        </>}
         {blocker.state === 'blocked' && (
           <UnsavedChangesDialog onLeave={blocker.proceed} onStay={blocker.reset} />
         )}

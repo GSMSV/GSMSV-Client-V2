@@ -8,7 +8,7 @@ import { Button } from '../../shared/ui/controls';
 import { SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { DemoCreateFormState } from './DemoCreateFormState';
 
 type DemoCreateModules = {
@@ -248,12 +248,13 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   useEffect(() => {
     if (!demoMode) { setDemoModules(null); setDemoDraft(null); return; }
     let active = true;
-    void Promise.all([
+    const controller = new AbortController();
+    void simulateDemoRequest('apps-create', controller.signal).then(() => Promise.all([
       import('../../entities/profile'),
       import('../../entities/team/demo'),
       import('../../entities/app/demo'),
       import('../../features/apps/createDemoAppDraft'),
-    ]).then(([profile, team, app, draftModule]) => {
+    ])).then(([profile, team, app, draftModule]) => {
       if (!active) return;
       const modules = { profile, team, app, draft: draftModule };
       setDemoModules(modules);
@@ -263,7 +264,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
     }).catch(() => {
       if (active) setDemoLoadError(true);
     });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [demoMode, demoLoadAttempt, teamId]);
 
   useEffect(() => {
