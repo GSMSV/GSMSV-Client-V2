@@ -22,11 +22,12 @@ import { getDemoTeam } from "../../entities/team/demo";
 import { reconcileDemoDatabaseRestarts } from "../../features/apps/demoServiceOperations";
 import { DemoAppDialog, Modal } from "./DemoAppDialog";
 import { DemoAppStateCards, useDemoAppRequest } from "./DemoAppRequestState";
-import { DeleteConfirmDialog } from "../../shared/ui/feedback";
+import { Banner, DeleteConfirmDialog } from "../../shared/ui/feedback";
+import { UsageCard } from "../../shared/ui/data-display";
 import { getSessionUser } from "../../entities/session";
 import { demoAppScopeOptions } from './demoAppScopeOptions';
 import { isDemoMode } from "../../shared/demo";
-import { Button, SegmentedControl, Switch } from "../../shared/ui/controls";
+import { Button, SegmentedControl, SelectField, Switch } from "../../shared/ui/controls";
 import { Octicon } from "../../shared/ui/icons";
 import {
   StudentShell,
@@ -86,6 +87,23 @@ const Title = styled.h1`
       ${({ theme }) => theme.typography.h2.family},
     sans-serif;
 `;
+const PageTitle = styled(Title)`
+  font:
+    ${({ theme }) => theme.typography.h1.weight}
+      ${({ theme }) => theme.typography.h1.size}px /
+      ${({ theme }) => theme.typography.h1.lineHeight}px
+      ${({ theme }) => theme.typography.h1.family},
+    sans-serif;
+`;
+const StateBanner = styled(Banner)`
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+
+    > div:last-child { width: 100%; }
+    > div:last-child > button { flex: 1 1 auto; }
+  }
+`;
 const Subtitle = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.muted};
@@ -101,14 +119,13 @@ const Tabs = styled.nav`
   min-width: 0;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-height: 42px;
-
-  @media (max-width: 600px) {
-    justify-content: flex-start;
-    gap: 4px;
-  }
+`;
+const TabActions = styled.div`
+  display: flex;
+  margin-left: auto;
 `;
 const Tab = styled.button<{ $active?: boolean }>`
   min-width: 57px;
@@ -151,8 +168,54 @@ const CardTitle = styled.h2`
       ${({ theme }) => theme.typography.title.family},
     sans-serif;
 `;
+const formatGb = (mb: number) => new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 }).format(mb / 1024);
+const InfoRow = styled.div`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+
+  > svg { flex: 0 0 16px; color: ${({ theme }) => theme.colors.muted}; }
+`;
+const InfoText = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+
+  > span, > small {
+    color: ${({ theme }) => theme.colors.muted};
+    font:
+      ${({ theme }) => theme.typography.caption.weight}
+        ${({ theme }) => theme.typography.caption.size}px /
+        ${({ theme }) => theme.typography.caption.lineHeight}px
+        ${({ theme }) => theme.typography.caption.family},
+      sans-serif;
+  }
+  > small { color: ${({ theme }) => theme.colors.faint}; }
+  > strong {
+    color: ${({ theme }) => theme.colors.text};
+    font:
+      ${({ theme }) => theme.typography.bodySmall.weight}
+        ${({ theme }) => theme.typography.bodySmall.size}px /
+        ${({ theme }) => theme.typography.bodySmall.lineHeight}px
+        ${({ theme }) => theme.typography.bodySmall.family},
+      sans-serif;
+  }
+`;
+const CountText = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+const SummaryUsage = styled(UsageCard)`
+  width: auto;
+  min-width: 0;
+  min-height: 150px;
+
+  @media (max-width: 600px) { min-height: 0; padding: 16px; }
+`;
 const Summary = styled.div`
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 
@@ -160,30 +223,6 @@ const Summary = styled.div`
   @media (max-width: 600px) {
     grid-template-columns: minmax(0, 1fr);
   }
-`;
-const SummaryCard = styled(Card)`
-  min-height: 150px;
-  justify-content: space-between;
-
-  @media (max-width: 600px) { min-height: 120px; }
-`;
-const SummaryLabel = styled.span`
-  color: ${({ theme }) => theme.colors.muted};
-  font:
-    ${({ theme }) => theme.typography.label.weight}
-      ${({ theme }) => theme.typography.label.size}px /
-      ${({ theme }) => theme.typography.label.lineHeight}px
-      ${({ theme }) => theme.typography.label.family},
-    sans-serif;
-`;
-const SummaryValue = styled.strong`
-  color: ${({ theme }) => theme.colors.text};
-  font:
-    ${({ theme }) => theme.typography.h2.weight}
-      ${({ theme }) => theme.typography.h2.size}px /
-      ${({ theme }) => theme.typography.h2.lineHeight}px
-      ${({ theme }) => theme.typography.h2.family},
-    sans-serif;
 `;
 const SummaryHelp = styled.span`
   color: ${({ theme }) => theme.colors.faint};
@@ -215,38 +254,56 @@ const ServiceGrid = styled.div`
 `;
 const ServiceCard = styled.article`
   display: flex;
+  min-width: 0;
   min-height: 254px;
   flex-direction: column;
-  justify-content: space-between;
   gap: 16px;
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { min-height: 0; padding: 16px; }
 `;
 const ServiceHeader = styled.div`
   display: flex;
   min-width: 0;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 `;
+const FeatureIcon = styled.span`
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+`;
 const ServiceName = styled.h3`
+  overflow: hidden;
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font:
-    ${({ theme }) => theme.typography.title.weight}
-      ${({ theme }) => theme.typography.title.size}px /
-      ${({ theme }) => theme.typography.title.lineHeight}px
-      ${({ theme }) => theme.typography.title.family},
+    ${({ theme }) => theme.typography.h2.weight}
+      ${({ theme }) => theme.typography.h2.size}px /
+      ${({ theme }) => theme.typography.h2.lineHeight}px
+      ${({ theme }) => theme.typography.h2.family},
     sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
-const State = styled.span`
-  color: ${({ theme }) => theme.colors.primary};
+const State = styled.span<{ $tone: "success" | "danger" | "neutral" }>`
+  flex: 0 0 auto;
+  color: ${({ theme, $tone }) => $tone === "success" ? theme.colors.primary : $tone === "danger" ? theme.colors.danger : theme.colors.muted};
   font:
-    ${({ theme }) => theme.typography.caption.weight}
-      ${({ theme }) => theme.typography.caption.size}px /
-      ${({ theme }) => theme.typography.caption.lineHeight}px
-      ${({ theme }) => theme.typography.caption.family},
+    ${({ theme }) => theme.typography.label.weight}
+      ${({ theme }) => theme.typography.label.size}px /
+      ${({ theme }) => theme.typography.label.lineHeight}px
+      ${({ theme }) => theme.typography.label.family},
     sans-serif;
 `;
 const ServiceCardMeta = styled.div`
@@ -254,19 +311,16 @@ const ServiceCardMeta = styled.div`
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
-  color: ${({ theme }) => theme.colors.muted};
-  font:
-    ${({ theme }) => theme.typography.caption.weight}
-      ${({ theme }) => theme.typography.caption.size}px /
-      ${({ theme }) => theme.typography.caption.lineHeight}px
-      ${({ theme }) => theme.typography.caption.family},
-    sans-serif;
+  margin-top: auto;
 `;
-const LinkText = styled.span`
-  color: ${({ theme }) => theme.colors.primary};
+const ServiceLine = styled.span`
+  overflow: hidden;
+  min-width: 0;
+  color: ${({ theme }) => theme.colors.muted};
   text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font:
     ${({ theme }) => theme.typography.bodySmall.weight}
       ${({ theme }) => theme.typography.bodySmall.size}px /
@@ -274,14 +328,14 @@ const LinkText = styled.span`
       ${({ theme }) => theme.typography.bodySmall.family},
     sans-serif;
 `;
-const CronScheduleButton = styled(LinkText).attrs({ as: "button" })`
+const CronScheduleButton = styled(ServiceLine).attrs({ as: "button" })`
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
   text-align: left;
 
-  &:hover, &:focus-visible { text-decoration: underline; }
+  &:hover, &:focus-visible { color: ${({ theme }) => theme.colors.text}; text-decoration: underline; }
 `;
 const Table = styled.div`
   width: 100%;
@@ -314,7 +368,7 @@ const TableRow = styled.div`
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
   align-items: center;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  color: ${({ theme }) => theme.colors.text};
+  color: ${({ theme }) => theme.colors.muted};
   & > span {
     min-width: 0;
     padding: 10px 12px;
@@ -340,20 +394,6 @@ const Notice = styled.div`
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.primarySoft};
   color: ${({ theme }) => theme.colors.primary};
-`;
-const RenewalNotice = styled(Notice)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-
-  @media (max-width: 600px) {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 16px;
-
-    > button { width: 100%; }
-  }
 `;
 const Field = styled.label`
   display: flex;
@@ -390,11 +430,26 @@ const Toggle = styled.div`
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-  > span { min-width: 0; }
+  > span {
+    min-width: 0;
+    color: ${({ theme }) => theme.colors.text};
+    font:
+      ${({ theme }) => theme.typography.label.weight}
+        ${({ theme }) => theme.typography.label.size}px /
+        ${({ theme }) => theme.typography.label.lineHeight}px
+        ${({ theme }) => theme.typography.label.family},
+      sans-serif;
+  }
   small {
     display: block;
-    margin-top: 4px;
+    margin-top: 2px;
     color: ${({ theme }) => theme.colors.faint};
+    font:
+      ${({ theme }) => theme.typography.caption.weight}
+        ${({ theme }) => theme.typography.caption.size}px /
+        ${({ theme }) => theme.typography.caption.lineHeight}px
+        ${({ theme }) => theme.typography.caption.family},
+      sans-serif;
   }
 `;
 
@@ -507,7 +562,7 @@ export function DemoAppOverviewPage() {
         <Breadcrumb>Apps</Breadcrumb>
         <Heading>
           <TitleBlock>
-            <Title>{app.name}</Title>
+            <PageTitle>{app.name}</PageTitle>
             <Subtitle>
               {app.repository} · {app.branch}
             </Subtitle>
@@ -522,39 +577,49 @@ export function DemoAppOverviewPage() {
           >
             설정
           </Tab>
-          {canManage && !expired && <Button
+          {canManage && !expired && <TabActions><Button
             variant="secondary"
+            icon={<Octicon name="plus" size={16} />}
             onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/services/new`)}
           >
             서비스 추가
-          </Button>}
+          </Button></TabActions>}
         </Tabs>
         {request.status !== "ready" ? (
           <DemoAppStateCards page="overview" status={request.status} onRetry={request.retry} environment={environment} />
         ) : <>
-        {(expired || (app.expiresAtMs ?? Infinity) - Date.now() <= 7 * 86_400_000) && <RenewalNotice role="status">
-          <div>
-            <SummaryLabel>{expired ? "정지됐습니다 · 3일 뒤 삭제됩니다" : `만료까지 ${Math.max(1, Math.ceil(((app.expiresAtMs ?? Date.now()) - Date.now()) / 86_400_000))}일 남았어요`}</SummaryLabel>
-            <SummaryHelp>{expired
-              ? `${app.expiresAt}에 사용 기간이 끝났습니다. ${app.stoppedFixture ? "10월 9일 14:00" : formatDemoAppDate(getDemoAppDeletionTime(app))} 전에 연장하면 다시 시작합니다.`
-              : `${app.expiresAt}에 정지됩니다. 연장하면 연결한 Database도 앱보다 먼저 끝나지 않게 함께 연장됩니다.`}</SummaryHelp>
-          </div>
-          <Button variant="secondary" onClick={extendUsage}>사용 기간 연장</Button>
-        </RenewalNotice>}
-        {viewingAsMember && <RenewalNotice role="status"><div>
-          <SummaryLabel>일반 팀원으로 보고 있습니다</SummaryLabel>
-          <SummaryHelp>상태와 로그를 보고 사용 기간을 연장할 수 있습니다. 배포·변수·설정은 팀장·DevOps가 바꿉니다.</SummaryHelp>
-        </div></RenewalNotice>}
+        {(expired || (app.expiresAtMs ?? Infinity) - Date.now() <= 7 * 86_400_000) && <StateBanner
+          tone={expired ? "danger" : "primary"}
+          icon={<Octicon name="clock" size={20} />}
+          title={expired ? "정지됐습니다 · 3일 뒤 삭제됩니다" : `만료까지 ${Math.max(1, Math.ceil(((app.expiresAtMs ?? Date.now()) - Date.now()) / 86_400_000))}일 남았습니다`}
+          description={expired
+            ? `${app.expiresAt}에 사용 기간이 끝났습니다. ${app.stoppedFixture ? "10월 9일 14:00" : formatDemoAppDate(getDemoAppDeletionTime(app))} 전에 연장하면 다시 시작합니다.`
+            : `${app.expiresAt}에 정지됩니다. 연장하면 연결한 Database도 앱보다 먼저 끝나지 않게 함께 연장됩니다.`}
+          action={<Button variant="secondary" icon={<Octicon name="calendar" size={16} />} onClick={extendUsage}>사용 기간 연장</Button>}
+        />}
+        {viewingAsMember && <StateBanner
+          tone="neutral"
+          icon={<Octicon name="shield" size={20} />}
+          title="일반 팀원으로 보고 있습니다"
+          description="상태와 로그를 보고 사용 기간을 연장할 수 있습니다. 배포·변수·설정은 팀장·DevOps가 바꿉니다."
+        />}
         {!expired && visibleServices.map(service => service.restartReason === "limit" ? (
-          <RenewalNotice key={service.id} role="status"><div>
-            <SummaryLabel>10번 넘게 다시 시작해서 멈췄습니다</SummaryLabel>
-            <SummaryHelp>짧은 시간에 계속 종료돼 {service.name}을 멈췄습니다. 로그를 확인하고 다시 배포해 주세요.</SummaryHelp>
-          </div><Button variant="secondary" onClick={() => navigate(getPath(appId, service.id, "logs"))}>로그 보기</Button></RenewalNotice>
+          <StateBanner
+            key={service.id}
+            tone="danger"
+            icon={<Octicon name="sync" size={20} />}
+            title="10번 넘게 다시 시작해서 멈췄습니다"
+            description={`짧은 시간에 계속 종료돼 ${service.name}을 멈췄습니다. 로그를 확인하고 다시 배포해 주세요.`}
+            action={<Button variant="secondary" icon={<Octicon name="terminal" size={16} />} onClick={() => navigate(getPath(appId, service.id, "logs"))}>로그 보기</Button>}
+          />
         ) : service.restartReason === "database" ? (
-          <RenewalNotice key={service.id} role="status"><div>
-            <SummaryLabel>Database 비밀번호가 바뀌어 다시 시작했습니다</SummaryLabel>
-            <SummaryHelp>{service.databaseId?.split(":").at(-1)} 비밀번호를 교체해서 새 값으로 {service.name}을 다시 시작했습니다.</SummaryHelp>
-          </div></RenewalNotice>
+          <StateBanner
+            key={service.id}
+            tone="neutral"
+            icon={<Octicon name="database" size={20} />}
+            title="Database 비밀번호가 바뀌어 다시 시작했습니다"
+            description={`${service.databaseId?.split(":").at(-1)} 비밀번호를 교체해서 새 값으로 ${service.name}을 다시 시작했습니다.`}
+          />
         ) : null)}
         <Card>
           <CardTitle>환경</CardTitle>
@@ -564,37 +629,35 @@ export function DemoAppOverviewPage() {
             value={environment}
             onChange={setEnvironment}
           />
-          <Subtitle>
+          <SummaryHelp>
             production은 main, staging은 develop 브랜치에 push하면 배포됩니다.
-          </Subtitle>
+          </SummaryHelp>
         </Card>
         <Summary>
-          <SummaryCard>
-            <SummaryLabel>서비스</SummaryLabel>
-            <SummaryValue>{visibleServices.length}개</SummaryValue>
-            <SummaryHelp>
-              {(["웹", "워커", "크론"] as const).flatMap(type => {
-                const count = visibleServices.filter(service => service.type === type).length;
-                return count ? [`${type} ${count}`] : [];
-              }).join(" · ") || "서비스가 없습니다"}
-            </SummaryHelp>
-          </SummaryCard>
-          <SummaryCard>
-            <SummaryLabel>메모리 할당량</SummaryLabel>
-            <SummaryValue>{quota.usedMemory} / {demoAppMemoryLimit} MB</SummaryValue>
-            <SummaryHelp>{app.environments.map(item =>
+          <SummaryUsage
+            label="서비스"
+            icon={<Octicon name="server" size={16} />}
+            value={`${visibleServices.length}개`}
+            caption={visibleServices.length ? (["웹", "워커", "크론"] as const).flatMap(type => {
+              const count = visibleServices.filter(service => service.type === type).length;
+              return count ? [<span key={type}>{type} <CountText>{count}</CountText></span>] : [];
+            }).flatMap((item, index) => index ? [" · ", item] : [item]) : "서비스가 없습니다"}
+          />
+          <SummaryUsage
+            label="메모리 할당량"
+            icon={<Octicon name="cpu" size={16} />}
+            value={`${formatGb(quota.usedMemory)} / ${formatGb(demoAppMemoryLimit)} GB`}
+            meter={{ value: Math.min(100, Math.round((quota.usedMemory / demoAppMemoryLimit) * 100)), tone: "primary", label: "메모리 사용량" }}
+            caption={app.environments.map(item =>
               `${item.name} ${app.services.filter(service => service.environment === item.name).reduce((total, service) => total + service.memoryMb, 0)} MB`,
-            ).join(" · ")}</SummaryHelp>
-          </SummaryCard>
-          <SummaryCard>
-            <SummaryLabel>최근 배포</SummaryLabel>
-            <SummaryValue>
-              {latestDeployment?.at ?? "—"}
-            </SummaryValue>
-            <SummaryHelp>
-              {latestDeployment ? `${latestDeployment.service} · ${latestDeployment.commitId ?? latestDeployment.id} · ${latestDeployment.author}` : "—"}
-            </SummaryHelp>
-          </SummaryCard>
+            ).join(" · ")}
+          />
+          <SummaryUsage
+            label="최근 배포"
+            icon={<Octicon name="history" size={16} />}
+            value={latestDeployment?.at ?? "—"}
+            caption={latestDeployment ? `${latestDeployment.service} · ${latestDeployment.commitId ?? latestDeployment.id} · ${latestDeployment.author}` : "—"}
+          />
         </Summary>
         <section>
           <ServicesHeading>
@@ -603,37 +666,37 @@ export function DemoAppOverviewPage() {
           <ServiceGrid>
             {visibleServices.map((service) => {
               const deployed = service.deployments.find(item => item.status === "running");
+              const status = expired ? "정지" : service.status;
               return <ServiceCard key={service.id}>
                 <ServiceHeader>
-                  <Octicon
-                    name={service.type === "웹" ? "globe" : "clock"}
-                    size={20}
-                  />
+                  <FeatureIcon aria-hidden="true">
+                    <Octicon name={service.type === "웹" ? "globe" : "clock"} size={20} />
+                  </FeatureIcon>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
+                    icon={<Octicon name="arrow-right" size={16} />}
+                    aria-label={`${service.name} 열기`}
                     onClick={() => navigate(getPath(appId, service.id))}
                   >
                     열기
                   </Button>
                 </ServiceHeader>
-                <div>
-                  <ServiceName>{service.name}</ServiceName>
-                  {service.type === "웹" && expired ? (
-                    <LinkText as={Link} to={`/public/${encodeURIComponent(appId)}/stopped?service=${encodeURIComponent(service.id)}`}>https://{service.subdomain}.{"{앱 도메인}"}</LinkText>
-                  ) : service.type === "크론" ? (
-                    <CronScheduleButton type="button" onClick={() => setCronService(service)}>매일 03:00 (서울)</CronScheduleButton>
-                  ) : <LinkText>{service.type === "웹" ? `https://${service.subdomain}.{앱 도메인}` : "주소 없음"}</LinkText>}
-                  <Subtitle>
-                    {service.type} · {service.memoryMb} MB · {service.cpu} vCPU
-                  </Subtitle>
-                </div>
+                <ServiceName>{service.name}</ServiceName>
+                {service.type === "웹" && expired ? (
+                  <ServiceLine as={Link} to={`/public/${encodeURIComponent(appId)}/stopped?service=${encodeURIComponent(service.id)}`}>https://{service.subdomain}.{"{앱 도메인}"}</ServiceLine>
+                ) : service.type === "크론" ? (
+                  <CronScheduleButton type="button" onClick={() => setCronService(service)}>매일 03:00 (서울)</CronScheduleButton>
+                ) : <ServiceLine>{service.type === "웹" ? `https://${service.subdomain}.{앱 도메인}` : "주소 없음"}</ServiceLine>}
+                <ServiceLine>
+                  {service.type} · {service.memoryMb} MB · {service.cpu} vCPU
+                </ServiceLine>
                 <ServiceCardMeta>
-                  <span>
+                  <ServiceLine>
                     {service.type === "크론" && service.lastCronRunAt
                       ? `지난 실행 ${service.lastCronRunAt} · 성공`
                       : deployed ? `${deployed.commitId ?? deployed.id} · ${deployed.at} 배포` : "—"}
-                  </span>
-                  <State>{expired ? "정지" : service.status}</State>
+                  </ServiceLine>
+                  <State $tone={status === "실행 중" ? "success" : status === "정지" ? "danger" : "neutral"}>{status}</State>
                 </ServiceCardMeta>
               </ServiceCard>;
             })}
@@ -810,7 +873,7 @@ export function DemoAppSettingsPage() {
         <Breadcrumb>Apps</Breadcrumb>
         <Heading>
           <TitleBlock>
-            <Title>{app.name}</Title>
+            <PageTitle>{app.name}</PageTitle>
             <Subtitle>
               {app.repository} · {app.branch}
             </Subtitle>
@@ -823,9 +886,9 @@ export function DemoAppSettingsPage() {
             개요
           </Tab>
           <Tab $active>설정</Tab>
-          <Button icon={<Octicon name="check" size={16} />} onClick={saveSettings} disabled={!canManage || request.status !== "ready"}>
+          <TabActions><Button icon={<Octicon name="check" size={16} />} onClick={saveSettings} disabled={!canManage || request.status !== "ready"}>
             설정 저장
-          </Button>
+          </Button></TabActions>
         </Tabs>
         {request.status !== "ready" ? (
           <DemoAppStateCards page="app-settings" status={request.status} onRetry={request.retry} />
@@ -835,6 +898,7 @@ export function DemoAppSettingsPage() {
             <CardTitle>환경 · {draft?.environments.length ?? 0} / 3</CardTitle>
             <Button
               variant="secondary"
+              icon={<Octicon name="plus" size={16} />}
               onClick={() => {
                 setNotice("");
                 setEnvironmentName("preview");
@@ -878,6 +942,7 @@ export function DemoAppSettingsPage() {
                 <span>
                   <Button
                     variant="ghost"
+                    icon={<Octicon name={editingEnvironment === env.name ? "check" : "pencil"} size={16} />}
                     disabled={!canManage}
                     onClick={() => {
                       if (editingEnvironment === env.name) {
@@ -915,10 +980,10 @@ export function DemoAppSettingsPage() {
               </EnvSettingsRow>
             ))}
           </Table>
-          <Subtitle>
+          <SummaryHelp>
             환경은 3개까지 만들 수 있습니다. CI 기다리기를 켜면 GitHub 검사를
             통과한 커밋만 배포합니다.
-          </Subtitle>
+          </SummaryHelp>
         </Card>
         <Card>
           <CardTitle>PR 미리보기</CardTitle>
@@ -943,26 +1008,19 @@ export function DemoAppSettingsPage() {
               }}
             />
           </Toggle>
-          <Field>
-            기준 환경
-            <select
-              aria-label="기준 환경"
-              disabled={!canManage}
-              value={draft?.services[0]?.previewEnvironment ?? "production"}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                setDraft(current => current ? {
-                  ...current,
-                  services: current.services.map(service => ({ ...service, previewEnvironment: value })),
-                } : current);
-                setNotice("");
-              }}
-            >
-              {(draft?.environments ?? []).map((env) => (
-                <option key={env.name}>{env.name}</option>
-              ))}
-            </select>
-          </Field>
+          <SelectField
+            label="기준 환경"
+            disabled={!canManage}
+            value={draft?.services[0]?.previewEnvironment ?? "production"}
+            options={(draft?.environments ?? []).map(env => ({ value: env.name, label: env.name }))}
+            onChange={(value) => {
+              setDraft(current => current ? {
+                ...current,
+                services: current.services.map(service => ({ ...service, previewEnvironment: value })),
+              } : current);
+              setNotice("");
+            }}
+          />
           <Toggle>
             <span>
               봇이 연 PR도 미리보기
@@ -982,38 +1040,42 @@ export function DemoAppSettingsPage() {
               }}
             />
           </Toggle>
-          <Subtitle>
+          <SummaryHelp>
             미리보기는 동시에 2개까지 열리고 7일 뒤 정리됩니다. 배포 권한이 없는
             사람의 PR은 미리보기를 열지 않습니다.
-          </Subtitle>
+          </SummaryHelp>
         </Card>
         <Card>
           <ServicesHeading>
             <CardTitle>사용 기간</CardTitle>
-            <Button variant="secondary" onClick={extendUsage}>
+            <Button variant="secondary" icon={<Octicon name="calendar" size={16} />} onClick={extendUsage}>
               사용 기간 연장
             </Button>
           </ServicesHeading>
-          <Field>
-            만료
-            <input disabled value={app.expiresAt} />
-          </Field>
-          <Subtitle>
-            연장하면 연결한 Database도 앱보다 먼저 끝나지 않게 함께 연장됩니다.
-          </Subtitle>
+          <InfoRow>
+            <Octicon name="calendar" size={16} />
+            <InfoText>
+              <span>만료</span>
+              <strong>{app.expiresAt}</strong>
+              <small>연장하면 {app.expiresAt === "10월 6일 14:00" ? "10월 20일 14:00" : formatDemoAppDate(Math.max(Date.now(), app.expiresAtMs ?? Date.now()) + 14 * 86_400_000)}까지 쓸 수 있습니다. 연결한 Database도 앱보다 먼저 끝나지 않게 함께 연장됩니다.</small>
+            </InfoText>
+          </InfoRow>
         </Card>
         <Card>
           <ServicesHeading>
             <CardTitle>앱 삭제</CardTitle>
-            <Button variant="danger" disabled={!canManage} onClick={() => setDeleteName("")}>
+            <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!canManage} onClick={() => setDeleteName("")}>
               앱 삭제
             </Button>
           </ServicesHeading>
-          <Subtitle>
-            서비스 {app.services.length}개 · 환경 {app.environments.length}개 ·
-            배포 기록과 변수가 지워집니다. 연결한 Database는 남습니다. 삭제할 앱
-            이름을 입력해 확인합니다.
-          </Subtitle>
+          <InfoRow>
+            <Octicon name="alert" size={16} />
+            <InfoText>
+              <span>삭제하면</span>
+              <strong>서비스 {app.services.length}개 · 환경 {app.environments.length}개 · 배포 기록과 변수가 지워집니다</strong>
+              <small>연결한 Database는 남습니다. 삭제할 때 앱 이름을 입력해 확인합니다.</small>
+            </InfoText>
+          </InfoRow>
         </Card>
         </>}
         {addingEnvironment && <Modal onClose={() => setAddingEnvironment(false)}>

@@ -19,6 +19,7 @@ type DemoServiceModules = {
   draft: typeof import('../../features/apps/createDemoAppDraft');
 };
 
+const formatGb = (mb: number) => new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 }).format(mb / 1024);
 const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
 
 const Page = styled.div`
@@ -571,7 +572,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
           <Card>
             <CardHeader>
               <CardTitle>자원</CardTitle>
-              <QuotaMeta>{quota ? `메모리 할당량 ${quota.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 ${quota.freeMemory} MB` : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
+              <QuotaMeta>{quota ? `메모리 할당량 ${formatGb(quota.usedMemory)}/2 GB 사용 중 · 남은 할당량 ${formatGb(quota.freeMemory)} GB` : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
             </CardHeader>
             <ResourceFields>
               <SliderField
