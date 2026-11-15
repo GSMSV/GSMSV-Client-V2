@@ -3,36 +3,62 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoQueryAudit, saveDemoQueryAudit } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
-import { DemoOnlyGate, Breadcrumb, Card, CardHeader, Heading, Muted, PageStack, SectionTitle, Subtitle, Table, TableWrap, Title, TitleGroup, WorkflowLayout } from '../demo-workflows/ui/WorkflowLayout';
+import { DatabaseTab, DatabaseTabs } from './DatabaseTabs';
+import { DemoOnlyGate, Breadcrumb, Card, CardHeader, Heading, PageStack, SectionTitle, Subtitle, Table, TableWrap, Title, TitleGroup, WorkflowLayout } from '../demo-workflows/ui/WorkflowLayout';
 
-const Editor = styled.textarea`
-  display: block;
-  width: 100%;
-  min-height: 120px;
+const EditorFrame = styled.div`
+  display: flex;
+  gap: 16px;
   padding: 16px;
-  border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
   outline: 1px solid transparent;
-  background: #211f24;
+  background: ${({ theme }) => theme.colors.sidebar};
+  font: ${({ theme }) => theme.typography.code.weight} ${({ theme }) => theme.typography.code.size}px/${({ theme }) => theme.typography.code.lineHeight}px ${({ theme }) => theme.typography.code.family}, monospace;
+  &:focus-within { outline-color: ${({ theme }) => theme.colors.primary}; }
+`;
+const LineNumbers = styled.span`
+  flex: 0 0 28px;
+  color: ${({ theme }) => theme.colors.faint};
+  white-space: pre;
+  user-select: none;
+`;
+const Editor = styled.textarea`
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text};
-  font: 400 13px/22px 'DM Mono', monospace;
-  resize: vertical;
-  &:focus { outline-color: ${({ theme }) => theme.colors.primary}; }
+  font: inherit;
+  white-space: pre;
+  overflow-x: auto;
+  resize: none;
+`;
+const QueryHint = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+const PageBreadcrumb = styled(Breadcrumb)`
+  margin: 0;
 `;
 const EditorHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   color: ${({ theme }) => theme.colors.primary};
 `;
 const QueryActions = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   margin-top: 16px;
@@ -44,19 +70,6 @@ const QueryActions = styled.div`
     > button { align-self: flex-end; }
   }
 `;
-const DatabaseTabs = styled.nav`
-  display: flex;
-  min-width: 0;
-  gap: 8px;
-
-  @media (max-width: 600px) {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-
-    > button { flex: 0 0 auto; }
-  }
-`;
 const ResultsTable = styled(Table)`
   min-width: 720px;
 `;
@@ -64,14 +77,18 @@ const FooterNote = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: ${({ theme }) => theme.colors.faint};
-  font: 400 12px/18px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+const FooterTitle = styled.span`
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
 `;
 const ResultHeading = styled.div`
-  margin-bottom: 16px;
   color: ${({ theme }) => theme.colors.text};
-  font: 500 20px/28px ${({ theme }) => theme.typography.title.family}, sans-serif;
+  font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
 `;
+// Figma 45 results table column split (id · name · email · created_at).
+const userColumnWidths = ['14%', '40%', '18%', '28%'];
 const ErrorText = styled.p`
   margin: 16px 0 0;
   color: ${({ theme }) => theme.colors.danger};
@@ -215,6 +232,8 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
   }, []);
   const databaseName = database?.name ?? databaseId;
   const teamScopeId = database?.owner?.type === 'team' ? database.owner.id : undefined;
+  const teamRole = teamScopeId ? getDemoTeam(teamScopeId)?.my_role : undefined;
+  const teamRoleLabel = teamRole === 'leader' ? '팀장' : teamRole === 'devops' ? 'DevOps' : teamRole === 'member' ? '팀원' : '팀';
 
   function runQuery() {
     if (!isDemoMode() || !databaseResolved || !database || database.status !== 'active' || database.isolation === 'dedicated' || executing) return;
@@ -329,14 +348,14 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
 
   if (database?.isolation === 'dedicated') return <Navigate to={`/databases/${encodeURIComponent(databaseId)}`} replace />;
 
-  return <WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · 팀` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
-    <Breadcrumb>Database</Breadcrumb>
+  return <WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · ${teamRoleLabel}` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
+    <PageBreadcrumb>Database</PageBreadcrumb>
     <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database ? `${database.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · 공유형` : databaseResolved ? 'Database를 사용할 수 없습니다' : 'Database 확인 중'}</Subtitle></TitleGroup></Heading>
     <DatabaseTabs aria-label="Database 메뉴">
-      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}`)}>접속 정보</Button>
-      <Button variant="primary" aria-current="page">쿼리 콘솔</Button>
-      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/backups`)}>백업</Button>
-      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/settings`)}>설정</Button>
+      <DatabaseTab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}`)}>접속 정보</DatabaseTab>
+      <DatabaseTab type="button" $active aria-current="page">쿼리 콘솔</DatabaseTab>
+      <DatabaseTab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/backups`)}>백업</DatabaseTab>
+      <DatabaseTab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/settings`)}>설정</DatabaseTab>
     </DatabaseTabs>
     {database?.status === 'suspended' && <Banner title="Database가 정지되어 쿼리를 실행하지 않았습니다" description="사용 기간을 연장한 뒤 다시 실행해 주세요." tone="danger" icon={<Octicon name="clock" size={20} />} />}
     {outcome === 'write-locked' && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
@@ -346,16 +365,19 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
     {!databaseResolved ? <><LoadingCard height={178} /><LoadingCard height={178} /></> : loadError ? <><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /></> : <>
     <Card>
       <EditorHeader><Octicon name="code" size={16} /><SectionTitle>쿼리</SectionTitle></EditorHeader>
-      <Editor aria-label="SQL 쿼리" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} />
-      <QueryActions><Muted>45초가 지나면 멈추고, 결과는 1,000행 또는 1 MB까지 보입니다.</Muted><Button icon={<Octicon name="play" size={16} />} disabled={!databaseResolved || !database || database.status !== 'active' || executing} onClick={runQuery}>실행</Button></QueryActions>
+      <EditorFrame>
+        <LineNumbers aria-hidden="true">{Array.from({ length: Math.max(4, query.split('\n').length) }, (_, index) => index + 1).join('\n')}</LineNumbers>
+        <Editor aria-label="SQL 쿼리" spellCheck={false} wrap="off" rows={Math.max(4, query.split('\n').length)} value={query} onChange={(event) => setQuery(event.target.value)} />
+      </EditorFrame>
+      <QueryActions><QueryHint>45초가 지나면 멈추고, 결과는 1,000행 또는 1 MB까지 보입니다.</QueryHint><Button icon={<Octicon name="play" size={16} />} disabled={!databaseResolved || !database || database.status !== 'active' || executing} onClick={runQuery}>실행</Button></QueryActions>
       {databaseResolved && !database && !loadError && <ErrorText role="alert">Database를 찾을 수 없거나 삭제되었습니다. Database 목록에서 사용 가능한 Database를 선택해 주세요.</ErrorText>}
       {database && error && ran && <ErrorText role="alert">{error}</ErrorText>}
     </Card>
     <Card>
       <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행 · 0.04초</ResultHeading></CardHeader>
-      <TableWrap><ResultsTable><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
+      <TableWrap><ResultsTable>{resultColumns.join(',') === userColumns.join(',') && <colgroup>{userColumnWidths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup>}<thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
     </Card>
     </>}
-    <FooterNote><span>SQL과 결과는 저장하지 않습니다</span><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
+    <FooterNote><FooterTitle>SQL과 결과는 저장하지 않습니다</FooterTitle><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
   </PageStack></WorkflowLayout>;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { extendDatabase, getDatabase, getDatabaseCredentials, listDatabaseBackups } from '../../entities/database';
@@ -9,8 +9,9 @@ import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/tea
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
-import { Octicon } from '../../shared/ui/icons';
+import { Octicon, type OcticonName } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { DatabaseTab as Tab, DatabaseTabs as Tabs } from './DatabaseTabs';
 
 const Page = styled.div`
   display: flex;
@@ -43,61 +44,62 @@ const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
-const Tabs = styled.nav`display: flex; width: 100%; flex-wrap: wrap; gap: 8px;`;
-const Tab = styled.button<{ $active?: boolean }>`
-  display: inline-flex; min-height: 42px; align-items: center; padding: 0 12px; border: 0; border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
-  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  cursor: pointer;
-  &:hover:not(:disabled) { background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : theme.colors.overlayHover}; color: ${({ theme }) => theme.colors.text}; }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
-`;
 const Summary = styled.section`
   display: flex; align-items: stretch; gap: 16px; width: 100%;
   @media (max-width: 720px) { flex-wrap: wrap; }
 `;
-const FlexibleUsageCard = styled(UsageCard)`width: auto; min-width: 0; flex: 1 1 0;`;
+const FlexibleUsageCard = styled(UsageCard)`
+  width: auto; min-width: 0; flex: 1 1 0;
+  @media (max-width: 720px) { flex-basis: 100%; }
+`;
 const Section = styled.section`display: flex; flex-direction: column; gap: 16px; width: 100%;`;
 const SectionTitle = styled.h2`
   margin: 0; color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
 `;
 const Card = styled.section`display: flex; width: 100%; flex-direction: column; gap: 16px; padding: 24px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.surface};`;
-const CardHeading = styled.h3`
+const NotFoundHeader = styled.div`display: flex; align-items: center; gap: 12px; color: ${({ theme }) => theme.colors.primary};`;
+const NotFoundTitle = styled.h2`
   margin: 0; color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
 `;
-const DetailGrid = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 40px;
-  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
+const InfoRow = styled.div`
+  display: flex; min-height: 44px; align-items: center; gap: 16px; width: 100%;
+  @media (max-width: 560px) { gap: 12px; }
 `;
-const Field = styled.div`display: flex; min-width: 0; flex-direction: column; gap: 6px;`;
+const InfoIcon = styled.span`display: inline-flex; flex: 0 0 16px; color: ${({ theme }) => theme.colors.muted};`;
+const InfoValue = styled.div`display: flex; min-width: 0; flex: 1 1 0; flex-direction: column; gap: 4px;`;
+const InfoActions = styled.div`
+  display: flex; flex: 0 0 auto; gap: 8px; margin-left: auto;
+  @media (max-width: 560px) { gap: 0; }
+`;
 const Label = styled.span`
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 const PlainValue = styled.span`
   overflow-wrap: anywhere; color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+const EditorHeader = styled.div`
+  display: flex; align-items: center; gap: 12px; color: ${({ theme }) => theme.colors.primary};
+`;
+const Code = styled.div`
+  display: flex; gap: 16px; overflow-x: auto; padding: 16px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.sidebar}; color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.code.weight} ${({ theme }) => theme.typography.code.size}px/${({ theme }) => theme.typography.code.lineHeight}px ${({ theme }) => theme.typography.code.family}, monospace;
 `;
-const Code = styled.pre`
-  overflow-x: auto; margin: 0; padding: 16px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.canvas}; color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.code.weight} ${({ theme }) => theme.typography.code.size}px/${({ theme }) => theme.typography.code.lineHeight}px ${({ theme }) => theme.typography.code.family}, monospace;
+const LineNumbers = styled.span`flex: 0 0 28px; color: ${({ theme }) => theme.colors.faint}; white-space: pre; user-select: none;`;
+const CodeLines = styled.code`min-width: 0; flex: 1 1 auto; font: inherit; white-space: pre;`;
+const CodeHelp = styled.p`
+  margin: 0; color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 const HelpText = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
-const FieldValueRow = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;`;
 const ActionRow = styled.div`display: flex; justify-content: flex-end;`;
 const TallErrorCard = styled(ErrorCard)`height: 276px;`;
-const CopyButton = styled.button`
-  flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: ${({ theme }) => theme.colors.primary};
-  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
-  cursor: pointer;
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 3px; }
-`;
 
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
 const initial = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
@@ -108,6 +110,28 @@ function dateTime(value: string) {
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(date);
 }
+const kstParts = (date: Date) => Object.fromEntries(new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Seoul' })
+  .formatToParts(date).map(part => [part.type, part.value]));
+function monthDayTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = kstParts(date);
+  return `${parts.month}월 ${parts.day}일 ${parts.hour}:${parts.minute}`;
+}
+function backupTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = kstParts(date);
+  const sameDay = (other: Record<string, string>) => other.year === parts.year && other.month === parts.month && other.day === parts.day;
+  if (sameDay(kstParts(new Date()))) return `오늘 ${parts.hour}:${parts.minute}`;
+  if (sameDay(kstParts(new Date(Date.now() - 86_400_000)))) return `어제 ${parts.hour}:${parts.minute}`;
+  return dateTime(value);
+}
+const DEMO_EXTENSION_MS = 14 * 86_400_000;
+function demoExtendedExpiry(expiresAt: string) {
+  const time = new Date(expiresAt).getTime();
+  return new Date(Math.max(Number.isNaN(time) ? 0 : time, Date.now()) + DEMO_EXTENSION_MS).toISOString();
+}
 function remainingDays(value: string) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? null : Math.ceil((time - Date.now()) / 86_400_000);
@@ -116,7 +140,12 @@ function engineName(value: DatabaseDetail['engine']) { return value === 'mysql' 
 function sqlExample(database: DatabaseDetail) {
   if (database.engine === 'mysql') {
     const escapedName = database.connection.database.replaceAll('`', '``');
-    return { code: `USE \`${escapedName}\`;\nSHOW TABLES;`, help: '이름에 하이픈이 있어도 MySQL 식별자 표기법으로 감싸서 사용할 수 있습니다.' };
+    return {
+      code: `USE \`${escapedName}\`;\nSHOW TABLES;`,
+      help: database.connection.database.includes('-')
+        ? '이름에 하이픈이 있어서 따옴표로 감싸야 합니다. 따옴표 없이 쓰면 문법 오류가 납니다.'
+        : '이름에 하이픈이 있어도 MySQL 식별자 표기법으로 감싸서 사용할 수 있습니다.',
+    };
   }
   return {
     code: `SELECT table_name\nFROM information_schema.tables\nWHERE table_schema = 'public';`,
@@ -328,7 +357,7 @@ export default function DatabaseDetailPage() {
     setExtendError(false);
     try {
       if (isDemoMode()) {
-        const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
+        const expiresAt = demoExtendedExpiry(detail.value?.expires_at ?? new Date().toISOString());
         const demo = await import('../../entities/database/demo');
         const status = detail.value?.status === 'suspended' ? 'active' : detail.value?.status;
         const result = demo.updateDemoDatabase(databaseGrn, { expires_at: expiresAt, ...(status ? { status } : {}) });
@@ -344,15 +373,22 @@ export default function DatabaseDetailPage() {
     finally { setIsExtending(false); }
   };
 
-  const copyableField = (label: string, value: string) => (
-    <Field key={label}>
-      <Label>{label}</Label>
-      <FieldValueRow><PlainValue>{value}</PlainValue><CopyButton type="button" onClick={() => void copy(label, value)}>{copiedField === label ? '복사됨' : '복사'}</CopyButton></FieldValueRow>
-    </Field>
+  const copyLabel = (label: string) => copiedField === label ? '복사됨' : '복사';
+  const infoRow = (icon: OcticonName, label: string, value: ReactNode, actions?: ReactNode) => (
+    <InfoRow key={label}>
+      <InfoIcon aria-hidden="true"><Octicon name={icon} size={16} /></InfoIcon>
+      <InfoValue><Label>{label}</Label><PlainValue>{value}</PlainValue></InfoValue>
+      {actions && <InfoActions>{actions}</InfoActions>}
+    </InfoRow>
+  );
+  const copyableField = (icon: OcticonName, label: string, value: string) => infoRow(icon, label, value,
+    <Button variant="ghost" icon={<Octicon name="copy" size={16} />} aria-label={`${label} 복사`} onClick={() => void copy(label, value)}>{copyLabel(label)}</Button>);
+  const codeBlock = (code: string) => (
+    <Code><LineNumbers aria-hidden="true">{code.split('\n').map((_, index) => index + 1).join('\n')}</LineNumbers><CodeLines>{code}</CodeLines></Code>
   );
 
   return (
-    <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>
+    <StudentShell activeItem="database" scopeLabel={scopeOptions.find(option => option.selected)?.label ?? (detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources')} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>
       <Page>
         <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
         {detail.loading && !detail.value ? <LoadingCard height={300} /> : loadFailed && !detail.value ? (
@@ -368,7 +404,7 @@ export default function DatabaseDetailPage() {
           </>
         ) : detail.error && !detail.value ? (
           <Card>
-            <CardHeading>Database를 찾을 수 없습니다</CardHeading>
+            <NotFoundHeader><Octicon name="search" size={24} /><NotFoundTitle>Database를 찾을 수 없습니다</NotFoundTitle></NotFoundHeader>
             <HelpText>삭제됐거나 볼 수 있는 권한이 없습니다. 7일 안에 삭제한 Database는 문의로 되살릴 수 있습니다.</HelpText>
             <ActionRow><Button variant="primary" icon={<Octicon name="database" size={16} />} onClick={() => navigate('/databases')}>Database 목록</Button></ActionRow>
           </Card>
@@ -388,35 +424,37 @@ export default function DatabaseDetailPage() {
             {detail.value.write_locked ? <Banner title="용량을 넘어 쓰기가 막혔습니다" description="읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다. 지워도 크기가 바로 줄지 않을 수 있습니다." tone="danger" icon={<Octicon name="alert" size={20} />} action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/docs')}>용량 줄이는 방법</Button>} />
               : storageWarning ? <Banner title="용량을 80% 넘게 쓰고 있습니다" description={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB · ${formatNumber(detail.value.storage.owner_limit_gb)} GB를 넘으면 쓰기가 막힙니다. 쓰지 않는 데이터를 정리해 주세요.`} tone="warning" icon={<Octicon name="alert" size={20} />} /> : null}
             {!detail.value.write_locked && unlockedAt && <Banner title="다시 쓸 수 있습니다" description={`용량이 ${formatNumber(detail.value.storage.owner_limit_gb)} GB 아래로 내려가서 쓰기 금지를 풀었습니다.`} tone="primary" icon={<Octicon name="check-circle" size={20} />} />}
-            {detail.value.status === 'suspended' && <Banner title={suspensionInfo ? `정지됐습니다 · ${suspensionInfo.deleteInDays}일 뒤 삭제됩니다` : 'Database가 정지됐습니다'} description={suspensionInfo ? `${dateTime(detail.value.expires_at)}에 만료돼 접속이 막혔습니다. ${dateTime(suspensionInfo.deleteAt)} 전에 연장하면 다시 쓸 수 있습니다.` : `만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
+            {detail.value.status === 'suspended' && <Banner title={suspensionInfo ? `정지됐습니다 · ${suspensionInfo.deleteInDays}일 뒤 삭제됩니다` : 'Database가 정지됐습니다'} description={suspensionInfo ? `${monthDayTime(detail.value.expires_at)}에 만료돼 접속이 막혔습니다. ${monthDayTime(suspensionInfo.deleteAt)} 전에 연장하면 다시 쓸 수 있습니다.` : `만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
             {departedMembers.length > 0 && <Banner title="비밀번호 교체를 권합니다" description={`${departedMembers.join(', ')} 님이 팀을 나갔습니다. 이 Database의 비밀번호를 알고 있을 수 있습니다.`} tone="warning" icon={<Octicon name="key" size={20} />} action={detail.value.permissions.rotate_password ? <Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>비밀번호 교체</Button> : undefined} />}
-            {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && detail.value.status !== 'suspended' && <Banner title={`만료까지 ${daysLeft}일 남았습니다`} description={`만료 시각은 ${dateTime(detail.value.expires_at)}입니다.`} tone="primary" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="primary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
+            {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && detail.value.status !== 'suspended' && <Banner title={`만료까지 ${daysLeft}일 남았습니다`} description={demoMode ? `${monthDayTime(detail.value.expires_at)}에 정지됩니다. 지금 연장하면 ${monthDayTime(demoExtendedExpiry(detail.value.expires_at))}까지 사용할 수 있습니다.` : `만료 시각은 ${dateTime(detail.value.expires_at)}입니다.`} tone="primary" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
             {extendedUntil && <Banner title="사용 기간을 연장했습니다" description={`${dateTime(extendedUntil)}까지 사용할 수 있습니다.`} tone="primary" icon={<Octicon name="check-circle" size={20} />} />}
             {extendError && <ErrorCard size="compact" onRetry={() => void extend()} />}
             <Summary aria-label="Database 요약">
               <FlexibleUsageCard label="사용 용량" icon={<Octicon name="graph" size={16} />} value={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB`} caption="내 Database를 모두 합해 세요" meter={{ value: detail.value.storage.owner_limit_gb > 0 ? Math.min(100, detail.value.storage.owner_total_used_gb / detail.value.storage.owner_limit_gb * 100) : 0, tone: detail.value.write_locked ? 'danger' : storageWarning ? 'warning' : 'primary', label: 'Database 전체 용량 사용량' }} />
-              <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`${currentConnections ?? '—'} / ${formatNumber(detail.value.max_connections)}`} caption={currentConnections !== null ? `계정당 ${formatNumber(detail.value.max_connections)}개까지 · 넘으면 거절됩니다` : '현재 연결 수는 API에서 제공하지 않습니다'} />
-              <FlexibleUsageCard label="최근 백업" icon={<Octicon name="history" size={16} />} value={backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : latestBackup ? dateTime(latestBackup.created_at) : '백업 없음'} caption={latestBackup ? `자동 백업 · ${formatNumber(latestBackup.size_mb)} MB · 7일 보관` : backups.error ? '백업 목록을 불러오지 못했습니다' : '매일 자동 백업 · 7일 보관'} />
+              <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`${currentConnections ?? '—'} / ${formatNumber(detail.value.max_connections)}`} caption={currentConnections !== null ? `계정당 ${formatNumber(detail.value.max_connections)}개까지 · 넘으면 거절됩니다` : '현재 연결 수는 API에서 제공하지 않습니다'} meter={currentConnections !== null && detail.value.max_connections > 0 ? { value: Math.min(100, currentConnections / detail.value.max_connections * 100), tone: currentConnections >= detail.value.max_connections ? 'danger' : currentConnections / detail.value.max_connections >= 0.8 ? 'warning' : 'primary', label: '동시 연결 사용량' } : undefined} />
+              <FlexibleUsageCard label="최근 백업" icon={<Octicon name="history" size={16} />} value={backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : latestBackup ? backupTime(latestBackup.created_at) : '백업 없음'} caption={latestBackup ? '매일 1회 · 7일 보관' : backups.error ? '백업 목록을 불러오지 못했습니다' : '매일 자동 백업 · 7일 보관'} />
             </Summary>
             <Section>
               <Card>
                 <SectionTitle>접속 정보</SectionTitle>
-                <DetailGrid>
-                  {copyableField('Host', detail.value.connection.host)}
-                  {copyableField('Port', String(detail.value.connection.port))}
-                  {copyableField('Database', detail.value.connection.database)}
-                  {copyableField('Username', detail.value.connection.username)}
-                  <Field><Label>Password</Label>{detail.value.permissions.view_credentials ? <FieldValueRow><PlainValue>{credentialVisible && credential ? credential.password : credentialLoading ? '불러오는 중…' : credentialError ? '접속 정보를 불러오지 못했습니다' : '••••••••••••'}</PlainValue><Button variant="ghost" disabled={credentialLoading} onClick={() => void toggleCredentialVisibility()}>{credentialVisible ? '숨기기' : '표시'}</Button><CopyButton type="button" disabled={credentialLoading} onClick={() => void copyCredential('password', 'Password')}>{copiedField === 'Password' ? '복사됨' : '복사'}</CopyButton></FieldValueRow> : <HelpText>접속 정보를 조회할 권한이 없습니다.</HelpText>}</Field>
-                  <Field><Label>암호화</Label><PlainValue>{detail.value.connection.tls ? 'TLS 사용' : 'TLS 미사용'}</PlainValue></Field>
-                </DetailGrid>
-                <Banner title="암호화된 연결만 받습니다" description="접속 도구에서 SSL/TLS를 켜 주세요." tone="neutral" icon={<Octicon name="shield" size={20} />} />
+                {copyableField('globe', '호스트', detail.value.connection.host)}
+                {copyableField('link', '포트', String(detail.value.connection.port))}
+                {copyableField('database', 'database', detail.value.connection.database)}
+                {copyableField('person', '계정', detail.value.connection.username)}
+                {detail.value.permissions.view_credentials
+                  ? infoRow('key', '비밀번호', credentialVisible && credential ? credential.password : credentialLoading ? '불러오는 중…' : credentialError ? '접속 정보를 불러오지 못했습니다' : '••••••••••••', <>
+                    <Button variant="ghost" icon={<Octicon name={credentialVisible ? 'eye-closed' : 'eye'} size={16} />} disabled={credentialLoading} aria-pressed={credentialVisible} onClick={() => void toggleCredentialVisibility()}>{credentialVisible ? '숨기기' : '표시'}</Button>
+                    <Button variant="ghost" icon={<Octicon name="copy" size={16} />} aria-label="비밀번호 복사" disabled={credentialLoading} onClick={() => void copyCredential('password', '비밀번호')}>{copyLabel('비밀번호')}</Button>
+                  </>)
+                  : infoRow('key', '비밀번호', '접속 정보를 조회할 권한이 없습니다.')}
+                {infoRow('shield', 'TLS', detail.value.connection.tls ? '암호화된 연결만 받습니다. 접속 도구에서 SSL/TLS를 켜 주세요.' : 'TLS를 쓰지 않습니다.')}
               </Card>
             </Section>
             <Section>
-              <Card><SectionTitle>SQL에서 이름 쓰기</SectionTitle><Code>{databaseSql?.code}</Code><HelpText>{databaseSql?.help} 쿼리 실행은 현재 API 계약에서 제공되지 않습니다.</HelpText></Card>
+              <Card><EditorHeader><Octicon name="code" size={16} /><SectionTitle>SQL에서 이름 쓰기</SectionTitle></EditorHeader>{codeBlock(databaseSql?.code ?? '')}<CodeHelp>{databaseSql?.help}{demoMode ? '' : ' 쿼리 실행은 현재 API 계약에서 제공되지 않습니다.'}</CodeHelp></Card>
             </Section>
             <Section>
-              <Card><SectionTitle>PC의 DB 도구에서 접속하기</SectionTitle><Code>{`ssh -L 13306:${detail.value.connection.host}:${detail.value.connection.port} ubuntu@{VM 접속 주소} -p {SSH 포트}`}</Code><HelpText>SSH 터널의 VM 주소·계정·포트는 이 API에서 제공하지 않습니다. DB 도구에서 터널을 연 뒤 127.0.0.1:13306으로 연결하세요.</HelpText></Card>
+              <Card><EditorHeader><Octicon name="code" size={16} /><SectionTitle>PC의 DB 도구에서 접속하기</SectionTitle></EditorHeader>{codeBlock(`ssh -L 13306:${detail.value.connection.host}:${detail.value.connection.port} ubuntu@{VM 접속 주소} -p {SSH 포트}`)}<CodeHelp>{demoMode ? '실행한 뒤 DB 도구에서 127.0.0.1:13306으로 접속하세요. VM이 없으면 쿼리 콘솔과 백업 내려받기를 쓰세요.' : 'SSH 터널의 VM 주소·계정·포트는 이 API에서 제공하지 않습니다. DB 도구에서 터널을 연 뒤 127.0.0.1:13306으로 연결하세요.'}</CodeHelp></Card>
             </Section>
           </>
         )}
