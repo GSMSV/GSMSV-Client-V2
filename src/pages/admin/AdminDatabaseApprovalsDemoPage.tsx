@@ -8,6 +8,7 @@ import { addDemoNotification } from '../../entities/notification';
 import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
+import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
 const AdminToolbar = styled.div`
@@ -38,6 +39,7 @@ const isPending = (request: DedicatedDatabaseRequest) => request.status === '대
 
 export default function AdminDatabaseApprovalsDemoPage() {
   const navigate = useNavigate();
+  const pageLoad = useDemoPageLoad('admin-database-approvals');
   const [requests, setRequests] = useState(() => getDemoDbRequests());
   const [selectedId, setSelectedId] = useState(() => getDemoDbRequests().find(isPending)?.id ?? '');
   const [filter, setFilter] = useState<'pending' | 'done'>('pending');
@@ -148,6 +150,7 @@ export default function AdminDatabaseApprovalsDemoPage() {
       </div>
       <Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setRequests(getDemoDbRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button>
     </AdminToolbar>
+    {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[254, 378, 298, [150, 150, 150]]} label="전용형 Database 신청을 불러오는 중" /> : <>
     <Card>
       <CardHeader><SectionTitle>승인 대기 신청</SectionTitle><ApprovalTabs><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => setFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => setFilter('done')}>처리 완료</Button></ApprovalTabs></CardHeader>
       <TableWrap><ApprovalTable><thead><tr><th>팀</th><th>신청자</th><th>엔진</th><th>이유</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.length ? visible.map((item) => <tr key={item.id} aria-selected={item.id === current?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }}><td>{item.team}</td><td>{item.applicant}</td><td>{item.engine}</td><td>{item.reason}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>) : <tr><td colSpan={6}>표시할 신청이 없습니다.</td></tr>}</tbody></ApprovalTable></TableWrap>
@@ -164,6 +167,7 @@ export default function AdminDatabaseApprovalsDemoPage() {
       <Card><CardHeader><SectionTitle>거절</SectionTitle><Button variant="secondary" disabled={current.status === '거절' || current.status === '승인 완료' || !rejectReason.trim()} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></CardHeader><Muted>거절하면 사유가 팀장에게 전달되고, 팀은 고쳐서 다시 신청할 수 있습니다.</Muted><Field style={{ marginTop: 16 }}>팀장에게 전달할 사유<Textarea placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></Card>
     </>}
     <Stats><Stat>운영 중인 전용형<strong>2개</strong><Muted>서비스 런타임 안에서 만듭니다</Muted></Stat><Stat>이번 학기 신청<strong>4건</strong><Muted>승인 2 · 거절 1</Muted></Stat><Stat>공유형 Database<strong>86개</strong><Muted>합계 21 GB 사용</Muted></Stat></Stats>
+    </>}
     <Muted>승인 기준 · 공유형이 줄 수 없는 장점만 승인합니다. 서버 전체 설정·확장 기능 변경, 계정·database를 직접 여러 개 만들기, 다른 학생의 부하와 성능 분리.</Muted>
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }

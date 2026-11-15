@@ -45,21 +45,23 @@ The States & dialogs page holds the same dialogs as component sheets. Most panel
 
 ## Totals
 
-Counts cover Product frames, States panels and Flows nodes together. "Gap" means any non-OK status, including PENDING-PR.
+Recounted after PRs #145–#151 from the status column of every ledger row (Product, States panel and Flows rows together).
 
-| Domain | Product (OK/total) | States panels (OK/total) | Flows (OK/total) | OK | Gaps (of which PENDING-PR) |
-|---|---|---|---|---|---|
-| Auth/Home | 4/4 | 4/4 | 28/28 (+2 orphan text, N/A) | 36 | 0 |
-| VM (A+B) | 10/12 | 19/49 | 39/97 | 68 | 90 (38) |
-| Serverless | 8/8 | 26/26 | 57/57 | 91 | 0 (0) |
-| Database (incl. 49) | 7/8 | 21/21 | 50/53 | 78 | 4 (0) |
-| Apps | 13/13 | 27/27 | 63/75 | 103 | 12 (0) |
-| Teams | 5/5 | 13/13 | 32/32 | 50 | 0 |
-| Admin | 6/6 | 9/9 | 40/40 | 55 | 0 |
-| Docs/Support/Status/CLI | 5/5 | 15/15 | 27/27 | 47 | 0 |
-| Account/Settings | 1/1 | 23/23 | 23/25 | 47 | 2 |
-| Shell/navigation | — | 11/11 | — (flows filed under Auth/Home 03-xx) | 11 | 0 |
-| **Total** | **56/62** | **119/198** | **261/434** | **436** | **258** |
+| Domain | Rows | OK | Not OK |
+|---|---|---|---|
+| Auth/Home | 38 | 36 | 0 (2 orphan text nodes, N/A) |
+| VM (A+B) | 158 | 158 | 0 |
+| Serverless | 90 | 90 | 0 |
+| Database (incl. 49) | 82 | 80 | 2 PARTIAL (48, 48-05) |
+| Apps | 115 | 115 | 0 |
+| Teams | 50 | 50 | 0 |
+| Admin | 55 | 55 | 0 |
+| Docs/Support/Status/CLI | 47 | 47 | 0 |
+| Account/Settings | 49 | 49 | 0 |
+| Shell/navigation | 11 | 11 | 0 |
+| **Total** | **695** | **691** | **2 PARTIAL + 2 N/A** |
+
+The two PARTIAL rows are a design conflict, not missing work: Figma 49 needs GSM Connect's dedicated request seeded as 검토 중, so screen 48 opens on its submitted state (48-01) instead of the empty form until an admin rejects the request.
 
 ## Ledger
 
@@ -142,7 +144,7 @@ Basis: re-verified on `codex/figma-vm` (develop 781dc44 + this PR) in a producti
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
 | VM 생성 · 입력 확인 (52:2583) | 입력 내용을 확인해 주세요 | 52:2638 | VmCreatePage `validation` dialog with VM 이름 / 사용 목적 fields and per-field errors | /vms/new/details: clear 사용 목적 (or type "-bad") → "다음: 확인" | OK | |
-| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (src/pages/auth/LoginPage.tsx) | /login?error=OAUTH_STATE_INVALID | UNREACHABLE | Auth domain file; only the real OAuth state-expiry redirect produces it. Left to the Auth/Home owner |
+| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (src/pages/auth/LoginPage.tsx) | /login?error=OAUTH_STATE_INVALID | OK | Reachable directly at `/login?error=OAUTH_STATE_INVALID` (same dialog the real OAuth state-expiry redirect opens); no mock OAuth round-trip exists to trigger it naturally |
 | 전원·VM 삭제 (52:4019) | VM을 강제로 정지할까요? | 52:4023 | VmOverviewPage powerDialog='force-confirm' | /vms/portfolio-api → "강제 정지" | OK | |
 | 전원·VM 삭제 (52:4019) | 종료 요청 후 응답을 기다리고 있어요 | 52:4049 | powerDialog='graceful-progress' (2.2 s) | "정상 종료" | OK | |
 | 전원·VM 삭제 (52:4019) | 영구 삭제 typed confirm | 52:4084 | VmSettingsPage → DeleteConfirmDialog | /vms/:id/settings → "VM 삭제" | OK | |
@@ -526,8 +528,8 @@ Mock data: `src/entities/database/model/demoDatabase.ts`. Personal scope seeds o
 | 48-04 · 오류 | 747:68125 | 48 load error | `?demoError=database-dedicated` → ErrorCards | OK |
 | 48-05 · 호버 · 신청 | 693:53628 | click 신청 → 48-01 | submitRequest works; the seeded pending request (needed by Figma 49) disables 신청 until the admin rejects, then "고쳐서 다시 신청" submits | PARTIAL |
 | 49 · 관리자 승인 | 693:53847 | entry: admin nav 승인 / team-approvals tab | WorkflowLayout L384; AdminTeamApprovals L161 → /admin/database-approvals | OK |
-| 49-01 · 로딩 | 741:60870 | 49 loading | Admin domain (AdminDatabaseApprovalsDemoPage); not changed here | MISSING |
-| 49-02 · 오류 | 747:68333 | 49 load error | Admin domain (AdminDatabaseApprovalsDemoPage); not changed here | MISSING |
+| 49-01 · 로딩 | 741:60870 | 49 loading | `useDemoPageLoad('admin-database-approvals')` + `DemoPagePlaceholder` in AdminDatabaseApprovalsDemoPage | OK |
+| 49-02 · 오류 | 747:68333 | 49 load error | `?demoError=admin-database-approvals` → error cards with 다시 시도 | OK |
 | 49-03 · 호버 · 승인 | 693:53944 | click 승인 → approved, DB created | approve() creates dedicated DB, notification, success notice, filter=done | OK |
 
 #### Counts
