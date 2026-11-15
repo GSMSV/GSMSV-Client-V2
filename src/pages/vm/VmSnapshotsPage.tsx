@@ -7,7 +7,7 @@ import { isDemoMode } from '../../shared/demo';
 import { Button, Switch, TextField } from '../../shared/ui/controls';
 import { LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
-import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Facts, Heading, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle, Table, TableWrap } from './VmDemoPrimitives';
+import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Facts, Heading, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle, Table, TableWrap } from './VmDemoPrimitives';
 import { VmUnavailablePage } from './VmUnavailablePage';
 import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
 import { findDeletedDemoVm } from './vmDemoHelpers';
@@ -20,8 +20,24 @@ const Title = styled.h1`
 
 const StatusLine = styled.p`
   margin: 4px 0 0;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
+`;
+
+const AutoKind = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
+const MutedCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const SwitchLabel = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 
 const RowActions = styled.div`
@@ -284,8 +300,8 @@ export function VmSnapshotsPage() {
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
-      <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={memberReadOnly || totalCount >= 3 || manualCount >= 2 || operation !== null} onClick={openCreateSnapshot}>Snapshot 만들기</Button></Heading>
-      <DetailTabs vmId={vm.id} active="Snapshot" teamId={vm.teamId} networkVmGrn={vm.grn} />
+      <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div></Heading>
+      <DetailTabs vmId={vm.id} active="Snapshot" teamId={vm.teamId} networkVmGrn={vm.grn} actions={<Button variant="primary" icon={<Octicon name="plus" />} disabled={memberReadOnly || totalCount >= 3 || manualCount >= 2 || operation !== null} onClick={openCreateSnapshot}>Snapshot 만들기</Button>} />
       {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={[[150, 150, 150], [183], [193]]} /> : <>
       <Facts>
         <MetricCard><MetricLabel><Octicon name="database" />　전체 Snapshot</MetricLabel><MetricValue>{totalCount} / 3</MetricValue><Hint>현재 수동 {manualCount}개 + 자동 {automaticCount}개 · 최대 3개</Hint></MetricCard>
@@ -294,15 +310,15 @@ export function VmSnapshotsPage() {
       </Facts>
       <Surface>
         <SurfaceTitle>매일 자동으로 백업하기</SurfaceTitle>
-        <FactValue>매일 00:00(KST)에 이전 자동 Snapshot을 삭제하고, 00:01에 새 Snapshot을 만듭니다. 교체 중 약 1분간 자동 Snapshot이 없을 수 있습니다.</FactValue>
-        <Row><div><FactValue>자동 Snapshot</FactValue><Hint>켜도 바로 만들지 않습니다. 다음 자정부터 최신 1개만 보관합니다.</Hint></div><Switch label="" checked={vm.autoSnapshots} disabled={memberReadOnly} onChange={setAutomatic} /></Row>
+        <MutedCopy>매일 00:00(KST)에 이전 자동 Snapshot을 삭제하고, 00:01에 새 Snapshot을 만듭니다. 교체 중 약 1분간 자동 Snapshot이 없을 수 있습니다.</MutedCopy>
+        <Row><div><SwitchLabel>자동 Snapshot</SwitchLabel><Hint>켜도 바로 만들지 않습니다. 다음 자정부터 최신 1개만 보관합니다.</Hint></div><Switch label="" checked={vm.autoSnapshots} disabled={memberReadOnly} onChange={setAutomatic} /></Row>
       </Surface>
       <Surface>
         <SurfaceTitle>저장된 Snapshot</SurfaceTitle>
         <TableWrap><Table>
           <thead><tr><th>이름</th><th>종류</th><th>생성 시각 (KST)</th><th>관리</th></tr></thead>
           <tbody>{vm.snapshots.length === 0 ? <tr><td colSpan={4}>저장된 Snapshot이 없습니다.</td></tr> : vm.snapshots.map(snapshot => <tr key={snapshot.id}>
-            <td>{snapshot.name}</td><td>{snapshot.kind === 'automatic' ? '자동' : '수동'}</td><td>{snapshot.createdAt}</td>
+            <td>{snapshot.name}</td><td>{snapshot.kind === 'automatic' ? <AutoKind>자동</AutoKind> : '수동'}</td><td>{snapshot.createdAt}</td>
             <td>{deletingSnapshotId === snapshot.id
               ? <ProgressText role="status" aria-live="polite">삭제 중</ProgressText>
               : <RowActions>
@@ -313,9 +329,7 @@ export function VmSnapshotsPage() {
           </tr>)}</tbody>
         </Table></TableWrap>
       </Surface>
-      <Surface>
-        <Row><Octicon name="info" size={20} /><div><FactValue>Snapshot은 디스크 데이터만 저장합니다</FactValue><Hint>메모리 상태와 실행 중인 작업은 저장되지 않습니다. 복원하면 해당 시점 이후 디스크 변경 사항이 사라지고, VM은 정지 상태가 됩니다.</Hint></div></Row>
-      </Surface>
+      <Banner><Octicon name="info" size={20} /><BannerCopy><strong>Snapshot은 디스크 데이터만 저장합니다</strong><span>메모리 상태와 실행 중인 작업은 저장되지 않습니다. 복원하면 해당 시점 이후 디스크 변경 사항이 사라지고, VM은 정지 상태가 됩니다.</span></BannerCopy></Banner>
       {notice && <Hint role="status">{notice}</Hint>}
       </>}
     </DemoPage>

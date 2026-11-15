@@ -13,7 +13,7 @@ import { Button, SliderField, StepConnector, StepIndicator } from '../../shared/
 import { Octicon } from '../../shared/ui/icons';
 import {
   Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, Fact, FactLabel, FactValue, Field, Hint, InlineFact,
-  Input, OsSelector, PrimaryButton, Row, Stack, Surface, SurfaceTitle, Textarea,
+  Input, OsSelector, PrimaryButton, Row, Stack, Surface, SurfaceTitle, Textarea, Title,
 } from './VmDemoPrimitives';
 
 const Steps = styled.nav`
@@ -73,6 +73,12 @@ const LabelWithRequired = styled.span`
   &::after { content: ' *'; color: ${({ theme }) => theme.colors.primary}; }
 `;
 
+const ReviewRows = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
 const DataRows = styled.div`
   display: flex;
   flex-direction: column;
@@ -100,21 +106,7 @@ const TablelessQuota = styled.div`
 
 const Accent = styled.span`
   color: ${({ theme }) => theme.colors.primary};
-  font-weight: 500;
-`;
-
-const Divider = styled.div`
-  width: 100%;
-  height: 1px;
-  background: ${({ theme }) => theme.colors.border};
-`;
-
-const RequestMeta = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 32px;
-
-  @media (max-width: 600px) { grid-template-columns: 1fr; }
+  font: 500 ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
 const QuotaTrack = styled.div`
@@ -375,20 +367,20 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   return <DemoShell activeItem="vm-create" scopeLabel={isTeam ? `${teamName} · ${team?.my_role === 'devops' ? 'DevOps 엔지니어' : '팀장'}` : '내 Resources'} teamScopeId={isTeam ? teamId : undefined} userName={isTeam ? creatorName : '김지민'} hasUnsavedInput={step === 'details'}>
     <DemoPage>
       <Breadcrumb>{isTeam ? `${teamName} / 팀 VM 만들기` : 'VM 생성'}</Breadcrumb>
+      <Title>{heading}</Title>
       <StepHead>
-        <SelectionTitle as="h1">{heading}</SelectionTitle>
+        <Steps aria-label="VM 생성 단계">
+          <StepArea><StepIndicator number={1} label="사양" active={step === 'spec'} /><StepConnector /></StepArea>
+          <StepArea><StepIndicator number={2} label="이름·목적" active={step === 'details'} /><StepConnector /></StepArea>
+          <StepIndicator number={3} label="확인" active={step === 'review'} />
+        </Steps>
         <TopActions>
           {step !== 'spec' && <TextButton type="button" onClick={back}><Octicon name="arrow-left" />{step === 'review' ? '이전: 이름·목적' : '이전: 사양'}</TextButton>}
           {step === 'review'
             ? <PrimaryButton onClick={createRequest} icon={<Octicon name="plus" />}>{isTeam ? '팀 VM 생성 요청' : 'VM 생성 요청'}</PrimaryButton>
-            : <PrimaryButton disabled={step === 'spec' && !isTeam && quotaExhausted} onClick={next} icon={<Octicon name="arrow-right" />} iconPosition="end">{step === 'spec' ? '다음: 이름·목적' : '다음: 확인'}</PrimaryButton>}
+            : <PrimaryButton disabled={step === 'spec' && !isTeam && quotaExhausted} onClick={next} icon={<Octicon name="arrow-right" />}>{step === 'spec' ? '다음: 이름·목적' : '다음: 확인'}</PrimaryButton>}
         </TopActions>
       </StepHead>
-      <Steps aria-label="VM 생성 단계">
-        <StepArea><StepIndicator number={1} label="사양" active={step === 'spec'} /><StepConnector /></StepArea>
-        <StepArea><StepIndicator number={2} label="이름·목적" active={step === 'details'} /><StepConnector /></StepArea>
-        <StepIndicator number={3} label="확인" active={step === 'review'} />
-      </Steps>
 
       {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={step === 'spec'
         ? [[452], [148], [isTeam ? 290 : 210]]
@@ -409,8 +401,8 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
         {isTeam ? <Surface>
           <SurfaceTitle>선택한 환경</SurfaceTitle>
           <DataRows>
-            <DataRow><Octicon name="organization" /><Fact><FactLabel>사양</FactLabel><FactValue>{draft.cpu} vCPU · RAM {draft.memory} GB · SSD {draft.disk} GB</FactValue></Fact></DataRow>
-            <DataRow><Octicon name="server" /><Fact><FactLabel>운영체제 · Node</FactLabel><FactValue>{draft.os} · 자원이 많이 남은 Node에 자동 배분</FactValue></Fact></DataRow>
+            <DataRow><Octicon name="server" /><Fact><FactLabel>사양</FactLabel><FactValue>{draft.cpu} vCPU · RAM {draft.memory} GB · SSD {draft.disk} GB</FactValue></Fact></DataRow>
+            <DataRow><Octicon name="gear" /><Fact><FactLabel>운영체제 · Node</FactLabel><FactValue>{draft.os} · 자원이 많이 남은 Node에 자동 배분</FactValue></Fact></DataRow>
             <DataRow><Octicon name="organization" /><Fact><FactLabel>팀 할당량</FactLabel><FactValue>현재 {quota.cpu}/{quota.cpuLimit} vCPU · RAM {quota.memory}/{quota.memoryLimit} GB · SSD {quota.disk}/{quota.diskLimit} GB<br />요청 포함 {included.cpu}/{quota.cpuLimit} vCPU · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB<br />요청 후 남은 할당량 vCPU {available.cpu - draft.cpu} · RAM {available.memory - draft.memory} GB · SSD {available.disk - draft.disk} GB</FactValue></Fact></DataRow>
             <DataRow><Octicon name="calendar" /><Fact><FactLabel>사용 기간</FactLabel><FactValue>생성부터 30일 · 만료 7일 전부터 기존 만료일에 14일씩 연장</FactValue></Fact></DataRow>
           </DataRows>
@@ -439,8 +431,8 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
           <Hint id="vm-name-hint">{isTeam ? '같은 팀 안에서 중복 불가 · ' : ''}최대 40자 · 영문·숫자로 시작 · 영문, 숫자, 하이픈, 밑줄.{isTeam ? ' ' : ' 같은 소유자 안에서 중복될 수 없습니다. '}비우면 자동 이름을 사용합니다.</Hint>
           <Field><LabelWithRequired>사용 목적</LabelWithRequired><Textarea value={draft.purpose} maxLength={100} onChange={event => changeDraft({ purpose: event.currentTarget.value })} /></Field>
           <Hint>100자 이내 · 공백만 입력할 수 없습니다.{isTeam && ' 관리자가 목적을 확인합니다.'}</Hint>
-          {!isTeam && <Banner><Octicon name="info" size={20} /><BannerCopy><strong>서비스 이용 목적을 구체적으로 적어주세요</strong><span>관리자가 확인하며, 기준에 맞지 않는 용도로 사용하면 VM이 삭제될 수 있습니다.</span></BannerCopy></Banner>}
         </Surface>
+        {!isTeam && <Banner><Octicon name="info" size={20} /><BannerCopy><strong>서비스 이용 목적을 구체적으로 적어주세요</strong><span>관리자가 확인하며, 기준에 맞지 않는 용도로 사용하면 VM이 삭제될 수 있습니다.</span></BannerCopy></Banner>}
         {!isTeam && <Surface>
           <SurfaceTitle>선택한 환경</SurfaceTitle>
           <Accent>소유자　나 · 김지민　/　개인 VM</Accent>
@@ -455,15 +447,21 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       {step === 'review' && <>
         <Surface>
           <SelectionTitle>{draft.name.trim() || `${isTeam ? 'team-vm' : 'vm'}-${String(state.sequence).padStart(3, '0')}`}</SelectionTitle>
-          <Accent>{isTeam ? `${teamName} · 팀 VM / 요청자 ${creatorName}(${team?.my_role === 'devops' ? 'DevOps' : '팀장'})` : '소유자　나 · 김지민　/　개인 VM'}</Accent>
-          <DataRows>
-            <InlineFact label="사용 목적" value={draft.purpose} />
-            {isTeam && <InlineFact label="소유자" value={`${teamName} · 팀 VM / 요청자 ${creatorName}(${team?.my_role === 'devops' ? 'DevOps' : '팀장'})`} />}
-            {!isTeam && <InlineFact label="사양" value={`${draft.cpu} vCPU · RAM ${draft.memory} GB · SSD ${draft.disk} GB`} />}
-            <InlineFact label="운영체제 · Node" value={`${draft.os} · 자원이 많이 남은 Node에 자동 배분`} />
-            <InlineFact label={isTeam ? '첫 만료' : '만료 예정일'} value={`생성 완료 시각부터 ${isTeam ? '30일' : '7일'} · 정확한 만료일은 생성 후 확정`} />
-            {isTeam && <InlineFact label="연장" value="만료 7일 전부터 모든 팀원이 기존 만료일에 14일씩 연장할 수 있습니다." />}
-          </DataRows>
+          {!isTeam && <Accent>소유자　나 · 김지민　/　개인 VM</Accent>}
+          {isTeam ? <ReviewRows>
+            <InlineFact icon="organization" label="소유자" value={`${teamName} · 팀 VM / 요청자 ${creatorName}(${team?.my_role === 'devops' ? 'DevOps' : '팀장'})`} />
+            <InlineFact icon="file-code" label="사용 목적" value={draft.purpose} />
+            <InlineFact icon="server" label="사양" value={`${draft.cpu} vCPU · RAM ${draft.memory} GB · SSD ${draft.disk} GB`} />
+            <InlineFact icon="gear" label="운영체제 · Node" value={`${draft.os} · 자원이 많이 남은 Node에 자동 배분`} />
+            <InlineFact icon="calendar" label="첫 만료" value="생성 완료 시각부터 30일 · 정확한 만료일은 생성 후 확정" />
+            <InlineFact icon="clock" label="연장" value="만료 7일 전부터 모든 팀원이 기존 만료일에 14일씩 연장할 수 있습니다." />
+          </ReviewRows> : <ReviewRows>
+            <InlineFact icon="file-code" label="사용 목적" value={draft.purpose} action={<TextButton type="button" onClick={() => navigate(`${prefix}/details`)}><Octicon name="pencil" />수정</TextButton>} />
+            <InlineFact icon="cpu" label="사양" value={`${draft.cpu} vCPU · RAM ${draft.memory} GB · SSD ${draft.disk} GB`} action={<TextButton type="button" onClick={() => navigate(prefix)}><Octicon name="pencil" />변경</TextButton>} />
+            <InlineFact icon="terminal" label="운영체제" value={draft.os} />
+            <InlineFact icon="server" label="Node 배치" value="자원이 많이 남은 Node에 자동 배분" />
+            <InlineFact icon="calendar" label="만료 예정일" value="생성 완료 시각부터 7일 · 정확한 만료일은 생성 후 확정" />
+          </ReviewRows>}
         </Surface>
         {isTeam ? <Surface>
           <SurfaceTitle>요청 후 팀 할당량 · 소형</SurfaceTitle>
@@ -474,23 +472,19 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
             <Hint>현재 사용량은 {quota.cpu === 0 && quota.memory === 0 && quota.disk === 0 ? '0입니다. 생성 대기 요청도 팀 사용량에 포함되며, 김지민의 개인 할당량은 그대로입니다.' : '팀 사용량에 요청이 포함됩니다.'}</Hint>
           </TablelessQuota>
         </Surface> : <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><Accent>요청이 접수되면 홈으로 이동합니다</Accent><span>대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. 차례가 오면 생성에 1–3분이 걸리며, 이후 초기 설정을 진행합니다. 다른 화면으로 이동해도 작업은 계속됩니다.</span></BannerCopy></Banner>}
-        {isTeam && <Banner><Octicon name="info" size={20} /><BannerCopy><Accent>팀 범위에서 생성 진행을 확인하세요</Accent><span>팀의 할당량과 팀 전체 자원 여유를 확인한 뒤 요청을 접수합니다. 차례가 오면 생성하고 초기 설정을 진행합니다.</span></BannerCopy></Banner>}
-        <Surface>
+        {isTeam && <Banner><Octicon name="info" size={20} /><BannerCopy><strong>팀 범위에서 생성 진행을 확인하세요</strong><span>팀의 할당량과 팀 전체 자원 여유를 확인한 뒤 요청을 접수합니다. 차례가 오면 생성하고 초기 설정을 진행합니다.</span></BannerCopy></Banner>}
+        {isTeam ? <Fact><FactLabel>요청 전 확인</FactLabel><FactValue>팀 VM도 만료 시 정지되고 3일 유예 후 삭제됩니다. 팀원 모두에게 알림을 보냅니다.</FactValue></Fact> : <Surface>
           <SurfaceTitle>요청 전 확인</SurfaceTitle>
-          <RequestMeta>
-            {!isTeam && <Fact><FactLabel>개인 할당량</FactLabel><FactValue>이 요청을 포함하면 vCPU {included.cpu}/{quota.cpuLimit} · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB</FactValue></Fact>}
-            <Fact><FactLabel>이용 규칙</FactLabel><FactValue>만료 7일 전부터 +14일 연장 · 만료 시 정지 · 3일 유예 후 삭제</FactValue></Fact>
-            {isTeam && <Fact><FactLabel>요청 후 팀 사용량</FactLabel><FactValue>vCPU {included.cpu}/{quota.cpuLimit} · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB</FactValue></Fact>}
-            {isTeam && <Fact><FactLabel>사용 기간</FactLabel><FactValue>생성부터 30일 · 만료 7일 전부터 모든 팀원이 기존 만료일에 14일씩 연장할 수 있습니다.</FactValue></Fact>}
-          </RequestMeta>
-        </Surface>
+          <ReviewRows>
+            <InlineFact icon="server" label="개인 할당량" value={`이 요청을 포함하면 vCPU ${included.cpu}/${quota.cpuLimit} · RAM ${included.memory}/${quota.memoryLimit}GB · SSD ${included.disk}/${quota.diskLimit}GB · ${included.cpu >= quota.cpuLimit && included.memory >= quota.memoryLimit && included.disk >= quota.diskLimit ? '남은 할당량 없음' : `남은 할당량 vCPU ${Math.max(0, quota.cpuLimit - included.cpu)} · RAM ${Math.max(0, quota.memoryLimit - included.memory)}GB · SSD ${Math.max(0, quota.diskLimit - included.disk)}GB`}`} />
+            <InlineFact icon="info" label="이용 규칙" value="만료 7일 전부터 +14일 연장 · 만료 시 정지 · 3일 유예 후 삭제" />
+          </ReviewRows>
+        </Surface>}
       </>}
       </>}
 
       {error && <Banner role="alert"><Octicon name="alert" size={20} /><BannerCopy>{error}</BannerCopy></Banner>}
       {notice && <Hint role="status">{notice}</Hint>}
-      <Divider />
-      <Hint>{isTeam ? '팀 VM도 만료 시 정지되고 3일 유예 후 삭제됩니다. 팀원 모두에게 알림을 보냅니다.' : 'VM 생성 요청은 로컬 미리보기에서만 반영됩니다.'}</Hint>
     </DemoPage>
     {reauthenticate && <ModalSurface labelledBy="vm-create-reauth-title" onDismiss={() => void navigate('/')}>
       <RequestDialog>
@@ -583,7 +577,7 @@ function TeamMemberCreateBlocked({ teamId, teamName, memberName }: { teamId: str
   return <DemoShell activeItem="vm-create" scopeLabel={`${teamName} · 일반 팀원`} teamScopeId={teamId} userName={memberName}>
     <DemoPage>
       <Breadcrumb>{teamName} / 팀 VM 만들기</Breadcrumb>
-      <SelectionTitle as="h1">팀에 필요한 환경을 선택하세요</SelectionTitle>
+      <Title>팀에 필요한 환경을 선택하세요</Title>
     </DemoPage>
     <ModalSurface labelledBy="vm-create-team-member-title" onDismiss={() => void navigate(teamHome)}>
       <RequestDialog>

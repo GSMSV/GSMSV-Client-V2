@@ -30,18 +30,31 @@ const InstanceRow = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 0;
+  > svg { flex: 0 0 16px; color: ${({ theme }) => theme.colors.muted}; }
+  > div { min-width: 0; flex: 1 1 auto; }
 `;
 
+const FieldLabel = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+`;
+
+/* Figma 12: 경고 아이콘 · 14px 안내 · 오른쪽 VM 삭제 */
 const WarningBar = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 16px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.dangerSoft};
   color: ${({ theme }) => theme.colors.danger};
+  > span {
+    flex: 1 1 240px;
+    color: ${({ theme }) => theme.colors.muted};
+    font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  }
 `;
 
 const NameEdit = styled.div`
@@ -419,7 +432,7 @@ export function VmSettingsPage() {
       <Surface>
         <SurfaceTitle>사용 목적</SurfaceTitle>
         <Hint>관리자가 확인하며 기준에 맞지 않으면 VM이 삭제될 수 있습니다.</Hint>
-        <FactValue>어떤 용도로 사용합니까?</FactValue>
+        <FieldLabel>어떤 용도로 사용합니까?</FieldLabel>
         <Textarea value={displayedPurpose} maxLength={100} disabled={readOnly} onChange={event => setPurpose(event.currentTarget.value)} />
         <Row><Hint>100자 이내로 입력해 주세요. 공백만 입력할 수 없습니다.</Hint><Button variant="primary" icon={<Octicon name="check" />} disabled={readOnly || purpose === null} onClick={savePurpose}>사용 목적 저장</Button></Row>
       </Surface>
@@ -443,7 +456,7 @@ export function VmSettingsPage() {
         <Row><Hint>초기 비밀번호를 재설정한 뒤 개요에서 확인할 수 있습니다.</Hint><Button variant="secondary" disabled={readOnly} icon={<Octicon name="key" />} onClick={() => { setPasswordResetError(''); setPasswordResetOpen(true); }}>비밀번호 재설정</Button></Row>
       </Surface>
       </>}
-      <WarningBar><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={readOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
+      <WarningBar><Octicon name="alert" size={20} /><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={readOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
       {notice && <Hint role="status">{notice}</Hint>}
     </DemoPage>
     {passwordResetOpen && <ModalSurface labelledBy="vm-reset-password-title" onDismiss={() => setPasswordResetOpen(false)}>
