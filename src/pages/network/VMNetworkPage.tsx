@@ -74,7 +74,6 @@ const Tabs = styled.nav`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
   @media (max-width: 600px) {
     flex-wrap: nowrap;
@@ -90,7 +89,7 @@ const Tab = styled(Link)<{ $active?: boolean }>`
   min-height: 42px;
   align-items: center;
   padding: 0 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px ${({ theme }) => theme.radii.base}px 0 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
@@ -257,6 +256,13 @@ const FirewallFoot = styled.div`
 const Muted = styled.span`
   color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+const FirewallLabel = styled.span`
+  display: block;
+  margin-bottom: 4px;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 `;
 
 const Overlay = styled.div`
@@ -821,7 +827,7 @@ export default function VMNetworkPage() {
               </tbody>
             </Table>
           </TableWrap>}
-          {ports.value && <Muted>외부 주소: {publicHost ?? '계약 응답에 호스트 정보가 없습니다.'}</Muted>}
+          {ports.value && !demoMode && <Muted>외부 주소: {publicHost ?? '계약 응답에 호스트 정보가 없습니다.'}</Muted>}
         </Surface>}
 
         {demoMode && firewallEnabled && firewallAllowRuleCount === 0 && <Banner role="status">
@@ -836,7 +842,7 @@ export default function VMNetworkPage() {
           <SectionHeading>
             <SectionTitle>방화벽 규칙 · {rules.value ? firewallEnabled ? '켜짐' : '꺼짐' : '—'}</SectionTitle>
             <SectionActions>
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={readOnly || firewallApplying || ruleRemaining <= 0 || !rules.value} onClick={() => openAction('rule')}>규칙 추가</Button>
+              <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={readOnly || firewallApplying || ruleRemaining <= 0 || !rules.value} onClick={() => openAction('rule')}>규칙 추가</Button>
             </SectionActions>
           </SectionHeading>
           {busy && <LoadingCard height={160} />}
@@ -849,7 +855,7 @@ export default function VMNetworkPage() {
                     <tr key={rule.id}>
                       <td><RuleAction $allowed={rule.action === 'accept'}>{rule.action === 'accept' ? '허용' : rule.action === 'drop' ? '차단' : '거부'} · {rule.direction === 'in' ? '수신' : '송신'}</RuleAction></td>
                       <td>{rule.protocol.toUpperCase()}{rule.dport ? ` · ${rule.dport}` : ''}</td>
-                      <td>{rule.source ?? '전체'}</td>
+                      <td>{rule.source ?? '0.0.0.0/0'}</td>
                       <td>{demoVm?.internalIp ?? '—'}</td>
                       <td><TableActions><IconButton type="button" aria-label="방화벽 규칙 삭제" title="삭제" disabled={readOnly || firewallApplying} onClick={() => { setConfirmTarget({ kind: 'rule', value: rule }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton></TableActions></td>
                     </tr>
@@ -858,7 +864,7 @@ export default function VMNetworkPage() {
               </Table>
             </TableWrap>
             <FirewallFoot>
-              <Muted>수신은 허용한 규칙만 통과하고 송신은 허용됩니다. 끄면 모든 수신 접속이 허용되므로 확인이 필요합니다.</Muted>
+              <div><FirewallLabel>방화벽 사용</FirewallLabel><Muted>수신은 허용한 규칙만 통과하고 송신은 허용됩니다. 끄면 모든 수신 접속이 허용되므로 확인이 필요합니다.</Muted></div>
               <FirewallControl
                 type="button"
                 $enabled={firewallEnabled}
@@ -890,7 +896,7 @@ export default function VMNetworkPage() {
               <tbody>
                 {domains.value.items.length === 0 ? <tr><td colSpan={4}>연결된 HTTPS Domain이 없습니다.</td></tr> : domains.value.items.map(domain => (
                   <tr key={domain.id}>
-                    <td>{domain.url}</td>
+                    <td>{domain.url.replace(/^https?:\/\//, '')}</td>
                     <td>{domain.internal_port}</td>
                     <td><Synced $status={domain.sync_status}>{syncLabel(domain.sync_status)}</Synced></td>
                     <td><TableActions>

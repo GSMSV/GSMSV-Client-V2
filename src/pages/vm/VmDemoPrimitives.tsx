@@ -61,7 +61,7 @@ export const Tabs = styled.nav`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  min-width: 0;
 
   @media (max-width: 600px) {
     flex-wrap: nowrap;
@@ -77,7 +77,7 @@ export const Tab = styled(Link)<{ $active?: boolean }>`
   min-height: 42px;
   align-items: center;
   padding: 0 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px ${({ theme }) => theme.radii.base}px 0 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
@@ -181,6 +181,8 @@ export const Banner = styled.div<{ $tone?: 'primary' | 'warning' | 'muted' }>`
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warningSoft : $tone === 'primary' ? theme.colors.primarySoft : theme.colors.surface};
   color: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warning : theme.colors.text};
+  /* Figma 배너 제목: 기본은 흰색, 경고는 노란색, 안내(primary)는 초록색 */
+  > div > strong { color: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warning : $tone === 'primary' ? theme.colors.primary : theme.colors.text}; }
 `;
 
 export const BannerCopy = styled.div`
@@ -190,6 +192,7 @@ export const BannerCopy = styled.div`
   flex-direction: column;
   gap: 8px;
   color: ${({ theme }) => theme.colors.muted};
+  strong { font-weight: 500; }
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
@@ -259,8 +262,13 @@ export const Table = styled.table`
   border-collapse: collapse;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-  th, td { padding: 14px 12px; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; text-align: left; }
-  th { color: ${({ theme }) => theme.colors.faint}; font-weight: 500; }
+  /* Figma 11·팀 VM 표: 채운 머리글(12px)과 행 아래 구분선 */
+  thead { background: ${({ theme }) => theme.colors.raised}; }
+  th { padding: 12px; color: ${({ theme }) => theme.colors.muted}; font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif; text-align: left; }
+  th:first-child { border-radius: ${({ theme }) => theme.radii.base}px 0 0 ${({ theme }) => theme.radii.base}px; }
+  th:last-child { border-radius: 0 ${({ theme }) => theme.radii.base}px ${({ theme }) => theme.radii.base}px 0; }
+  td { padding: 12px; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; text-align: left; }
+  th, td { white-space: nowrap; }
 `;
 
 const Segmented = styled.div`
@@ -289,7 +297,31 @@ export function OsSelector({ value, onChange }: { value: string; onChange: (valu
   </Segmented>;
 }
 
-export function DetailTabs({ vmId, active, teamId, networkVmGrn }: { vmId: string; active: string; teamId?: string; networkVmGrn?: string }) {
+/** Figma: 탭과 화면별 동작 버튼은 한 줄에 놓인다(탭 왼쪽, 버튼 오른쪽). */
+export const TabsBar = styled.div`
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+`;
+
+export const TabActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+
+  @media (max-width: 1100px) { justify-content: flex-start; }
+`;
+
+export function DetailTabs({ vmId, active, teamId, networkVmGrn, actions }: { vmId: string; active: string; teamId?: string; networkVmGrn?: string; actions?: ReactNode }) {
   const prefix = teamId ? `/teams/${teamId}/vms/${vmId}` : `/vms/${vmId}`;
   const tabs = [
     ['개요', prefix],
@@ -298,7 +330,9 @@ export function DetailTabs({ vmId, active, teamId, networkVmGrn }: { vmId: strin
     ['Snapshot', `${prefix}/snapshots`],
     ['설정', `${prefix}/settings`],
   ];
-  return <Tabs aria-label="VM 메뉴">{tabs.map(([label, to]) => <Tab key={label} to={to} $active={active === label}>{label}</Tab>)}</Tabs>;
+  const nav = <Tabs aria-label="VM 메뉴">{tabs.map(([label, to]) => <Tab key={label} to={to} $active={active === label}>{label}</Tab>)}</Tabs>;
+  if (!actions) return nav;
+  return <TabsBar>{nav}<TabActions>{actions}</TabActions></TabsBar>;
 }
 
 export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Resources', userName = '김지민', teamScopeId, hasUnsavedInput = false }: {
@@ -355,13 +389,26 @@ export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Res
   >{children}</StudentShell>;
 }
 
-export function InlineFact({ label, value, icon = 'server' }: { label: string; value: ReactNode; icon?: OcticonName }) {
-  return <FactRow><Octicon name={icon} size={16} /><Fact><FactLabel>{label}</FactLabel><FactValue>{value}</FactValue></Fact></FactRow>;
+export function InlineFact({ label, value, icon = 'server', action }: { label: string; value: ReactNode; icon?: OcticonName; action?: ReactNode }) {
+  return <FactRow><Octicon name={icon} size={16} /><FactBody><FactLabel>{label}</FactLabel><FactValue>{value}</FactValue></FactBody>{action}</FactRow>;
 }
 
+/** Figma 정보 행: 아이콘 16px · 라벨/값 · 오른쪽 동작이 세로 가운데 정렬된다. */
 const FactRow = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
+  > svg { flex: 0 0 16px; color: ${({ theme }) => theme.colors.muted}; }
+  > button { flex: 0 0 auto; white-space: nowrap; }
+`;
+
+const FactBody = styled(Fact)`
+  flex: 1 1 auto;
+`;
+
+export const FactList = styled.div`
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 `;
 

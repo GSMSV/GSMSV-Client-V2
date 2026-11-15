@@ -38,10 +38,8 @@ const Chart = styled.svg`
 
 const ValueRow = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 8px;
-  padding: 20px 0 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
 const Value = styled.strong`
@@ -51,7 +49,7 @@ const Value = styled.strong`
 
 const Percent = styled.span`
   color: ${({ theme }) => theme.colors.muted};
-  font-size: 14px;
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
 const MetricCardWide = styled(MetricCard)`
@@ -80,7 +78,6 @@ const DataGrid = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-top: 16px;
 `;
 
 type MonitoringRange = '1시간' | '6시간' | '24시간';
@@ -217,11 +214,12 @@ export function VmMonitoringPage() {
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
-      <Heading><div><Title>{vm.name}</Title><StatusLine><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText> · Resource 사용 기록</StatusLine></div><RangeButtons>
-        {(['6시간', '24시간', '1시간'] as const).map(value => <Button key={value} variant={range === value ? 'primary' : 'secondary'} icon={range === value ? <Octicon name="clock" /> : undefined} onClick={() => setRange(value)}>{value}</Button>)}
+      <Heading><div><Title>{vm.name}</Title><StatusLine><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText> · Resource 사용 기록</StatusLine></div></Heading>
+      <DetailTabs vmId={vm.id} active="Monitoring" teamId={vm.teamId} networkVmGrn={vm.grn} actions={<RangeButtons>
+        {(['6시간', '24시간'] as const).map(value => <Button key={value} variant={range === value ? 'primary' : 'secondary'} icon={range === value ? <Octicon name="clock" /> : undefined} onClick={() => setRange(value)}>{value}</Button>)}
         <Button variant="secondary" icon={<Octicon name="sync" />} onClick={reloadHistory}>새로고침</Button>
-      </RangeButtons></Heading>
-      <DetailTabs vmId={vm.id} active="Monitoring" teamId={vm.teamId} networkVmGrn={vm.grn} />
+        <Button variant={range === '1시간' ? 'primary' : 'secondary'} icon={range === '1시간' ? <Octicon name="clock" /> : undefined} onClick={() => setRange('1시간')}>1시간</Button>
+      </RangeButtons>} />
       {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={[[338, 338], [338, 338]]} /> : <>
       {vm.status === 'running' && <BannerWarning />}
       {vm.status === 'stopped' && <Banner><Octicon name="stop" size={20} /><BannerCopy>
