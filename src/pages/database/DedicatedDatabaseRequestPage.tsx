@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
+import { getSessionUser } from '../../entities/session';
 import { getDemoTeam } from '../../entities/team/demo';
 import { getDemoTeamDedicatedDatabaseQuota } from '../../entities/database/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
+import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Breadcrumb, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
@@ -37,8 +39,8 @@ const InfoText = styled.div`
 export default function DedicatedDatabaseRequestPage() {
   const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
-  const teamScopeId = routeTeamId ?? 'demo-team';
-  const team = getDemoTeam(teamScopeId);
+  const team = getDemoTeam(routeTeamId ?? 'demo-team');
+  const teamScopeId = team?.id ?? routeTeamId ?? 'demo-team';
   const teamName = team?.name ?? 'GSM Connect';
   const canRequestDedicatedDatabase = team?.my_role === 'leader' || team?.my_role === 'devops';
   const [engine, setEngine] = useState<'MySQL' | 'PostgreSQL'>('MySQL');
@@ -46,13 +48,18 @@ export default function DedicatedDatabaseRequestPage() {
   const [description, setDescription] = useState('실시간 매칭 기능 때문에 쿼리가 많습니다. 공유 서버의 다른 학생 Database에 영향을 주지 않도록 따로 쓰고 싶습니다.');
   const [notice, setNotice] = useState('');
   const [requests, setRequests] = useState(() => getDemoDbRequests());
-  const teamRequests = requests.filter((request) => (request.teamId && request.teamId === teamScopeId) || request.team === teamName);
+  const isTeamRequest = (request: DedicatedDatabaseRequest) => request.teamId
+    ? request.teamId === teamScopeId
+    : request.team === teamName;
+  const teamRequests = requests.filter(isTeamRequest);
   const latestRequest = teamRequests.at(-1);
   const pending = [...teamRequests].reverse().find((request) => request.status === '대기 중' || request.status === '검토 중');
 
   function submitRequest() {
     if (!isDemoMode() || !canRequestDedicatedDatabase) return;
-    if (pending) {
+    const latestRequests = getDemoDbRequests();
+    if (latestRequests.some(request => isTeamRequest(request) && (request.status === '대기 중' || request.status === '검토 중'))) {
+      setRequests(latestRequests);
       setNotice('신청을 검토 중입니다. 결과가 나오기 전에는 다시 신청할 수 없습니다.');
       return;
     }
@@ -61,17 +68,21 @@ export default function DedicatedDatabaseRequestPage() {
       return;
     }
     if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
+    const requester = team?.members.find(member => member.member_id === getSessionUser()?.id);
+    const applicationDate = new Date().toISOString().slice(0, 10).replaceAll('-', '.');
     const request: DedicatedDatabaseRequest = {
-      id: `db-request-${crypto.randomUUID()}`, team: teamName, teamId: teamScopeId, applicant: '김지민 · 팀장', members: team?.members.length ?? 3,
-      engine, reason, description: description.trim(), requestedAt: '2026.11.14', status: '대기 중', rejectReason: '',
+      id: `db-request-${crypto.randomUUID()}`, team: teamName, teamId: teamScopeId,
+      applicant: `${requester?.name ?? getSessionUser()?.name ?? '김지민'} · ${team?.my_role === 'devops' ? 'DevOps' : '팀장'}`,
+      members: team?.members.length ?? 0,
+      engine, reason, description: description.trim(), requestedAt: applicationDate, status: '대기 중', rejectReason: '',
     };
-    const nextRequests = [...requests, request];
+    const nextRequests = [...latestRequests, request];
     if (!saveDemoDbRequests(nextRequests)) {
       setNotice('신청을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
     setRequests(nextRequests);
-    setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
+    setNotice('');
   }
 
   if (isDemoMode() && !canRequestDedicatedDatabase) {
@@ -81,10 +92,10 @@ export default function DedicatedDatabaseRequestPage() {
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>{teamName} / Database / 전용형 신청</Breadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
-    {notice && !notice.startsWith('전용 Database 신청') && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
+    {notice && <Alert $tone="warning" role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
+    {pending && <Banner tone="primary" icon={<Octicon name="clock" size={20} />} title="전용형 신청을 보냈습니다" description="관리자가 확인하면 알림으로 알려 드립니다. 결과가 나오기 전에는 다시 신청할 수 없습니다." />}
     <Card>
       <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={Boolean(pending) || latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>{latestRequest?.status === '거절' ? '고쳐서 다시 신청' : '신청'}</Button></CardHeader>
-      {pending && <Alert $tone="success" role="status"><Octicon name="check" size={16} /><span>전용형 신청을 보냈습니다. 관리자가 확인하면 알림으로 알려 드립니다. 결과가 나오기 전에는 다시 신청할 수 없습니다.</span></Alert>}
       <Muted>팀당 1개까지이고, 팀 Database 4개 안에 들어갑니다. 팀장과 DevOps만 신청할 수 있습니다.</Muted>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
         <Field>엔진<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 8, background: '#403d45' }}>{(['MySQL', 'PostgreSQL'] as const).map((item) => <button key={item} type="button" onClick={() => setEngine(item)} style={{ minHeight: 34, border: 0, borderRadius: 6, background: engine === item ? '#203d30' : 'transparent', color: engine === item ? '#00ff90' : '#c0bbc6', cursor: 'pointer' }}>{item}</button>)}</div></Field>

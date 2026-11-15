@@ -34,7 +34,7 @@ export interface AdminAllVmsContentProps {
   expiringGrns?: string[];
   demoVmDetails?: Record<string, DemoVmDetails>;
   onDemoPowerAction?: (grn: string, powerState: 'running' | 'stopped') => void;
-  onOpenDetails?: (name: string) => void;
+  onOpenDetails?: (grn: string) => void;
   onRefresh: () => void;
   refreshDisabled: boolean;
 }
@@ -471,7 +471,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
                   <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.purpose ?? <MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue>}</Cell>
                   <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => {
                     setSelectedKey(row.key);
-                    if (row.resource && onOpenDetails) onOpenDetails(row.name);
+                    if (row.resource) onOpenDetails?.(row.resource.grn);
                   }}>상세 열기</Button></Cell>
                 </TableRow>
               ))}
@@ -506,7 +506,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
                 <DetailRow><span>Resources</span><DetailValue>{selectedDetails ? `${selectedDetails.tier} · ${selectedDetails.vcpu} vCPU / ${selectedDetails.ramGb}GB / ${selectedDetails.diskGb}GB` : <Unsupported title="현재 관리자 VM API에서 리소스 사양을 제공하지 않습니다">API에서 제공하지 않음</Unsupported>}</DetailValue></DetailRow>
               </DetailRows>
               <DetailActions>
-                <Button variant="secondary" icon={getIcon('server')} disabled={!selectedRow.resource || !onOpenDetails} title={!onOpenDetails ? 'VM 상세 관리 API가 없습니다.' : undefined} onClick={() => onOpenDetails?.(selectedRow.name)}>상세 관리</Button>
+                <Button variant="secondary" icon={getIcon('server')} disabled={!selectedRow.resource || !onOpenDetails} title={!onOpenDetails ? 'VM 상세 관리 API가 없습니다.' : undefined} onClick={() => { if (selectedRow.resource) onOpenDetails?.(selectedRow.resource.grn); }}>상세 관리</Button>
                 <Button variant="secondary" icon={getIcon('stop')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'stopped'} title={!onDemoPowerAction ? 'VM 종료 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'stopped')}>종료</Button>
                 <Button variant="secondary" icon={getIcon('sync')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'running'} title={!onDemoPowerAction ? 'VM 재시작 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'running')}>재시작</Button>
               </DetailActions>

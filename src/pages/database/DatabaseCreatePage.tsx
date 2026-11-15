@@ -251,7 +251,7 @@ export default function DatabaseCreatePage() {
   const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const invalidOwner = owner !== 'me' && !teamId;
   const listPath = teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases';
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const user = getSessionUser();
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
@@ -267,9 +267,9 @@ export default function DatabaseCreatePage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
-      void import('../../entities/home').then(({ demoHomeTeams }) => { if (!cancelled) setTeams(demoHomeTeams); });
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => { if (!cancelled) setTeams(listDemoTeams()); });
       return () => { cancelled = true; };
     }
     void listMyTeams(controller.signal).then(value => {
@@ -288,18 +288,13 @@ export default function DatabaseCreatePage() {
       setTeam({ value: null, loading: false, error: false });
       return () => controller.abort();
     }
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
-      void Promise.all([import('../../entities/database/demo'), import('../../entities/home')]).then(([demo, home]) => {
+      void Promise.all([import('../../entities/database/demo'), import('../../entities/team/demo')]).then(([demo, teams]) => {
         if (cancelled) return;
         setDatabases({ value: demo.listDemoDatabases(teamId ?? 'me'), loading: false, error: false });
         if (teamId) {
-          const summary = home.demoHomeTeams.find(item => item.id === teamId);
-          const value: TeamDetail | null = summary ? {
-            ...summary, rejection_reason: null, members: [],
-            quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
-            permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
-          } : null;
+          const value = teams.getDemoTeam(teamId);
           setTeam(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
           setQuota({ value: null, loading: false, error: false });
         } else {
@@ -372,12 +367,22 @@ export default function DatabaseCreatePage() {
     if (teamId && team.value?.status !== 'approved') { setDialog('notApproved'); return; }
 
     setSubmitting(true);
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
+      if (teamId && team.value?.my_role !== 'leader' && team.value?.my_role !== 'devops') {
+        setDialog('permission');
+        setSubmitting(false);
+        return;
+      }
       let createdGrn: string;
       try {
-        const { createDemoDatabase, getDemoDatabaseCredentials } = await import('../../entities/database/demo');
+        const { createDemoDatabase, getDemoDatabaseCredentials, listDemoDatabases } = await import('../../entities/database/demo');
+        if (teamId && listDemoDatabases(teamId).length >= 4) {
+          setDialog('teamLimit');
+          setSubmitting(false);
+          return;
+        }
         const owner = teamId ? { id: teamId, name: team.value?.name ?? 'GSM Connect' } : undefined;
-        const created = createDemoDatabase(trimmedName, engine, owner);
+        const created = createDemoDatabase(trimmedName, engine, owner, 'shared');
         if (!getDemoDatabaseCredentials(created.grn)) throw new Error('DEMO_DATABASE_CREDENTIALS_UNAVAILABLE');
         createdGrn = created.grn;
       } catch {

@@ -195,12 +195,12 @@ interface Loadable<T> {
   error: boolean;
 }
 
-const databasePresentationMock = import.meta.env.DEV
-  ? {
-    welcomeDatabaseDescription: 'welcome-api 함수가 연결해 쓰는 Database입니다.',
-    concurrentConnections: 10,
-  }
-  : null;
+const DatabaseActions = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
 
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
@@ -230,9 +230,9 @@ function getStatus(status: DatabaseStatus, writeLocked: boolean) {
   }
 }
 
-function DatabaseResourceCard({ database, onOpen }: { database: DatabaseSummary; onOpen: () => void }) {
+function DatabaseResourceCard({ database, demoMode, onOpen }: { database: DatabaseSummary; demoMode: boolean; onOpen: () => void }) {
   const status = getStatus(database.status, database.write_locked);
-  const description = database.name === 'welcome-db' ? databasePresentationMock?.welcomeDatabaseDescription : undefined;
+  const description = demoMode && database.name === 'welcome-db' ? 'welcome-api 함수가 연결해 쓰는 Database입니다.' : undefined;
   return (
     <DatabaseCard>
       <CardActions>
@@ -257,7 +257,7 @@ export default function DatabaseListPage() {
   const isTeamScope = owner !== 'me';
   const teamId = (owner.startsWith('team-') || owner === 'demo-team') ? owner : undefined;
   const user = getSessionUser();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
   const [quota, setQuota] = useState<Loadable<DatabaseQuota>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);
@@ -271,7 +271,7 @@ export default function DatabaseListPage() {
   const loadList = useCallback(async (signal: AbortSignal) => {
     setDatabases(current => ({ ...current, loading: true, error: false }));
     try {
-      if (import.meta.env.DEV && demoMode) {
+      if (demoMode) {
         const { listDemoDatabases } = await import('../../entities/database/demo');
         const items = listDemoDatabases(owner);
         if (!signal.aborted) setDatabases({ value: items, loading: false, error: false });
@@ -287,7 +287,7 @@ export default function DatabaseListPage() {
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
-      if (import.meta.env.DEV && demoMode) {
+      if (demoMode) {
         const { getDemoDatabaseQuota } = await import('../../entities/database/demo');
         if (!signal.aborted) setQuota({ value: getDemoDatabaseQuota(), loading: false, error: false });
         return;
@@ -306,7 +306,7 @@ export default function DatabaseListPage() {
   }, [loadList, retryKey]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !demoMode) return;
+    if (!demoMode) return;
     const refresh = () => {
       setRetryKey(value => value + 1);
       setQuotaRetryKey(value => value + 1);
@@ -326,10 +326,12 @@ export default function DatabaseListPage() {
   }, [loadQuota, quotaRetryKey, owner]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       let cancelled = false;
-      void import('../../entities/home').then(({ demoHomeTeams }) => {
-        if (!cancelled) setTeams({ value: demoHomeTeams, loading: false, error: false });
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!cancelled) setTeams({ value: listDemoTeams(), loading: false, error: false });
+      }).catch(() => {
+        if (!cancelled) setTeams({ value: null, loading: false, error: true });
       });
       return () => { cancelled = true; };
     }
@@ -344,19 +346,14 @@ export default function DatabaseListPage() {
   }, [demoMode, scopeRetryKey]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode && teamId) {
+    if (demoMode && teamId) {
       let cancelled = false;
-      void import('../../entities/home').then(({ demoHomeTeams }) => {
+      void import('../../entities/team/demo').then(({ getDemoTeam }) => {
         if (cancelled) return;
-        const summary = demoHomeTeams.find(team => team.id === teamId);
-        const value: TeamDetail | null = summary ? {
-          ...summary,
-          rejection_reason: null,
-          members: [],
-          quota: { vm: { vcpu: { used: 2, limit: 4 }, ram_gb: { used: 4, limit: 8 }, ssd_gb: { used: 20, limit: 60 } } },
-          permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
-        } : null;
+        const value = getDemoTeam(teamId);
         setCurrentTeam(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
+      }).catch(() => {
+        if (!cancelled) setCurrentTeam({ value: null, loading: false, error: true });
       });
       return () => { cancelled = true; };
     }
@@ -434,6 +431,10 @@ export default function DatabaseListPage() {
               <Description>VM에 설치하지 않고 발급받아 쓰는 데이터베이스입니다.</Description>
             </TitleBlock>
             {isTeamScope ? (
+              <DatabaseActions>
+                {demoMode && teamId && (currentTeam.value?.my_role === 'leader' || currentTeam.value?.my_role === 'devops') && (
+                  <Button variant="secondary" icon={<Octicon name="people" size={16} />} onClick={() => navigate('/teams/' + encodeURIComponent(teamId) + '/databases/dedicated/new')}>전용형 신청</Button>
+                )}
               <Button
                 variant="primary"
                 icon={<Octicon name="plus" size={16} />}
@@ -444,6 +445,7 @@ export default function DatabaseListPage() {
                   void navigate(`/databases/new?owner=${encodeURIComponent(teamId)}`);
                 }}
               >새 Database</Button>
+              </DatabaseActions>
             ) : <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>}
           </ResourceListHeading>
         </HeadingGroup>
@@ -470,8 +472,8 @@ export default function DatabaseListPage() {
               <FlexibleUsageCard
                 label="동시 연결"
                 icon={<Octicon name="link" size={16} />}
-                value={databasePresentationMock ? `계정당 ${databasePresentationMock.concurrentConnections}개` : <QuietValue>—</QuietValue>}
-                caption={<ConnectionCaption>{databasePresentationMock ? '넘는 연결은 거절됩니다' : '연결 한도 정보 없음'}</ConnectionCaption>}
+                value={demoMode ? '계정당 10개' : <QuietValue>—</QuietValue>}
+                caption={<ConnectionCaption>{demoMode ? '넘는 연결은 거절됩니다' : '연결 한도 정보 없음'}</ConnectionCaption>}
               />
             </>
           )}
@@ -488,7 +490,7 @@ export default function DatabaseListPage() {
           ) : (
             <ResourceListCards>
               {databases.value?.map(database => (
-                <DatabaseResourceCard key={database.grn} database={database} onOpen={() => openDatabase(database)} />
+                <DatabaseResourceCard key={database.grn} database={database} demoMode={demoMode} onOpen={() => openDatabase(database)} />
               ))}
             </ResourceListCards>
           )}

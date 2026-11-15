@@ -1,7 +1,6 @@
 import { readDemoState, writeDemoState } from '../../../shared/demo';
 import type { DatabaseQuota } from '../../quota/model/types';
-import type { DatabaseEngine } from './types';
-import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail, DatabaseSummary } from './types';
+import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail, DatabaseEngine, DatabaseSummary } from './types';
 
 export interface DemoDatabaseState {
   databases: DatabaseDetail[];
@@ -55,7 +54,7 @@ const demoDatabaseSeed: DemoDatabaseState = {
     {
       grn: teamGrn, id: 'connect-db', name: 'connect-db',
       owner: { type: 'team', id: 'demo-team', name: 'GSM Connect' },
-      engine: 'mysql', isolation: 'dedicated', status: 'active', write_locked: false,
+      engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
       connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_db', username: 'connect_admin', tls: true },
       storage: { used_gb: 7.4, owner_total_used_gb: 7.4, owner_limit_gb: 60 }, max_connections: 100,
       created_by: { name: '김민수' }, created_at: '2026-10-03T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
@@ -187,6 +186,10 @@ export function getDemoDatabaseState(): DemoDatabaseState {
     changed = true;
   }
   for (const database of validState.databases) {
+    if (database.grn === teamGrn && database.isolation === 'dedicated') {
+      database.isolation = 'shared';
+      changed = true;
+    }
     if (database.permissions && typeof database.permissions === 'object' && typeof database.permissions.view_credentials !== 'boolean') {
       database.permissions.view_credentials = true;
       changed = true;
@@ -270,29 +273,35 @@ export function getDemoDatabaseQuota(): DatabaseQuota {
   };
 }
 
-export function createDemoDatabase(name: string, engine: DatabaseEngine, owner?: { id: string; name: string }): DatabaseDetail {
+export function createDemoDatabase(
+  name: string,
+  engine: DatabaseEngine,
+  owner?: { id: string; name: string },
+  isolation: DatabaseDetail['isolation'] = owner ? 'dedicated' : 'shared',
+): DatabaseDetail {
   const state = getDemoDatabaseState();
   const ownerInfo = owner
     ? { type: 'team' as const, id: owner.id, name: owner.name }
     : { type: 'user' as const, id: 'demo-student', name: '김민수' };
   const id = `demo-${crypto.randomUUID()}`;
   const now = new Date().toISOString();
+  const dedicated = isolation === 'dedicated';
   const database: DatabaseDetail = {
     grn: `grn:gsmsv:database:${ownerInfo.id}:${id}`,
     id,
     name,
     owner: ownerInfo,
     engine,
-    isolation: owner ? 'dedicated' : 'shared',
+    isolation,
     status: 'creating',
     write_locked: false,
-    connection: { host: owner ? 'team-db-demo.gs-msv.local' : 'db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: id.replaceAll('-', '_'), username: `${ownerInfo.id}_user`, tls: true },
+    connection: { host: dedicated ? 'team-db-demo.gs-msv.local' : 'db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: id.replaceAll('-', '_'), username: `${ownerInfo.id}_user`, tls: true },
     storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 10 },
-    max_connections: owner ? 100 : 10,
+    max_connections: dedicated ? 100 : 10,
     created_by: { name: '김민수' },
     created_at: now,
     updated_at: now,
-    expires_at: new Date(Date.now() + (owner ? 30 : 7) * 86_400_000).toISOString(),
+    expires_at: new Date(Date.now() + (dedicated ? 31 : 7) * 86_400_000).toISOString(),
     permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
   };
   state.databases.unshift(database);

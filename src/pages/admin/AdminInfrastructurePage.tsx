@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { matchPath, useLocation, useNavigate } from 'react-router';
+import { matchPath, Navigate, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, type InfraNode, type NodeVm } from '../../entities/infra-node';
 import type { DemoInfraSnapshot } from '../../entities/infra-node/demo';
 import { listNotifications } from '../../entities/notification';
+import { getSessionUser } from '../../entities/session';
 import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
@@ -569,6 +570,12 @@ function summarizeMemory(node: InfraNode) {
 }
 
 export default function AdminInfrastructurePage() {
+  const demoMode = isDemoMode();
+  if (demoMode && getSessionUser()?.role !== 'admin') return <Navigate to="/" replace />;
+  return <AdminInfrastructure demoMode={demoMode} />;
+}
+
+function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const navigation = useResponsiveNavigation();
@@ -580,6 +587,7 @@ export default function AdminInfrastructurePage() {
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [demoPowerError, setDemoPowerError] = useState(false);
   const closeNotifications = useCallback(() => {
     setNotificationsOpen(false);
     window.requestAnimationFrame(() => document.getElementById('admin-notifications-trigger')?.focus());
@@ -588,7 +596,7 @@ export default function AdminInfrastructurePage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setState(current => ({ kind: 'loading', nodes: current.nodes, resources: current.resources, checkedAt: current.checkedAt }));
     try {
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (demoMode) {
         const { getDemoInfraSnapshot } = await import('../../entities/infra-node/demo');
         if (signal.aborted) return;
         const snapshot = getDemoInfraSnapshot();
@@ -633,13 +641,9 @@ export default function AdminInfrastructurePage() {
         ? { kind: 'error', nodes: [], resources: [], checkedAt: null, status }
         : { kind: 'error', nodes: current.nodes, resources: current.resources, checkedAt: current.checkedAt, status });
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
-      setUnreadCount(2);
-      return;
-    }
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
@@ -664,6 +668,7 @@ export default function AdminInfrastructurePage() {
   const refresh = () => setRefreshKey(value => value + 1);
 
   const loadNodeVms = async (node: string) => {
+    if (demoMode) return;
     if (nodeVmStates[node]?.loading) return;
     if (nodeVmStates[node] && !nodeVmStates[node].error) return;
     setNodeVmStates(current => ({ ...current, [node]: { loading: true, error: false, unavailable: false, items: current[node]?.items ?? [] } }));
@@ -720,10 +725,10 @@ export default function AdminInfrastructurePage() {
         <Navigation aria-label="관리자 메뉴">
           {navItems.map((item, index) => {
             const href = index === 0 ? '/admin/infra'
-              : index === 1 ? (import.meta.env.DEV && isDemoMode() ? '/admin/team-approvals' : undefined)
+              : index === 1 ? (demoMode ? '/admin/team-approvals' : undefined)
                 : index === 2 ? '/admin/vms'
-                  : index === 3 ? (import.meta.env.DEV && isDemoMode() ? '/admin/inquiries' : undefined)
-                    : index === 4 ? (import.meta.env.DEV && isDemoMode() ? '/admin/accounts' : undefined)
+                  : index === 3 ? (demoMode ? '/admin/inquiries' : undefined)
+                    : index === 4 ? (demoMode ? '/admin/accounts' : undefined)
                       : undefined;
             const active = index === 2
               ? Boolean(matchPath('/admin/vms', location.pathname) || matchPath('/admin/vms/:vmId', location.pathname))
@@ -792,24 +797,35 @@ export default function AdminInfrastructurePage() {
                     {state.kind === 'error' && hasVmSnapshot && (
                       <Banner tone="warning" icon={icon('alert')} title="최신 VM 정보를 불러오지 못했습니다" description="이전 조회 결과를 표시하고 있습니다." action={<Button variant="secondary" onClick={refresh}>다시 시도</Button>} />
                     )}
+                    {demoPowerError && <Banner tone="danger" title="VM 상태를 저장하지 못했습니다" description="잠시 뒤 다시 시도해 주세요." />}
                     <AdminAllVmsContent
                       resources={vmResources}
                       nodes={nodes}
                       nodeVmStates={nodeVmStates}
                       expiringGrns={demoSnapshot?.expiringGrns}
                       demoVmDetails={demoSnapshot?.vmDetails}
-                      onDemoPowerAction={import.meta.env.DEV && demoSnapshot ? (grn, powerState) => {
+                      onDemoPowerAction={demoSnapshot ? async (grn, powerState) => {
+                        const { getDemoInfraSnapshot, saveDemoInfraSnapshot } = await import('../../entities/infra-node/demo');
+                        const snapshot = getDemoInfraSnapshot();
+                        if (!snapshot.resources.some(resource => resource.grn === grn)) {
+                          setDemoPowerError(true);
+                          return;
+                        }
                         const nextSnapshot = {
-                          ...demoSnapshot,
-                          resources: demoSnapshot.resources.map(resource => resource.grn === grn
+                          ...snapshot,
+                          resources: snapshot.resources.map(resource => resource.grn === grn
                             ? { ...resource, power_state: powerState, status: powerState === 'running' ? '실행 중' : '정지됨' }
                             : resource),
                         };
+                        if (!saveDemoInfraSnapshot(nextSnapshot)) {
+                          setDemoPowerError(true);
+                          return;
+                        }
+                        setDemoPowerError(false);
                         setDemoSnapshot(nextSnapshot);
                         setState(current => current.kind === 'ready' ? { ...current, resources: nextSnapshot.resources } : current);
-                        void import('../../entities/infra-node/demo').then(({ saveDemoInfraSnapshot }) => saveDemoInfraSnapshot(nextSnapshot));
                       } : undefined}
-                      onOpenDetails={demoSnapshot ? name => navigate(`/admin/vms/${encodeURIComponent(name)}`) : undefined}
+                      onOpenDetails={demoSnapshot ? grn => navigate(`/admin/vms/${encodeURIComponent(grn)}`) : undefined}
                       onRefresh={refresh}
                       refreshDisabled={state.kind === 'loading'}
                     />

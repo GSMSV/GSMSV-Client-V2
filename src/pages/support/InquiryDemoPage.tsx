@@ -128,6 +128,11 @@ const ConfirmActions = styled.div`
   justify-content: flex-end;
   gap: 8px;
 `;
+const Answer = styled.section`
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+`;
 
 export default function InquiryDemoPage() {
   const navigate = useNavigate();
@@ -143,21 +148,23 @@ export default function InquiryDemoPage() {
   const [notice, setNotice] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Inquiry | null>(null);
   const myItems = items.filter((item) => item.isMine);
+  const answers = myItems.filter(item => item.status === '답변 완료' && item.reply);
 
   function submit() {
     if (!isDemoMode()) return;
     const text = content.trim();
     if (!text || text.length > 500) { setNotice('문의 내용은 1~500자로 입력해 주세요.'); return; }
-    const next: Inquiry = { id: `inquiry-${crypto.randomUUID()}`, title: text.length > 48 ? `${text.slice(0, 48)}…` : text, author: '김지민', studentId: '2107', createdAt: '2026.11.14 12:00', vmName, content: text, ...(article ? { source: { title: article, ...(articleUrl ? { url: articleUrl } : {}) } } : {}), reply: '', status: '대기 중', isMine: true };
-    const updated = [next, ...items];
+    const createdAt = new Date().toISOString().slice(0, 16).replaceAll('-', '.').replace('T', ' ');
+    const next: Inquiry = { id: `inquiry-${crypto.randomUUID()}`, title: text.length > 48 ? `${text.slice(0, 48)}…` : text, author: '김지민', studentId: '2107', createdAt, vmName, content: text, ...(article ? { source: { title: article, ...(articleUrl ? { url: articleUrl } : {}) } } : {}), reply: '', status: '대기 중', isMine: true };
+    const updated = [next, ...getDemoInquiries()];
     if (!saveDemoInquiries(updated)) { setNotice('질문을 등록하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
-    setNotice('질문을 등록했습니다. 관리자가 답변하면 알림으로 안내해 드립니다.');
+    setNotice('질문을 등록했습니다. 답변을 받으면 이 화면에서 확인할 수 있습니다.');
     setContent('');
   }
 
   function remove(id: string) {
-    const updated = items.filter((item) => item.id !== id);
+    const updated = getDemoInquiries().filter(item => item.id !== id || !item.isMine);
     if (!saveDemoInquiries(updated)) { setNotice('질문을 삭제하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
     setPendingDelete(null);
@@ -179,7 +186,10 @@ export default function InquiryDemoPage() {
         <Hint>· 관련 VM을 선택하면 상황을 설명하기 쉽습니다.<br />· 문의 내용은 1~500자까지 입력할 수 있습니다.</Hint>
       </EmptyInquiryState> : <InquiryList>{myItems.map((item) => <InquiryRow key={item.id}><InquiryIndicator aria-hidden="true"><Octicon name={item.status === '답변 완료' ? 'check-circle' : 'clock'} size={20} /></InquiryIndicator><InquiryCopy><InquiryTitle>{item.title}</InquiryTitle><InquiryDate>{item.createdAt} 등록</InquiryDate><Hint>{item.status === '답변 완료' ? `답변 완료 · ${item.repliedAt ?? '관리자가 답변했습니다.'}` : '검토가 끝나면 알림으로 안내해 드립니다.'}</Hint><InquiryStatus>{item.status}</InquiryStatus></InquiryCopy><Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} onClick={() => setPendingDelete(item)}>질문 삭제</Button></InquiryRow>)}</InquiryList>}
     </InquiryCard>
-    <Hint>관리자 답변 · 만료일까지 7일 이하로 남으면 연장 버튼이 활성화됩니다. 연장하면 기존 만료일에 14일이 더해집니다. 만료 후에도 3일의 유예 기간 안에는 연장할 수 있습니다.</Hint>
+    {answers.map(item => <Answer key={item.id} aria-label={`${item.title} · 관리자 답변`}>
+      <Muted><strong>관리자 답변</strong>{answers.length > 1 && ` · ${item.title}`}</Muted>
+      <Muted>{item.reply}</Muted>
+    </Answer>)}
     {pendingDelete && <ModalSurface labelledBy="inquiry-delete-title" onDismiss={() => setPendingDelete(null)}>
       <ConfirmPanel aria-labelledby="inquiry-delete-title" aria-describedby="inquiry-delete-copy">
         <ConfirmTitle id="inquiry-delete-title">이 질문을 삭제하시겠습니까?</ConfirmTitle>

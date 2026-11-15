@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
+import { getDemoDbRequests, getDemoTeamRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { createDemoDatabase, getDemoDatabase, getDemoTeamDedicatedDatabaseQuota, listDemoDatabases } from '../../entities/database/demo';
 import type { DatabaseEngine } from '../../entities/database';
-import { listDemoTeams } from '../../entities/team/demo';
+import { addDemoNotification } from '../../entities/notification';
+import { getDemoTeam, listDemoTeams } from '../../entities/team/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
@@ -33,14 +34,16 @@ const ApprovalTable = styled(Table)`
   min-width: 800px;
 `;
 
+const isPending = (request: DedicatedDatabaseRequest) => request.status === '대기 중' || request.status === '검토 중';
+
 export default function AdminDatabaseApprovalsDemoPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState(() => getDemoDbRequests());
-  const [selectedId, setSelectedId] = useState(() => getDemoDbRequests().find((item) => item.status === '검토 중' || item.status === '대기 중')?.id ?? getDemoDbRequests()[0]?.id ?? '');
+  const [selectedId, setSelectedId] = useState(() => getDemoDbRequests().find(isPending)?.id ?? '');
   const [filter, setFilter] = useState<'pending' | 'done'>('pending');
   const [rejectReason, setRejectReason] = useState('');
   const [notice, setNotice] = useState('');
-  const visible = useMemo(() => requests.filter((item) => filter === 'pending' ? item.status === '검토 중' || item.status === '대기 중' : item.status === '승인 완료' || item.status === '거절'), [requests, filter]);
+  const visible = useMemo(() => requests.filter((item) => filter === 'pending' ? isPending(item) : !isPending(item)), [requests, filter]);
   const current = visible.find((item) => item.id === selectedId) ?? visible[0];
 
   useEffect(() => {
@@ -48,20 +51,31 @@ export default function AdminDatabaseApprovalsDemoPage() {
   }, [current?.id, current?.rejectReason]);
 
   function update(next: DedicatedDatabaseRequest) {
-    const updated = requests.map((item) => item.id === next.id ? next : item);
+    const updated = getDemoDbRequests().map((item) => item.id === next.id ? next : item);
     if (!saveDemoDbRequests(updated)) return false;
     setRequests(updated);
+    setSelectedId(next.id);
+    setFilter('done');
     return true;
   }
 
   function approve() {
-    if (!current || (current.status !== '대기 중' && current.status !== '검토 중')) return;
-    const team = listDemoTeams().find((item) => item.id === current.teamId || item.name === current.team);
-    const teamId = current.teamId ?? team?.id ?? 'demo-team';
-    const teamName = team?.name ?? current.team;
+    const request = getDemoDbRequests().find(item => item.id === current?.id);
+    if (!request || !isPending(request)) {
+      setRequests(getDemoDbRequests());
+      setNotice('이미 처리된 신청입니다.');
+      return;
+    }
+    const teamId = request.teamId ?? listDemoTeams().find(item => item.name === request.team)?.id;
+    const team = teamId ? getDemoTeam(teamId) : undefined;
+    if (!teamId || !team) {
+      setNotice('신청한 팀을 찾을 수 없어 승인할 수 없습니다.');
+      return;
+    }
+    const teamName = team.name;
     const existingDatabases = listDemoDatabases(teamId);
-    const databaseName = current.databaseName ?? `dedicated-${current.id.replace(/[^a-z0-9]/gi, '').slice(-12).toLowerCase()}`;
-    let database = current.databaseGrn ? getDemoDatabase(current.databaseGrn) : null;
+    const databaseName = request.databaseName ?? `dedicated-${request.id.replace(/[^a-z0-9]/gi, '').slice(-12).toLowerCase()}`;
+    let database = request.databaseGrn ? getDemoDatabase(request.databaseGrn) : null;
 
     if (!database) database = existingDatabases
       .map((item) => getDemoDatabase(item.grn))
@@ -83,40 +97,54 @@ export default function AdminDatabaseApprovalsDemoPage() {
         return;
       }
       try {
-        const engine: DatabaseEngine = current.engine === 'MySQL' ? 'mysql' : 'postgresql';
-        database = createDemoDatabase(databaseName, engine, { id: teamId, name: teamName });
+        const engine: DatabaseEngine = request.engine === 'MySQL' ? 'mysql' : 'postgresql';
+        database = createDemoDatabase(databaseName, engine, { id: teamId, name: teamName }, 'dedicated');
       } catch {
         setNotice('전용 Database를 만들지 못했습니다. 다시 시도해 주세요.');
         return;
       }
     }
 
-    const approved = { ...current, teamId, status: '승인 완료' as const, databaseGrn: database.grn, databaseName: database.name };
+    const approved = { ...request, teamId, status: '승인 완료' as const, databaseGrn: database.grn, databaseName: database.name };
     if (!update(approved)) {
       setNotice('Database는 만들어졌지만 신청 상태를 저장하지 못했습니다. 다시 승인하면 기존 Database와 연결됩니다.');
       return;
     }
-    setNotice(`${current.team} 전용형 신청을 승인하고 ${database.name} Database를 만들었습니다.`);
+    addDemoNotification({
+      kind: 'dedicated-database-approved', category: 'Database', group: 'Resource',
+      title: '전용형 Database 신청이 승인됐습니다', body: teamName,
+      resource: { grn: database.grn, name: database.name },
+    });
+    setNotice(`${request.team} 전용형 신청을 승인했습니다. ${database.name} Database가 로컬 미리보기에 등록되었습니다.`);
   }
 
   function reject() {
-    if (!current || (current.status !== '대기 중' && current.status !== '검토 중')) return;
+    const request = getDemoDbRequests().find(item => item.id === current?.id);
+    if (!request || !isPending(request)) {
+      setRequests(getDemoDbRequests());
+      setNotice('이미 처리된 신청입니다.');
+      return;
+    }
     if (!rejectReason.trim()) { setNotice('팀장에게 전달할 거절 사유를 입력해 주세요.'); return; }
-    if (!update({ ...current, status: '거절', rejectReason: rejectReason.trim() })) {
+    if (!update({ ...request, status: '거절', rejectReason: rejectReason.trim() })) {
       setNotice('거절 사유를 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    setNotice(`${current.team} 신청을 거절하고 사유를 기록했습니다.`);
+    addDemoNotification({
+      kind: 'dedicated-database-rejected', category: 'Database', group: 'Resource',
+      title: '전용형 Database 신청이 거절됐습니다', body: rejectReason.trim(), resource: null,
+    });
+    setNotice(`${request.team} 신청을 거절하고 사유를 기록했습니다.`);
   }
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="승인"><PageStack>
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 승인</p>
     <Heading><TitleGroup><Title>승인</Title><Muted>공유형으로 할 수 없는 이유인지 확인하고 승인하세요.</Muted></TitleGroup></Heading>
-    {notice && <Alert $tone={notice.includes('입력') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
+    {notice && <Alert $tone={notice.includes('습니다.') && /승인했습니다|사유를 기록했습니다|새로고침했습니다/.test(notice) ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <AdminToolbar>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Button variant="ghost" onClick={() => navigate('/admin/team-approvals')}>팀 <Badge>3</Badge></Button>
-        <Button variant="primary">전용형 Database <Badge>1</Badge></Button>
+        <Button variant="ghost" onClick={() => navigate('/admin/team-approvals')}>팀 <Badge>{getDemoTeamRequests().filter(item => item.status === '대기 중' || item.status === '검토 중').length}</Badge></Button>
+        <Button variant="primary" aria-current="page">전용형 Database <Badge>{requests.filter(isPending).length}</Badge></Button>
       </div>
       <Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setRequests(getDemoDbRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button>
     </AdminToolbar>
