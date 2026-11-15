@@ -137,31 +137,32 @@ const Table = styled.div`
 
 const TableHead = styled.div`
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(100px, 1fr) 160px 140px;
+  grid-template-columns: 219px 300px 200px 180px minmax(197px, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 42px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 
-  @media (max-width: 760px) { min-width: 592px; }
+  & > span { min-width: 0; padding: 12px; }
+
+  @media (max-width: 760px) { min-width: 1096px; }
 `;
 
 const EnvRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(100px, 1fr) 160px 140px;
+  grid-template-columns: 219px 300px 200px 180px minmax(197px, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: 48px;
-  padding: 0 12px;
+  min-height: 66px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 
-  @media (max-width: 760px) { min-width: 592px; }
+  & > :not(button) { min-width: 0; padding: 12px; }
+  & > button { margin: 12px; }
+
+  @media (max-width: 760px) { min-width: 1096px; }
 `;
 
 const Mono = styled.code`
@@ -494,17 +495,18 @@ export default function AppSettingsPage() {
               <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled title="환경 관리 API 계약이 제공되지 않습니다.">환경 추가</Button>
             </CardHeader>
             <Table role="table" aria-label="앱 환경">
-              <TableHead role="row"><span role="columnheader">환경</span><span role="columnheader">브랜치</span><span role="columnheader">자동 재배포</span><span role="columnheader">작업</span></TableHead>
+              <TableHead role="row"><span role="columnheader">환경</span><span role="columnheader">브랜치</span><span role="columnheader">자동 재배포</span><span role="columnheader">CI 기다리기</span><span role="columnheader">작업</span></TableHead>
               {current.envs.map(environment => (
                 <EnvRow role="row" key={environment.id}>
                   <span>{environment.name}</span>
                   <Mono title="브랜치 정보 API 계약 미제공">—</Mono>
-                  <span>—</span>
+                  <Mono title="자동 재배포 설정 API 계약 미제공">—</Mono>
+                  <Mono title="CI 대기 설정 API 계약 미제공">—</Mono>
                   <Button variant="ghost" icon={<Octicon name="pencil" size={16} />} disabled title="환경 설정 API 계약이 제공되지 않습니다.">편집</Button>
                 </EnvRow>
               ))}
             </Table>
-            <CardCopy>서비스·브랜치별 설정 API 계약이 제공되지 않아 환경 편집은 사용할 수 없습니다.</CardCopy>
+            <CardCopy>브랜치·자동 재배포·CI 대기 설정 API 계약이 제공되지 않아 환경 편집은 사용할 수 없습니다.</CardCopy>
           </Card>
 
           <Card>
