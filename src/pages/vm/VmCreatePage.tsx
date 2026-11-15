@@ -5,6 +5,7 @@ import { canCreateDemoTeamVm, getDemoVmDraft, getDemoVmQuota, getDemoVmState, ma
 import { getSessionUser } from '../../entities/session';
 import { createDemoTeamQuotaRequest, getDemoTeam } from '../../entities/team/demo';
 import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
+import { recordDemoVmCreateFailure } from '../../entities/home';
 import { consumeDemoFailure, isDemoMode } from '../../shared/demo';
 import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
@@ -295,6 +296,25 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
     navigate(step === 'review' ? `${prefix}/details` : step === 'details' ? prefix : (isTeam ? `/teams/${encodeURIComponent(teamId)}` : '/'));
   }
 
+  /**
+   * 개인 VM 요청 실패는 홈의 "VM을 만들지 못했습니다" 배너로 보여준다(요청 후 홈으로 이동하는 흐름).
+   * 홈 배너가 없는 팀 VM이나 기록에 실패한 경우에는 이 화면의 대화상자로 보여준다. 작성한 초안은 그대로 둔다.
+   */
+  function reportCreateFailure() {
+    if (!isTeam && recordDemoVmCreateFailure({
+      name: draft.name.trim() || `vm-${String(state.sequence).padStart(3, '0')}`,
+      purpose: draft.purpose.trim(),
+      cpu: draft.cpu,
+      memory: draft.memory,
+      disk: draft.disk,
+      os: draft.os,
+    })) {
+      navigate('/');
+      return;
+    }
+    setCreateFailed(true);
+  }
+
   function createRequest() {
     if (!ensureSession()) return;
     if (isTeam && !canCreateDemoTeamVm(teamId)) {
@@ -334,12 +354,12 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
     }
     setSharedQuotaBlocked(false);
     if (consumeDemoFailure('vm-create')) {
-      setCreateFailed(true);
+      reportCreateFailure();
       return;
     }
     const { state: nextState, vm } = makeDemoVm(latest, draft, owner, teamId, teamName, creatorName);
     if (!saveDemoVmState(nextState)) {
-      setCreateFailed(true);
+      reportCreateFailure();
       return;
     }
     resetDemoVmDraft(owner, routeTeamId);
