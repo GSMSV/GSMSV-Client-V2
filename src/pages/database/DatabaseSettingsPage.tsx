@@ -129,7 +129,7 @@ export default function DatabaseSettingsPage(){
 
   const load=useCallback(async(signal:AbortSignal)=>{
     setDetail(current=>({...current,loading:true,error:false}));
-    if(import.meta.env.DEV&&isDemoMode()){
+    if(isDemoMode()){
       const demo=await import('../../entities/database/demo');
       if(signal.aborted)return;
       const value=demo.getDemoDatabase(databaseGrn);
@@ -147,13 +147,13 @@ export default function DatabaseSettingsPage(){
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load,retryKey]);
   useEffect(()=>{
     const current=detail.value;
-    if(!(import.meta.env.DEV&&isDemoMode())||!current){setConnectedFunctions([]);return;}
+    if(!isDemoMode()||!current){setConnectedFunctions([]);return;}
     let active=true;
     void import('../../entities/database/demo').then(demo=>{if(active)setConnectedFunctions(demo.getDemoDatabaseConnectedFunctions(current.grn));});
     return()=>{active=false;};
   },[detail.value]);
   useEffect(()=>{
-    if(import.meta.env.DEV&&isDemoMode()){
+    if(isDemoMode()){
       let cancelled=false;
       void import('../../entities/home').then(({demoHomeTeams})=>{if(!cancelled)setTeams(demoHomeTeams);});
       return()=>{cancelled=true;};
@@ -163,7 +163,7 @@ export default function DatabaseSettingsPage(){
     return()=>controller.abort();
   },[]);
   useEffect(()=>{
-    if(!(import.meta.env.DEV&&isDemoMode())||deleteOperation?.operation.status!=='queued')return;
+    if(!isDemoMode()||deleteOperation?.operation.status!=='queued')return;
     const timer=window.setTimeout(()=>{
       setDeleteOperation(current=>current?{...current,operation:{...current.operation,status:'completed'}}:current);
       const current=detail.value;
@@ -207,7 +207,7 @@ export default function DatabaseSettingsPage(){
     if(!value||!value.permissions.update||!nameValid||!nameDirty||saving)return;
     setSaving(true);setSaveError(false);setSaved(false);
     try{
-      if(import.meta.env.DEV&&isDemoMode()){
+      if(isDemoMode()){
         const demo=await import('../../entities/database/demo');
         const result=demo.updateDemoDatabase(value.grn,{name:trimmedName,updated_at:new Date().toISOString()});
         if(!result)throw new Error('Database not found');
@@ -225,7 +225,7 @@ export default function DatabaseSettingsPage(){
     if(!value||!value.permissions.rotate_password||rotating)return;
     setRotating(true);setRotationError(false);
     try{
-      if(import.meta.env.DEV&&isDemoMode()){
+      if(isDemoMode()){
         const demo=await import('../../entities/database/demo');
         const password=`demo-${crypto.randomUUID().slice(0,18)}`;
         if (!demo.setDemoDatabasePassword(value.grn,password)) throw new Error('Database password could not be saved');
@@ -242,7 +242,7 @@ export default function DatabaseSettingsPage(){
     if(!value||!value.permissions.delete||confirmName!==value.name||deleting)return;
     setDeleting(true);setDeleteError(false);
     try{
-      if(import.meta.env.DEV&&isDemoMode()){
+      if(isDemoMode()){
         const demo=await import('../../entities/database/demo');
         if(!demo.deleteDemoDatabase(value.grn))throw new Error('Database not found');
         setDeleteOperation({operation:{id:`demo-op-${crypto.randomUUID()}`,type:'delete',status:'queued'},resource:{grn:value.grn,status:'deleting'}});
@@ -262,7 +262,7 @@ export default function DatabaseSettingsPage(){
         <TabsRow>
           <Tabs aria-label="Database 상세 메뉴">
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}`)}>접속 정보</Tab>
-            <Tab type="button" title={import.meta.env.DEV && isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 제공되지 않습니다'} disabled={!(import.meta.env.DEV && isDemoMode())} onClick={()=>{if(import.meta.env.DEV&&isDemoMode())navigate(`/databases/${encodeURIComponent(value.grn)}/query`);}}>쿼리 콘솔</Tab>
+            {(!isDemoMode() || value.isolation === 'shared') && <Tab type="button" title={isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 제공되지 않습니다'} disabled={!isDemoMode()} onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}/query`)}>쿼리 콘솔</Tab>}
             <Tab type="button" onClick={()=>navigate(`/databases/${encodeURIComponent(value.grn)}/backups`)}>백업</Tab>
             <Tab type="button" $active aria-current="page">설정</Tab>
           </Tabs>

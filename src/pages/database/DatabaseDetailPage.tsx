@@ -142,7 +142,7 @@ export default function DatabaseDetailPage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       const demo = await import('../../entities/database/demo');
       if (signal.aborted) return;
       const value = demo.getDemoDatabase(databaseGrn);
@@ -171,7 +171,7 @@ export default function DatabaseDetailPage() {
   }, [load, retry]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !isDemoMode()) return;
+    if (!isDemoMode()) return;
     const refresh = () => setRetry(value => value + 1);
     window.addEventListener('gsmsv:demo-database-state-change', refresh);
     return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
@@ -179,7 +179,7 @@ export default function DatabaseDetailPage() {
 
   useEffect(() => {
     const current = detail.value;
-    if (!import.meta.env.DEV || !isDemoMode() || !current) { setDemoMetrics({ currentConnections: null, suspensionInfo: null }); return; }
+    if (!isDemoMode() || !current) { setDemoMetrics({ currentConnections: null, suspensionInfo: null }); return; }
     let active = true;
     void import('../../entities/database/demo').then(demo => {
       if (!active) return;
@@ -189,7 +189,7 @@ export default function DatabaseDetailPage() {
   }, [detail.value]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       void import('../../entities/home').then(({ demoHomeTeams }) => {
         if (!cancelled) setTeams(demoHomeTeams);
@@ -210,7 +210,7 @@ export default function DatabaseDetailPage() {
     return latest;
   }, null) ?? null, [backups.value]);
   const daysLeft = detail.value ? remainingDays(detail.value.expires_at) : null;
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const currentConnections = detail.value && demoMode ? demoMetrics.currentConnections : null;
   const suspensionInfo = detail.value && demoMode ? demoMetrics.suspensionInfo : null;
   const databaseSql = detail.value ? sqlExample(detail.value) : null;
@@ -255,7 +255,7 @@ export default function DatabaseDetailPage() {
     setCredentialLoading(true);
     setCredentialError(false);
     try {
-      const value = import.meta.env.DEV && isDemoMode()
+      const value = isDemoMode()
         ? await import('../../entities/database/demo').then(demo => demo.getDemoDatabaseCredentials(databaseGrn))
         : await getDatabaseCredentials(databaseGrn);
       if (!value) throw new Error('Database credentials are unavailable');
@@ -296,7 +296,7 @@ export default function DatabaseDetailPage() {
     setIsExtending(true);
     setExtendError(false);
     try {
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (isDemoMode()) {
         const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
         const demo = await import('../../entities/database/demo');
         const status = detail.value?.status === 'suspended' ? 'active' : detail.value?.status;
@@ -339,7 +339,7 @@ export default function DatabaseDetailPage() {
             </Heading>
             <Tabs aria-label="Database 상세 메뉴">
               <Tab type="button" $active aria-current="page">접속 정보</Tab>
-              <Tab type="button" title={isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 아직 제공되지 않습니다'} disabled={!isDemoMode()} onClick={() => { if (isDemoMode()) navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/query`); }}>쿼리 콘솔</Tab>
+              {(!demoMode || detail.value.isolation === 'shared') && <Tab type="button" title={demoMode ? undefined : '쿼리 실행 API가 계약에 없어 아직 제공되지 않습니다'} disabled={!demoMode} onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/query`)}>쿼리 콘솔</Tab>}
               <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/backups`)}>백업</Tab>
               <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>설정</Tab>
             </Tabs>

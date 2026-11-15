@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoInfraSnapshot, saveDemoInfraSnapshot, type DemoInfraSnapshot } from '../../entities/infra-node/demo';
 import { addDemoNotification } from '../../entities/notification';
+import { getDemoVmState } from '../../entities/vm';
 import { Button } from '../../shared/ui/controls';
 import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -147,6 +148,9 @@ export default function DemoAdminVmDetailPage() {
   const vm = useMemo(() => snapshot.resources.find(item => item.name === vmId || item.grn === vmId)
     ?? (vmId === 'demo-vm-1' ? snapshot.resources.find(item => item.name === 'portfolio-api') : undefined), [snapshot.resources, vmId]);
   const details = vm ? snapshot.vmDetails[vm.grn] : undefined;
+  const networkVm = useMemo(() => vm
+    ? getDemoVmState().vms.find(item => item.name === vm.name)
+    : undefined, [vm]);
   const running = vm?.power_state === 'running';
   const expiryDays = details
     ? Math.ceil((Date.parse(`${details.expiresAt.slice(0, 10).replaceAll('.', '-')}T00:00:00Z`) - Date.parse('2026-09-29T00:00:00Z')) / 86_400_000)
@@ -159,18 +163,27 @@ export default function DemoAdminVmDetailPage() {
   }
 
   function updateDetails(patch: Partial<NonNullable<typeof details>>) {
-    if (!vm) return;
-    persist({ ...snapshot, vmDetails: { ...snapshot.vmDetails, [vm.grn]: { ...details!, ...patch } } });
+    if (!vm || !details) return false;
+    if (!persist({ ...snapshot, vmDetails: { ...snapshot.vmDetails, [vm.grn]: { ...details, ...patch } } })) {
+      setNotice('VM 설정을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return false;
+    }
+    setNotice('');
+    return true;
   }
 
   function changePower(powerState: 'running' | 'stopped') {
     if (!vm) return;
-    persist({
+    const saved = persist({
       ...snapshot,
       resources: snapshot.resources.map(item => item.grn === vm.grn
         ? { ...item, power_state: powerState, status: powerState === 'running' ? '실행 중' : '정지됨' }
         : item),
     });
+    if (!saved) {
+      setNotice('VM 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
     setNotice(powerState === 'running' ? 'VM을 다시 시작했습니다.' : 'VM을 정상 종료했습니다.');
   }
 
@@ -229,7 +242,7 @@ export default function DemoAdminVmDetailPage() {
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="전체 VM"><PageStack>
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / {vm.name}</p>
-    {notice && <Alert $tone="success" role="status"><Octicon name="info" size={16} />{notice}</Alert>}
+    {notice && <Alert $tone={notice.includes('못했습니다') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <Heading>
       <TitleGroup><Title>{vm.name}</Title><Muted>{details.ownerName}의 {vm.name} · 관리자 조회</Muted></TitleGroup>
       <Actions>
@@ -249,7 +262,7 @@ export default function DemoAdminVmDetailPage() {
         <CardHeader><SectionTitle>운영 정보</SectionTitle></CardHeader>
         <ValueRow><ValueLabel><Hint>사용 목적</Hint><Muted>{details.purpose}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('file-code')} onClick={() => { setPurposeDraft(details.purpose); setPanel('purpose'); }}>수정</Button></ValueRow>
         <ValueRow><ValueLabel><Hint>자동 Snapshot</Hint><Muted>{details.autoSnapshot ? `켜짐 · 최신 ${details.retainedSnapshots}개 보관` : '꺼짐'}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('history')} onClick={() => setPanel('snapshot')}>관리</Button></ValueRow>
-        <ValueRow><ValueLabel><Hint>Network</Hint><Muted>외부 포트 {details.externalPorts}/{details.externalPortLimit} · HTTPS Domain {details.httpsDomains}/{details.httpsDomainLimit}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('globe')} onClick={() => navigate(`/vms/${encodeURIComponent(vm.grn)}/network`)}>관리</Button></ValueRow>
+        <ValueRow><ValueLabel><Hint>Network</Hint><Muted>외부 포트 {details.externalPorts}/{details.externalPortLimit} · HTTPS Domain {details.httpsDomains}/{details.httpsDomainLimit}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('globe')} disabled={!networkVm} title={!networkVm ? '이 VM의 Network 정보는 로컬 미리보기에서 제공되지 않습니다.' : undefined} onClick={() => { if (networkVm) navigate(`/vms/${encodeURIComponent(networkVm.grn)}/network`); }}>관리</Button></ValueRow>
       </Card>
       <Card>
         <CardHeader><SectionTitle>사용 기간</SectionTitle></CardHeader>
@@ -307,7 +320,7 @@ export default function DemoAdminVmDetailPage() {
           <Field htmlFor="vm-purpose">사용 목적
           <Input id="vm-purpose" value={purposeDraft} onChange={event => setPurposeDraft(event.currentTarget.value)} />
           </Field>
-          <DialogActions><Button variant="secondary" onClick={() => setPanel(null)}>취소</Button><Button disabled={!purposeDraft.trim()} onClick={() => { updateDetails({ purpose: purposeDraft.trim() }); setPanel(null); setNotice('사용 목적을 저장했습니다.'); }}>저장</Button></DialogActions>
+          <DialogActions><Button variant="secondary" onClick={() => setPanel(null)}>취소</Button><Button disabled={!purposeDraft.trim()} onClick={() => { if (updateDetails({ purpose: purposeDraft.trim() })) { setPanel(null); setNotice('사용 목적을 저장했습니다.'); } }}>저장</Button></DialogActions>
         </> : <>
           <ValueRow><ValueLabel><Hint>자동 Snapshot</Hint><Muted>{details.autoSnapshot ? '켜짐' : '꺼짐'}</Muted></ValueLabel><Button variant="secondary" onClick={() => updateDetails({ autoSnapshot: !details.autoSnapshot })}>{details.autoSnapshot ? '끄기' : '켜기'}</Button></ValueRow>
           <ValueRow><ValueLabel><Hint>보관 개수</Hint><Muted>최신 Snapshot 보관</Muted></ValueLabel><Actions><Button variant="secondary" disabled={details.retainedSnapshots <= 1} onClick={() => updateDetails({ retainedSnapshots: Math.max(1, details.retainedSnapshots - 1) })}>−</Button><Muted>{details.retainedSnapshots}개</Muted><Button variant="secondary" onClick={() => updateDetails({ retainedSnapshots: details.retainedSnapshots + 1 })}>+</Button></Actions></ValueRow>

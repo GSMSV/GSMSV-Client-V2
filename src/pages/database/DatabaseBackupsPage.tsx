@@ -126,7 +126,7 @@ export default function DatabaseBackupsPage() {
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       const demo = await import('../../entities/database/demo');
       if (signal.aborted) return;
       const value = demo.getDemoDatabase(databaseGrn);
@@ -154,14 +154,14 @@ export default function DatabaseBackupsPage() {
   }, [load, retryKey]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !isDemoMode()) return;
+    if (!isDemoMode()) return;
     const refresh = () => setRetryKey(value => value + 1);
     window.addEventListener('gsmsv:demo-database-state-change', refresh);
     return () => window.removeEventListener('gsmsv:demo-database-state-change', refresh);
   }, []);
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       void import('../../entities/home').then(({ demoHomeTeams }) => {
         if (!cancelled) setTeams(demoHomeTeams);
@@ -226,7 +226,7 @@ export default function DatabaseBackupsPage() {
     setDownloadingId(backup.id);
     setFailedDownloadBackup(null);
     try {
-      const blob = import.meta.env.DEV && isDemoMode()
+      const blob = isDemoMode()
         ? await new Response(
           new Blob([`-- Local demo backup: ${backup.id}\n-- Database: ${detail.value?.name ?? databaseGrn}\nSELECT 1;\n`])
             .stream()
@@ -252,7 +252,7 @@ export default function DatabaseBackupsPage() {
     setRestoreError(false);
     try {
       let result: RestoreDatabaseBackupResponse;
-      if (import.meta.env.DEV && isDemoMode()) {
+      if (isDemoMode()) {
         const demo = await import('../../entities/database/demo');
         const preRestoreId = `pre-restore-${crypto.randomUUID()}`;
         const savedPreRestoreBackup = demo.addDemoPreRestoreBackup(databaseGrn, {
@@ -301,14 +301,14 @@ export default function DatabaseBackupsPage() {
           <HeadingGroup><HeadingRow><TitleBlock><Title>{detail.value.name}</Title><Subtitle>{detail.value.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {detail.value.isolation === 'shared' ? '공유형' : '전용형'}</Subtitle></TitleBlock></HeadingRow></HeadingGroup>
           <Tabs aria-label="Database 상세 메뉴">
             <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}`)}>접속 정보</Tab>
-            <Tab
+            {(!isDemoMode() || detail.value.isolation === 'shared') && <Tab
               type="button"
               title={isDemoMode() ? undefined : '쿼리 실행 API가 계약에 없어 아직 제공되지 않습니다'}
               disabled={!isDemoMode()}
               onClick={() => {
                 if (isDemoMode()) navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/query`);
               }}
-            >쿼리 콘솔</Tab>
+            >쿼리 콘솔</Tab>}
             <Tab type="button" $active aria-current="page">백업</Tab>
             <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>설정</Tab>
           </Tabs>

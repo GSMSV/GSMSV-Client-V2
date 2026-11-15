@@ -16,7 +16,7 @@ function screen(Element: typeof DatabaseQueryDemoPage) {
   return <Suspense fallback={null}><Element /></Suspense>;
 }
 
-/** Routes for frontend-only Figma preview flows; merge into the central router after this slice lands. */
+/** Frontend-only workflows guarded by demo mode and, for admin pages, the demo role. */
 export const demoDatabaseSupportRoutes: RouteObject[] = [
   { path: '/cli', element: screen(CliLoginEntryDemoPage) },
   { path: '/databases/:databaseId/query', element: screen(DatabaseQueryDemoPage) },

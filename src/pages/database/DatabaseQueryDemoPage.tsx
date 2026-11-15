@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoQueryAudit, saveDemoQueryAudit } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
@@ -149,8 +149,12 @@ function parseQuery(query: string, sourceRows: QueryRow[]): { columns: QueryColu
 }
 
 export default function DatabaseQueryDemoPage() {
-  const navigate = useNavigate();
   const { databaseId = 'welcome-db' } = useParams<{ databaseId: string }>();
+  return <DemoOnlyGate><DatabaseQuery key={databaseId} databaseId={databaseId} /></DemoOnlyGate>;
+}
+
+function DatabaseQuery({ databaseId }: { databaseId: string }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
   const [rows, setRows] = useState(seedRows);
   const [resultColumns, setResultColumns] = useState(userColumns);
@@ -169,7 +173,7 @@ export default function DatabaseQueryDemoPage() {
     setDatabaseResolved(false);
     setDatabase(null);
     setLoadError(false);
-    if (!(import.meta.env.DEV && isDemoMode())) {
+    if (!isDemoMode()) {
       setDatabase(null);
       setDatabaseRows([]);
       setDatabaseResolved(true);
@@ -179,7 +183,8 @@ export default function DatabaseQueryDemoPage() {
     void import('../../entities/database/demo').then(demo => {
       if (cancelled) return;
       const value = demo.getDemoDatabase(databaseId);
-      setDatabaseRows(demo.getDemoDatabaseState().databases.map(item => ({
+      const ownerId = value?.owner.id;
+      setDatabaseRows(demo.getDemoDatabaseState().databases.filter(item => item.owner.id === ownerId).map(item => ({
         id: item.id,
         name: item.name,
         engine: item.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL',
@@ -188,9 +193,7 @@ export default function DatabaseQueryDemoPage() {
       })));
       const databaseValue = value
         ? { name: value.name, engine: value.engine, isolation: value.isolation, status: value.status, write_locked: value.write_locked, owner: value.owner }
-        : databaseId === 'welcome-db'
-          ? { name: 'welcome-db', engine: 'mysql' as const, isolation: 'shared' as const, status: 'active', write_locked: false }
-          : null;
+        : null;
       setDatabase(databaseValue);
       setDatabaseResolved(true);
     }).catch(() => {
@@ -214,7 +217,7 @@ export default function DatabaseQueryDemoPage() {
   const teamScopeId = database?.owner?.type === 'team' ? database.owner.id : undefined;
 
   function runQuery() {
-    if (!databaseResolved || !database || database.status !== 'active' || executing) return;
+    if (!isDemoMode() || !databaseResolved || !database || database.status !== 'active' || database.isolation === 'dedicated' || executing) return;
     setOutcome(null);
     setError('');
     setRan(false);
@@ -303,12 +306,14 @@ export default function DatabaseQueryDemoPage() {
   }
 
 
-  return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · 팀` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
+  if (database?.isolation === 'dedicated') return <Navigate to={`/databases/${encodeURIComponent(databaseId)}`} replace />;
+
+  return <WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · 팀` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>Database</Breadcrumb>
-    <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database ? `${database.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · ${database.isolation === 'dedicated' ? '전용형' : '공유형'}` : databaseResolved ? 'Database를 사용할 수 없습니다' : 'Database 확인 중'}</Subtitle></TitleGroup></Heading>
+    <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database ? `${database.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · 공유형` : databaseResolved ? 'Database를 사용할 수 없습니다' : 'Database 확인 중'}</Subtitle></TitleGroup></Heading>
     <DatabaseTabs aria-label="Database 메뉴">
       <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}`)}>접속 정보</Button>
-      <Button variant="primary">쿼리 콘솔</Button>
+      <Button variant="primary" aria-current="page">쿼리 콘솔</Button>
       <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/backups`)}>백업</Button>
       <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/settings`)}>설정</Button>
     </DatabaseTabs>
@@ -330,5 +335,5 @@ export default function DatabaseQueryDemoPage() {
       <TableWrap><ResultsTable><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
     </Card>
     <FooterNote><span>SQL과 결과는 저장하지 않습니다</span><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
-  </PageStack></WorkflowLayout></DemoOnlyGate>;
+  </PageStack></WorkflowLayout>;
 }

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getDemoInquiries, saveDemoInquiries, type Inquiry } from '../../entities/demo-workflows';
+import { getDemoInfraSnapshot } from '../../entities/infra-node/demo';
+import { addDemoNotification } from '../../entities/notification';
 import { Button } from '../../shared/ui/controls';
 import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -137,6 +139,8 @@ export default function AdminInquiriesDemoPage() {
   const [notice, setNotice] = useState('');
   const [showOverwrite, setShowOverwrite] = useState(false);
   const selected = items.find((item) => item.id === selectedId) ?? items[0];
+  const vmName = selected?.vmName.split(' · ')[0];
+  const relatedVm = vmName ? getDemoInfraSnapshot().resources.find(item => item.name === vmName) : undefined;
   const visible = useMemo(() => items.filter((item) => filter === '전체' || item.status === filter), [items, filter]);
   const pageSize = 4;
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
@@ -146,13 +150,25 @@ export default function AdminInquiriesDemoPage() {
   function submitReply(confirmOverwrite = false) {
     if (!selected) return;
     if (!reply.trim()) { setNotice('답변 내용을 입력해 주세요.'); return; }
-    if (selected.status === '답변 완료' && !confirmOverwrite) { setShowOverwrite(true); return; }
+    const latestItems = getDemoInquiries();
+    const current = latestItems.find(item => item.id === selected.id);
+    if (!current) {
+      setItems(latestItems);
+      setShowOverwrite(false);
+      setNotice('문의가 삭제되어 답변을 저장하지 못했습니다.');
+      return;
+    }
+    if (current.status === '답변 완료' && !confirmOverwrite) {
+      setItems(latestItems);
+      setShowOverwrite(true);
+      return;
+    }
     const now = new Date();
     const repliedAt = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const updated = items.map((item) => item.id === selected.id ? {
+    const updated = latestItems.map((item) => item.id === current.id ? {
       ...item,
-      replyHistory: selected.status === '답변 완료' && selected.reply.trim()
-        ? [...(item.replyHistory ?? []), selected.reply]
+      replyHistory: current.status === '답변 완료' && current.reply.trim()
+        ? [...(item.replyHistory ?? []), current.reply]
         : item.replyHistory,
       reply: reply.trim(),
       repliedAt,
@@ -161,7 +177,22 @@ export default function AdminInquiriesDemoPage() {
     if (!saveDemoInquiries(updated)) { setNotice('답변을 저장하지 못했습니다. 다시 시도해 주세요.'); return; }
     setItems(updated);
     setShowOverwrite(false);
-    setNotice('답변을 등록했습니다. 로컬 미리보기에서 답변 완료 상태로 표시됩니다.');
+    if (filter === '대기 중') {
+      setFilter('답변 완료');
+      const answeredIndex = updated.filter(item => item.status === '답변 완료').findIndex(item => item.id === current.id);
+      setPage(Math.floor(answeredIndex / pageSize) + 1);
+    }
+    const notified = current.isMine && addDemoNotification({
+      kind: 'inquiry-replied',
+      category: '문의',
+      group: 'Support',
+      title: '문의에 답변이 등록됐습니다',
+      body: current.title,
+      resource: null,
+    });
+    setNotice(current.isMine && !notified
+      ? '답변을 등록했습니다. 로컬 알림은 저장하지 못했습니다.'
+      : '답변을 등록했습니다. 로컬 미리보기에서 답변 완료 상태로 표시됩니다.');
   }
   function cancelReply() { setReply(selected?.reply ?? ''); setShowOverwrite(false); setNotice('답변 수정을 취소했습니다.'); }
 
@@ -172,10 +203,10 @@ export default function AdminInquiriesDemoPage() {
     <FilterBar><FilterButtons>{(['전체', '대기 중', '답변 완료'] as const).map((item) => <Button key={item} variant={filter === item ? 'primary' : 'ghost'} onClick={() => { setFilter(item); setPage(1); }}>{item} <Badge $tone="success">{item === '전체' ? items.length : items.filter((entry) => entry.status === item).length}</Badge></Button>)}</FilterButtons><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setItems(getDemoInquiries()); setNotice('문의 목록을 새로고침했습니다.'); }}>새로고침</Button></FilterBar>
     <Card><CardHeader><SectionTitle>최근 문의 · 대기 중 우선</SectionTitle></CardHeader><TableWrap><InquiryTable><thead><tr><th>문의</th><th>작성자</th><th>작성일</th><th>상태</th></tr></thead><tbody>{pageItems.length ? pageItems.map((item) => <tr key={item.id} aria-selected={item.id === selected?.id} onClick={() => select(item)}><td>{item.title}</td><td>{item.author} · {item.studentId}</td><td>{item.createdAt}</td><td><Badge $tone={item.status === '답변 완료' ? 'success' : 'warning'}>{item.status}</Badge></td></tr>) : <tr><td colSpan={4}><Hint>{items.length === 0 ? '아직 등록된 문의가 없습니다.' : '이 조건에 맞는 문의가 없습니다.'}</Hint></td></tr>}</tbody></InquiryTable></TableWrap><PaginationFooter><Hint>{items.length}개 중 {visible.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, visible.length)}</Hint><nav aria-label="문의 목록 페이지"><Button variant="ghost" disabled={page <= 1} aria-label="이전 페이지" icon={<Octicon name="arrow-left" size={16} />} onClick={() => setPage((value) => Math.max(1, value - 1))} />{Array.from({ length: pageCount }, (_, index) => index + 1).map((value) => <Button key={value} variant={page === value ? 'primary' : 'ghost'} onClick={() => setPage(value)}>{value}</Button>)}<Button variant="ghost" disabled={page >= pageCount} aria-label="다음 페이지" icon={<Octicon name="arrow-right" size={16} />} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} /></nav></PaginationFooter></Card>
     {selected && <>
-      <Card><InquiryDetailHeader><SectionTitle>{selected.title}</SectionTitle><Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate('/admin/vms/demo-vm-1')}>VM 보기</Button></InquiryDetailHeader>
-        <InquiryDetailGrid><div><Hint>작성자</Hint><Muted>{selected.author} · {selected.studentId}</Muted></div><div><Hint>관련 VM</Hint><Muted>{selected.vmName}</Muted></div><div style={{ gridColumn: '1 / -1' }}><Hint>문의 내용</Hint><Muted>{selected.content}</Muted></div>{selected.reply && <div style={{ gridColumn: '1 / -1' }}><Hint>현재 답변</Hint><Muted>{selected.reply} · {selected.createdAt}</Muted></div>}{Boolean(selected.replyHistory?.length) && <div style={{ gridColumn: '1 / -1' }}><Hint>이전 답변 · 관리자 전용</Hint><Muted>{selected.replyHistory?.join('\n')}</Muted></div>}</InquiryDetailGrid>
+      <Card><InquiryDetailHeader><SectionTitle>{selected.title}</SectionTitle>{relatedVm && <Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(`/admin/vms/${encodeURIComponent(relatedVm.grn)}`)}>VM 보기</Button>}</InquiryDetailHeader>
+        <InquiryDetailGrid><div><Hint>작성자</Hint><Muted>{selected.author} · {selected.studentId}</Muted></div><div><Hint>관련 VM</Hint><Muted>{selected.vmName || '선택 안 함'}</Muted></div><div style={{ gridColumn: '1 / -1' }}><Hint>문의 내용</Hint><Muted>{selected.content}</Muted></div>{selected.reply && <div style={{ gridColumn: '1 / -1' }}><Hint>현재 답변</Hint><Muted>{selected.reply} · {selected.repliedAt ?? selected.createdAt}</Muted></div>}{Boolean(selected.replyHistory?.length) && <div style={{ gridColumn: '1 / -1' }}><Hint>이전 답변 · 관리자 전용</Hint><Muted>{selected.replyHistory?.join('\n')}</Muted></div>}</InquiryDetailGrid>
       </Card>
-      <Card><CardHeader><div><SectionTitle>답변 수정</SectionTitle><Hint>안내를 보완할 수 있습니다. 등록하면 질문자에게 답변 알림을 보냅니다.</Hint></div></CardHeader><Field>관리자 답변<Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="답변을 입력하세요" /></Field><Hint>기존 답변을 대체할 내용을 확인해 주세요.</Hint><ReplyActionRow><Button variant="secondary" onClick={cancelReply}>취소</Button><Button onClick={() => submitReply()} icon={<Octicon name="check" size={16} />}>{selected.status === '답변 완료' ? '새 답변으로 등록' : '답변 등록'}</Button></ReplyActionRow></Card>
+      <Card><CardHeader><div><SectionTitle>{selected.status === '답변 완료' ? '답변 수정' : '답변 작성'}</SectionTitle><Hint>{selected.status === '답변 완료' ? '안내를 보완할 수 있습니다. 등록하면 질문자에게 답변 알림을 보냅니다.' : '아직 답변하지 않은 문의입니다. 등록하면 질문자에게 답변 알림을 보냅니다.'}</Hint></div></CardHeader><Field>관리자 답변<Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="답변을 입력하세요" /></Field><Hint>{selected.status === '답변 완료' ? '기존 답변을 대체할 내용을 확인해 주세요.' : '등록한 답변은 나중에 수정할 수 있습니다.'}</Hint><ReplyActionRow><Button variant="secondary" onClick={cancelReply}>취소</Button><Button onClick={() => submitReply()} icon={<Octicon name="check" size={16} />}>{selected.status === '답변 완료' ? '새 답변으로 등록' : '답변 등록'}</Button></ReplyActionRow></Card>
     </>}
     {showOverwrite && selected?.status === '답변 완료' && <ModalSurface labelledBy="inquiry-overwrite-title" onDismiss={() => setShowOverwrite(false)}>
       <OverwritePanel aria-labelledby="inquiry-overwrite-title" aria-describedby="inquiry-overwrite-copy">
