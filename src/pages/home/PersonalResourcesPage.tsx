@@ -535,13 +535,14 @@ export default function PersonalResourcesPage() {
       const homeState = demo.getDemoHomeState();
       const vmState = vmRepository.getDemoVmState();
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
+      const personalFunctions = serverlessRepository.getDemoServerlessFunctions();
       setExpiringPersonalVmId(personalVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued')?.id ?? null);
-      const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0);
+      const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0 && personalFunctions.length === 0);
       if (homeState?.firstVisit && !firstVisit) demo.setDemoFirstVisit(false);
       setDemoHome(homeState ? {
         ...homeState,
         firstVisit,
-        functions: serverlessRepository.getDemoServerlessFunctions().map(fn => ({
+        functions: personalFunctions.map(fn => ({
           id: fn.id,
           name: fn.name,
           runtime: fn.runtime === 'javascript' ? 'Node.js' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
