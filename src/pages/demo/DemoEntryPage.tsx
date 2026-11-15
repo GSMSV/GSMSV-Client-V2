@@ -64,9 +64,10 @@ export default function DemoEntryPage() {
       if (!startDemoSession(role) || !resumeDemoProfile()) return;
     } else if (!startDemoSession(role)) return;
     if (role === 'user' && import.meta.env.DEV) {
-      const [{ setDemoFirstVisit }, vm] = await Promise.all([
+      const [{ setDemoFirstVisit }, vm, serverless] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),
+        import('../../entities/serverless'),
       ]);
       setDemoFirstVisit(firstVisit);
       if (firstVisit) {
@@ -76,6 +77,7 @@ export default function DemoEntryPage() {
           vms: state.vms.filter(item => item.owner !== 'personal'),
           personalQuota: { ...state.personalQuota, cpu: 0, memory: 0, disk: 0 },
         });
+        await serverless.clearDemoServerlessFunctions();
       }
     }
     navigate(role === 'admin' ? '/admin/infra' : '/');
