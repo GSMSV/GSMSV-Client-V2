@@ -1,5 +1,6 @@
 export {
   canExtendDemoTeamVm,
+  cancelDemoVmCreateRequest,
   demoTeamReferenceTime,
   getDemoVmDraft,
   getDemoVmDaysRemaining,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { getDemoVmQuota, getDemoVmState, saveDemoVmState } from '../../entities/vm';
 import { clearDemoNetworkState, getDemoNetworkState, saveDemoNetworkState } from '../../entities/network';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
@@ -60,6 +60,37 @@ const NameError = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+const ResizePanel = styled.div`
+  display: flex;
+  width: min(480px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+`;
+
+const ResizeTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const ResizeCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const ResizeFieldLabel = styled.label`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+`;
+
+const ResizeActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 const DeleteOverlay = styled.div`
   position: fixed;
   z-index: 1000;
@@ -112,6 +143,9 @@ export function VmSettingsPage() {
   const [deleteName, setDeleteName] = useState('');
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [resizeOpen, setResizeOpen] = useState(false);
+  const [nextDisk, setNextDisk] = useState(0);
+  const [resizeError, setResizeError] = useState('');
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
@@ -127,6 +161,10 @@ export function VmSettingsPage() {
   const vmRecord = vm;
   const network = getDemoNetworkState(vmRecord.grn);
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
+  const quota = vmRecord.owner === 'team' ? getDemoVmQuota(state, vmRecord.teamId ?? 'demo-team') : state.personalQuota;
+  const remainingDisk = Math.max(0, quota.diskLimit - quota.disk);
+  const resizableDiskLimit = vmRecord.disk + Math.floor(remainingDisk / 10) * 10;
+  const canResizeDisk = !memberReadOnly && resizableDiskLimit > vmRecord.disk;
   const displayedPurpose = purpose || vmRecord.purpose;
 
   function persistState(next: typeof state) {
@@ -147,6 +185,47 @@ export function VmSettingsPage() {
     }
     setPurpose('');
     setNotice('사용 목적을 저장했습니다.');
+  }
+
+  function openResizeDialog() {
+    if (!canResizeDisk) return;
+    setNextDisk(resizableDiskLimit);
+    setResizeError('');
+    setResizeOpen(true);
+  }
+
+  function resizeDisk() {
+    if (memberReadOnly) return;
+    const latest = getDemoVmState();
+    const latestVm = latest.vms.find(item => item.id === vmRecord.id);
+    if (!latestVm) {
+      setResizeError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
+      return;
+    }
+    const latestQuota = latestVm.owner === 'team'
+      ? getDemoVmQuota(latest, latestVm.teamId ?? 'demo-team')
+      : latest.personalQuota;
+    const latestRemaining = Math.max(0, latestQuota.diskLimit - latestQuota.disk);
+    const increase = nextDisk - latestVm.disk;
+    if (increase < 10 || increase % 10 !== 0 || increase > latestRemaining) {
+      setResizeError('남은 할당량 안에서 10 GB 단위로 선택해 주세요.');
+      return;
+    }
+    const next = {
+      ...latest,
+      vms: latest.vms.map(item => item.id === latestVm.id ? {
+        ...item,
+        disk: nextDisk,
+        ...(item.demoQuotaDisk !== undefined ? { demoQuotaDisk: item.demoQuotaDisk + increase } : {}),
+      } : item),
+    };
+    if (!saveDemoVmState(next)) {
+      setResizeError('디스크 용량을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setState(next);
+    setResizeOpen(false);
+    setNotice(`디스크를 ${nextDisk} GB로 늘렸습니다. 완료 후 VM 안에서 파일 시스템을 늘려 주세요.`);
   }
 
   function cancelNameEdit() {
@@ -283,11 +362,11 @@ export function VmSettingsPage() {
       </Surface>
       <Surface>
         <SurfaceTitle>Resources</SurfaceTitle>
-        <Hint>사양은 개인 할당량 안에서 늘릴 수 있습니다. 지금은 개인 할당량을 모두 사용하고 있어 늘릴 수 없습니다.</Hint>
+        <Hint>{canResizeDisk ? `SSD는 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 10 GB 단위로 늘릴 수 있습니다. 남은 할당량 ${remainingDisk} GB입니다.` : memberReadOnly ? '팀장 또는 DevOps만 VM 사양을 변경할 수 있습니다.' : `사양은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 늘릴 수 있습니다. 현재 남은 할당량이 없어 늘릴 수 없습니다.`}</Hint>
         <SliderField label="vCPU" value={vm.cpu} min={1} max={vm.cpu} valueLabel={`${vm.cpu} vCPU`} minLabel="최소 1" maxLabel={`최대 ${vm.cpu} · 남은 할당량 0`} disabled />
         <SliderField label="RAM" value={vm.memory} min={1} max={vm.memory} valueLabel={`${vm.memory} GB`} minLabel="최소 1 GB" maxLabel={`최대 ${vm.memory} GB · 남은 할당량 0`} disabled />
-        <SliderField label="SSD" value={vm.disk} min={vm.disk} max={vm.disk} valueLabel={`${vm.disk} GB`} minLabel={`현재 ${vm.disk} GB · 줄일 수 없습니다`} maxLabel={`최대 ${vm.disk} GB · 남은 할당량 0`} helper="SSD는 늘릴 수만 있습니다. 늘린 뒤에는 VM 안에서 파일 시스템을 늘려야 합니다." showHelper disabled />
-        <Row><span /><Button variant="secondary" disabled icon={<Octicon name="cpu" />}>사양 적용</Button></Row>
+        <SliderField label="SSD" value={vm.disk} min={vm.disk} max={vm.disk} valueLabel={`${vm.disk} GB`} minLabel={`현재 ${vm.disk} GB · 줄일 수 없습니다`} maxLabel={`최대 ${resizableDiskLimit} GB · 남은 할당량 ${remainingDisk} GB`} helper="SSD는 늘릴 수만 있습니다. 늘린 뒤에는 VM 안에서 파일 시스템을 늘려야 합니다." showHelper disabled />
+        <Row><span /><Button variant="secondary" disabled={!canResizeDisk} icon={<Octicon name="database" />} onClick={openResizeDialog}>디스크 늘리기</Button></Row>
       </Surface>
       <Surface>
         <SurfaceTitle>Instance 정보</SurfaceTitle>
@@ -299,6 +378,21 @@ export function VmSettingsPage() {
       <WarningBar><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={memberReadOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
       {notice && <Hint role="status">{notice}</Hint>}
     </DemoPage>
+    {resizeOpen && <ModalSurface labelledBy="vm-resize-title" onDismiss={() => setResizeOpen(false)}>
+      <ResizePanel>
+        <ResizeTitle id="vm-resize-title">디스크 늘리기</ResizeTitle>
+        <ResizeCopy>· 늘린 용량은 다시 줄일 수 없습니다.<br />· 완료 후 VM 안에서 파일 시스템을 늘려야 합니다.</ResizeCopy>
+        <FactValue>현재 {vmRecord.disk} GB · {vmRecord.owner === 'team' ? '팀' : '개인'} SSD {quota.disk}/{quota.diskLimit} GB</FactValue>
+        <ResizeFieldLabel htmlFor="vm-next-disk">새 용량</ResizeFieldLabel>
+        <Input id="vm-next-disk" type="number" min={vmRecord.disk + 10} max={resizableDiskLimit} step={10} value={nextDisk} onChange={event => { setNextDisk(Number(event.currentTarget.value)); setResizeError(''); }} />
+        <Hint>최대 {resizableDiskLimit} GB · 남은 할당량 {remainingDisk} GB</Hint>
+        {resizeError && <NameError role="alert">{resizeError}</NameError>}
+        <ResizeActions>
+          <Button variant="secondary" onClick={() => setResizeOpen(false)}>취소</Button>
+          <Button variant="primary" disabled={nextDisk <= vmRecord.disk || nextDisk > resizableDiskLimit || (nextDisk - vmRecord.disk) % 10 !== 0} onClick={resizeDisk}>늘리기</Button>
+        </ResizeActions>
+      </ResizePanel>
+    </ModalSurface>}
     {deleteOpen && <DeleteOverlay onMouseDown={event => { if (event.target === event.currentTarget && !deleteSaving) setDeleteOpen(false); }}>
       <DeleteConfirmDialog
         open
