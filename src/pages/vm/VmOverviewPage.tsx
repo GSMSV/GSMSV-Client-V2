@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmExpiryTime, getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmState, saveDemoVmState } from '../../entities/vm';
 import { getDemoNetworkState, restoreDefaultPortForwards } from '../../entities/network';
+import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
@@ -119,27 +120,6 @@ const StateDialogActions = styled.div`
   gap: 8px;
 `;
 
-const PurposeField = styled.label`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
-`;
-
-const PurposeInput = styled.textarea`
-  width: 100%;
-  min-height: 88px;
-  box-sizing: border-box;
-  resize: vertical;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  padding: 10px 12px;
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-
 type PowerDialog = 'graceful-progress' | 'force-confirm' | 'force-progress' | 'restart-progress' | null;
 type PowerOperation = 'normal' | 'force' | 'restart' | null;
 
@@ -151,13 +131,16 @@ export function VmOverviewPage() {
   const [notice, setNotice] = useState('');
   const [powerDialog, setPowerDialog] = useState<PowerDialog>(null);
   const [powerOperation, setPowerOperation] = useState<PowerOperation>(null);
-  const [extensionDialogOpen, setExtensionDialogOpen] = useState(false);
-  const [extensionPurpose, setExtensionPurpose] = useState('');
   const [cancelDialog, setCancelDialog] = useState<'confirm' | 'started' | null>(null);
   const [networkVersion, setNetworkVersion] = useState(0);
   const powerTimer = useRef<number | null>(null);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   const networkState = useMemo(() => vm ? getDemoNetworkState(vm.grn) : null, [vm?.grn, networkVersion]);
+  const vmExtension = useDemoVmExtension({
+    onStateChange: setState,
+    onExtended: () => setNotice('사용 기간을 14일 연장했습니다.'),
+    onError: setNotice,
+  });
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (!vm) return <Navigate to={window.location.pathname.startsWith('/teams/') ? `/teams/${encodeURIComponent(routeTeamId ?? 'demo-team')}/vms` : '/'} replace />;
@@ -230,53 +213,9 @@ export function VmOverviewPage() {
     }
   }
 
-  function requestExtension(confirmation?: { purpose?: string }) {
-    const latest = getDemoVmState();
-    const latestVm = latest.vms.find(item => item.id === vmRecord.id);
-    if (!latestVm || latestVm.status === 'queued' || (latestVm.owner === 'team' && !canExtendDemoTeamVm(latestVm))) {
-      setState(latest);
-      setExtensionDialogOpen(false);
-      return;
-    }
-
-    const extensionCount = (latestVm.extensionCount ?? 0) + 1;
-    if (latestVm.owner === 'personal' && extensionCount % 4 === 0 && !confirmation) {
-      setState(latest);
-      setExtensionPurpose(latestVm.purpose);
-      setExtensionDialogOpen(true);
-      return;
-    }
-
-    const expiryTime = getDemoVmExpiryTime(latestVm.expiresAt);
-    if (expiryTime === undefined) {
-      setNotice('만료일을 확인할 수 없어 사용 기간을 연장하지 못했습니다.');
-      return;
-    }
-    const nextDate = new Date(expiryTime);
-    nextDate.setUTCDate(nextDate.getUTCDate() + 14);
-    const expiresAt = `${nextDate.toISOString().slice(0, 10).replaceAll('-', '.')} 14:00 (KST)`;
-    const next = {
-      ...latest,
-      vms: latest.vms.map(item => item.id === latestVm.id ? {
-        ...item,
-        expiresAt,
-        purpose: confirmation?.purpose ?? item.purpose,
-        extensionCount,
-      } : item),
-    };
-    if (!saveDemoVmState(next)) {
-      setNotice('사용 기간을 저장하지 못했습니다. 다시 시도해 주세요.');
-      return;
-    }
-    setState(next);
-    setExtensionDialogOpen(false);
-    setNotice('사용 기간을 14일 연장했습니다.');
-  }
-
-  function confirmExtensionWithPurpose() {
-    const nextPurpose = extensionPurpose.trim();
-    if (!nextPurpose || nextPurpose.length > 100) return;
-    requestExtension({ purpose: nextPurpose });
+  function requestExtension() {
+    setNotice('');
+    void vmExtension.extend(vmRecord.id);
   }
 
   function cancelCreateRequest() {
@@ -398,18 +337,14 @@ export function VmOverviewPage() {
         </>}
       </PowerPanel>
     </ModalSurface>}
-    {extensionDialogOpen && <ModalSurface labelledBy="vm-extension-title" onDismiss={() => setExtensionDialogOpen(false)}>
-      <StateDialogPanel>
-        <StateDialogTitle id="vm-extension-title">아직 이 목적으로 사용 중입니까?</StateDialogTitle>
-        <StateDialogCopy>4번째 연장입니다. 사용 목적을 확인해 주세요.</StateDialogCopy>
-        <PurposeField>사용 목적<PurposeInput value={extensionPurpose} maxLength={100} onChange={event => setExtensionPurpose(event.currentTarget.value)} /></PurposeField>
-        <StateDialogActions>
-          <Button variant="secondary" onClick={() => setExtensionDialogOpen(false)}>취소</Button>
-          <Button variant="secondary" disabled={!extensionPurpose.trim() || extensionPurpose.trim().length > 100} onClick={confirmExtensionWithPurpose}>목적 수정 후 연장</Button>
-          <Button variant="primary" onClick={() => requestExtension({})}>그대로 연장</Button>
-        </StateDialogActions>
-      </StateDialogPanel>
-    </ModalSurface>}
+    {vmExtension.confirmation && <DemoVmExtensionDialog
+      key={JSON.stringify(vmExtension.confirmation)}
+      initialPurpose={vmExtension.confirmation.purpose}
+      extensionCount={vmExtension.confirmation.extensionCount}
+      error={vmExtension.error}
+      onConfirm={vmExtension.confirm}
+      onDismiss={vmExtension.dismiss}
+    />}
     {cancelDialog === 'confirm' && <ModalSurface labelledBy="vm-create-cancel-title" onDismiss={() => setCancelDialog(null)}>
       <StateDialogPanel>
         <StateDialogTitle id="vm-create-cancel-title">생성을 취소하시겠습니까?</StateDialogTitle>

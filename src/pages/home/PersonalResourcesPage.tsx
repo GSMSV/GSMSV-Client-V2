@@ -8,6 +8,7 @@ import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import type { DemoHomeState } from '../../entities/home';
 import type { DemoVm, DemoVmQuota } from '../../entities/vm';
+import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -441,6 +442,7 @@ export default function PersonalResourcesPage() {
   const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
   const [expiringPersonalVmId, setExpiringPersonalVmId] = useState<string | null>(null);
   const [personalExtensionNotice, setPersonalExtensionNotice] = useState('');
+  const [personalExtensionError, setPersonalExtensionError] = useState('');
   const [cancelDialog, setCancelDialog] = useState<{ phase: 'confirm'; id: string; name: string } | { phase: 'started' } | null>(null);
   const [cancelError, setCancelError] = useState('');
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
@@ -451,6 +453,11 @@ export default function PersonalResourcesPage() {
   const [teamsError, setTeamsError] = useState(false);
   const [teamsRetryKey, setTeamsRetryKey] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
+  const vmExtension = useDemoVmExtension({
+    onStateChange: state => setDemoVms(state.vms.filter(vm => vm.owner === 'personal')),
+    onExtended: vm => setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`),
+    onError: setPersonalExtensionError,
+  });
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (import.meta.env.DEV && demoMode) {
@@ -597,6 +604,7 @@ export default function PersonalResourcesPage() {
   const queuedPersonalVms = demoVms.filter(vm => vm.status === 'queued');
   const activePersonalVms = demoVms.filter(vm => vm.status !== 'queued');
   const expiringPersonalVm = demoVms.find(vm => vm.id === expiringPersonalVmId && vm.status !== 'queued');
+  const initialExpiry = expiringPersonalVm?.expiresAt === '2026.10.03 14:00 (KST)';
 
   async function cancelQueuedVm(vmId: string) {
     if (!(import.meta.env.DEV && demoMode)) return;
@@ -619,21 +627,6 @@ export default function PersonalResourcesPage() {
     } : current);
     setCancelError('');
     setCancelDialog(target && target.status !== 'queued' ? { phase: 'started' } : null);
-  }
-
-  async function extendPersonalVm(vmId: string) {
-    if (!(import.meta.env.DEV && demoMode)) return;
-    const repository = await import('../../entities/vm');
-    const state = repository.getDemoVmState();
-    const vm = state.vms.find(item => item.id === vmId && item.owner === 'personal');
-    const match = vm?.expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
-    if (!vm || !match) return;
-    const nextDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14);
-    const expiresAt = `${nextDate.getFullYear()}.${String(nextDate.getMonth() + 1).padStart(2, '0')}.${String(nextDate.getDate()).padStart(2, '0')} 14:00 (KST)`;
-    const nextState = { ...state, vms: state.vms.map(item => item.id === vm.id ? { ...item, expiresAt } : item) };
-    repository.saveDemoVmState(nextState);
-    setDemoVms(current => current.map(item => item.id === vm.id ? { ...item, expiresAt } : item));
-    setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`);
   }
 
   return (
@@ -672,13 +665,21 @@ export default function PersonalResourcesPage() {
         </div>}
 
         {demoMode && !demoHome?.firstVisit && expiringPersonalVm && <Banner
-          title={personalExtensionNotice || 'portfolio-api · 만료까지 4일'}
-          description={personalExtensionNotice ? `${expiringPersonalVm.expiresAt}까지 사용할 수 있습니다.` : '10월 3일 14:00에 만료됩니다. 지금 연장하면 10월 17일까지 사용할 수 있습니다.'}
+          title={personalExtensionNotice || `${expiringPersonalVm.name} · ${initialExpiry ? '만료까지 4일' : '사용 기간'}`}
+          description={personalExtensionNotice
+            ? `${expiringPersonalVm.expiresAt}까지 사용할 수 있습니다.`
+            : initialExpiry
+              ? '10월 3일 14:00에 만료됩니다. 지금 연장하면 10월 17일까지 사용할 수 있습니다.'
+              : `${expiringPersonalVm.expiresAt}에 만료됩니다. 지금 연장하면 14일 더 사용할 수 있습니다.`}
           tone="primary"
           icon={<Octicon name="clock" size={20} />}
           secondaryAction={<Button variant="secondary" onClick={() => navigate(`/vms/${encodeURIComponent(expiringPersonalVm.id)}`)}>VM 관리</Button>}
-          action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => void extendPersonalVm(expiringPersonalVm.id)}>{personalExtensionNotice ? '연장 완료' : '14일 연장'}</Button>}
+          action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => {
+            setPersonalExtensionError('');
+            void vmExtension.extend(expiringPersonalVm.id);
+          }}>{personalExtensionNotice ? '연장 완료' : '14일 연장'}</Button>}
         />}
+        {demoMode && personalExtensionError && <Notice role="alert">{personalExtensionError}</Notice>}
 
         {demoMode && demoHome?.firstVisit ? <>
           <Notice role="note">
@@ -830,6 +831,14 @@ export default function PersonalResourcesPage() {
           </Section>
         </Sections>}
       </Page>
+      {demoMode && vmExtension.confirmation && <DemoVmExtensionDialog
+        key={JSON.stringify(vmExtension.confirmation)}
+        initialPurpose={vmExtension.confirmation.purpose}
+        extensionCount={vmExtension.confirmation.extensionCount}
+        error={vmExtension.error}
+        onConfirm={vmExtension.confirm}
+        onDismiss={vmExtension.dismiss}
+      />}
       {demoMode && cancelDialog && <ModalSurface labelledBy="home-vm-cancel-title" onDismiss={() => setCancelDialog(null)}>
         <WorkDialog>
           <WorkDialogTitle id="home-vm-cancel-title">
