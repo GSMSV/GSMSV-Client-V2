@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, useParams, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
@@ -58,8 +58,7 @@ let demoRoutes: RouteObject[] = [];
 let demoSessionGate: RouteObject['Component'];
 
 if (import.meta.env.DEV) {
-  const [entry, roleSelection, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
-    import('../pages/demo/DemoEntryPage'),
+  const [roleSelection, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
     import('../pages/auth/RoleSelectionDemoPage'),
     import('../pages/vm/demoRoutes'),
     import('../pages/demo-workflows/routes'),
@@ -67,19 +66,10 @@ if (import.meta.env.DEV) {
     import('../pages/serverless/routes'),
     import('../pages/demo/DemoSessionGate'),
   ]);
-  const DemoEntryPage = entry.default;
   const RoleSelectionDemoPage = roleSelection.default;
   demoSessionGate = sessionGate.default;
 
   demoRoutes = [
-    {
-      path: '/__demo',
-      element: (
-        <Suspense fallback={null}>
-          <DemoEntryPage />
-        </Suspense>
-      ),
-    },
     {
       path: '/__demo/role-selection',
       element: (
@@ -97,6 +87,10 @@ if (import.meta.env.DEV) {
 
 const routes: RouteObject[] = [
   ...demoRoutes,
+  {
+    path: '/admin',
+    element: <Navigate to="/admin/infra" replace />,
+  },
   {
     path: '/',
     element: (
