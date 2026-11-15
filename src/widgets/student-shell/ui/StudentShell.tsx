@@ -80,7 +80,6 @@ export function StudentShell({
   scopeOptions,
   scopeDisabled,
   scopeDisabledReason,
-  onNavigate,
   onCreateTeam,
   onOpenStatus,
   onSelectScope,
@@ -97,6 +96,31 @@ export function StudentShell({
   const [logoutPending, setLogoutPending] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const navigation = useResponsiveNavigation();
+  const demoMode = import.meta.env.DEV && isDemoMode();
+  const selectedTeamId = teamScopeId ?? scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id;
+  const unavailableItems: StudentNavigationKey[] = [
+    ...(!demoMode ? ['vm-create' as const, 'support' as const] : []),
+    ...(disabledNavigationItems ?? []),
+  ];
+
+  const navigateToItem = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const teamPath = selectedTeamId ? `/teams/${encodeURIComponent(selectedTeamId)}` : undefined;
+    const paths: Partial<Record<StudentNavigationKey, string>> = {
+      home: teamPath ?? '/',
+      'vm-create': selectedTeamId && demoMode
+        ? `${teamPath}/vms/new`
+        : demoMode ? '/vms/new' : undefined,
+      serverless: '/serverless',
+      database: selectedTeamId ? `/databases?owner=${encodeURIComponent(selectedTeamId)}` : '/databases',
+      apps: teamPath ? `${teamPath}/apps` : '/apps',
+      team: teamPath ?? '/teams',
+      docs: '/help',
+      support: demoMode ? '/support/inquiries?demo=1' : undefined,
+      settings: teamPath ? `${teamPath}/settings` : '/settings',
+    };
+    const path = paths[item];
+    if (path) void navigate(path);
+  };
 
   const requestNavigation = (action: () => void) => {
     if (logoutPending) return;
@@ -110,15 +134,7 @@ export function StudentShell({
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
       navigation.close();
-      if (item === 'serverless') {
-        void navigate('/serverless');
-        return;
-      }
-      if (item === 'docs') {
-        void navigate('/help');
-        return;
-      }
-      onNavigate(item);
+      navigateToItem(item);
     });
   };
 
@@ -137,7 +153,11 @@ export function StudentShell({
         onNavigate={handleNavigate}
         onCreateTeam={() => requestNavigation(() => { navigation.close(); onCreateTeam(); })}
         onOpenStatus={() => requestNavigation(() => { navigation.close(); onOpenStatus(); })}
-        disabledItems={disabledNavigationItems}
+        disabledItems={unavailableItems}
+        disabledReasons={{
+          'vm-create': 'VM 생성은 현재 운영 환경에서 제공되지 않습니다. 로컬 데모 모드에서 확인할 수 있습니다.',
+          support: '문의 화면은 현재 운영 환경에서 제공되지 않습니다. 로컬 데모 모드에서 확인할 수 있습니다.',
+        }}
         actionsAtBottom={sidebarActionsAtBottom}
       />
       <MainColumn inert={navigation.open}>
