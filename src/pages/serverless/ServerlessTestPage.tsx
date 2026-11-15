@@ -28,8 +28,8 @@ export interface ServerlessTestPageProps {
   active?: boolean;
   dailyExecutions?: { used: number; limit: number };
   executionError?: 'inactive' | 'quota' | 'missing' | null;
-  onDismissExecutionError?: () => void;
-  onActivate?: () => void;
+  onDismissExecutionError: () => void;
+  onActivate: () => void;
   onCopyResponse?: (responseJson: string) => void;
   onViewLogs?: () => void;
   onSelectTab?: (tab: ServerlessTestTab) => void;
