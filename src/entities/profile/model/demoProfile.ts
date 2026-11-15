@@ -55,6 +55,10 @@ export function updateDemoProfile(changes: Partial<DemoProfile>): DemoProfile | 
   return saveDemoProfile(next) ? next : null;
 }
 
+export function signOutDemoProfile(): boolean {
+  return Boolean(updateDemoProfile({ signedOut: true }));
+}
+
 export function resumeDemoProfile(): boolean {
   const profile = getDemoProfile();
   if (!profile) return false;

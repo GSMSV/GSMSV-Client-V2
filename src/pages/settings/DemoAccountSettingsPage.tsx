@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { getDemoProfile, updateDemoProfile, type DemoProfile } from '../../entities/profile';
+import { getDemoProfile, signOutDemoProfile, updateDemoProfile, type DemoProfile } from '../../entities/profile';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { listDemoTeams } from '../../entities/team/demo';
 import type { TeamRole } from '../../entities/team';
@@ -143,6 +143,7 @@ export default function DemoAccountSettingsPage() {
   ], [navigate, teams]);
 
   function performGoToLogin() {
+    signOutDemoProfile();
     clearSessionUser();
     void navigate('/login', { replace: true });
   }

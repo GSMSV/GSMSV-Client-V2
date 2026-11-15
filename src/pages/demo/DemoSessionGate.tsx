@@ -19,6 +19,7 @@ export default function DemoSessionGate() {
     || pathname === '/__demo/role-selection'
     || pathname === '/docs'
     || pathname === '/status'
+    || pathname.startsWith('/public/')
     || pathname === '/__design-system'
     || (pathname === '/settings' && profile?.accountDeleted)
     || (pathname.startsWith('/admin/') && getSessionUser()?.id === 'demo-admin');

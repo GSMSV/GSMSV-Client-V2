@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent
 import { useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { clearSessionUser, getSessionUser } from '../../../entities/session';
+import { signOutDemoProfile } from '../../../entities/profile';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../../entities/team';
 import { isDemoMode } from '../../../shared/demo';
 import { logout } from '../../../features/auth/logout/api/logout';
@@ -222,7 +223,9 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequ
     onLogoutPendingChange?.(true);
     setLogoutError(false);
     try {
-      if (!(import.meta.env.DEV && isDemoMode())) await logout();
+      const demoMode = import.meta.env.DEV && isDemoMode();
+      if (demoMode) signOutDemoProfile();
+      else await logout();
       clearSessionUser();
       setOpen(false);
       void navigate('/login', { replace: true });
