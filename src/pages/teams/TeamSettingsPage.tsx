@@ -27,11 +27,21 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+  container: team-settings / inline-size;
+
+  @media (max-width: 960px) {
+    padding: 24px;
+  }
+
+  @media (max-width: 600px) {
+    padding: 16px;
+  }
 `;
 
 const Breadcrumb = styled.p`
   width: 100%; margin: 0; color: ${({ theme }) => theme.colors.faint};
   font: 400 12px/18px ${({ theme }) => theme.typography.body.family}, sans-serif;
+  overflow-wrap: anywhere;
 `;
 
 const Heading = styled.header`
@@ -45,6 +55,7 @@ const Title = styled.h1`
 `;
 const Subtitle = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted};
+  overflow-wrap: anywhere;
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
 const RoleName = styled.strong`color: ${({ theme }) => theme.colors.primary}; font-weight: 500;`;
@@ -52,6 +63,10 @@ const RoleName = styled.strong`color: ${({ theme }) => theme.colors.primary}; fo
 const Panel = styled.section`
   box-sizing: border-box; display: flex; min-width: 0; flex-direction: column; gap: 16px;
   padding: 24px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.surface};
+
+  @container team-settings (max-width: 560px) {
+    padding: 16px;
+  }
 `;
 const PanelTitle = styled.h2`
   margin: 0; color: ${({ theme }) => theme.colors.text};
@@ -66,11 +81,21 @@ const TableHeader = styled.div`
   display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1fr) minmax(140px, .7fr) minmax(160px, .8fr);
   gap: 12px; padding: 12px 16px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.faint}; font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @container team-settings (max-width: 1040px) {
+    display: none;
+  }
 `;
 const MemberRow = styled.div`
   display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1fr) minmax(140px, .7fr) minmax(160px, .8fr);
   gap: 12px; align-items: center; min-height: 56px; padding: 8px 16px; border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.text}; font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  @container team-settings (max-width: 1040px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 12px;
+    padding: 12px 0;
+  }
 `;
 const MemberIdentity = styled.div`display: flex; min-width: 0; align-items: center; gap: 8px;`;
 const Avatar = styled.img`width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; object-fit: cover;`;
@@ -79,9 +104,37 @@ const AvatarFallback = styled.span`
 `;
 const MemberLabel = styled.span`overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
 const RoleText = styled.span<{ $leader?: boolean }>`color: ${({ theme, $leader }) => $leader ? theme.colors.primary : theme.colors.muted};`;
-const RowActions = styled.div`display: flex; justify-content: flex-start; gap: 8px;`;
-const TwoColumns = styled.div`display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; width: 100%;`;
-const InviteHeader = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 12px;`;
+const JoinedDate = styled(Muted)`
+  > span { display: none; }
+
+  @container team-settings (max-width: 1040px) {
+    grid-column: 1 / -1;
+    > span { display: inline; }
+  }
+`;
+const RowActions = styled.div`
+  display: flex; justify-content: flex-start; gap: 8px;
+
+  @container team-settings (max-width: 1040px) {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    &:empty { display: none; }
+  }
+`;
+const TwoColumns = styled.div`
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; width: 100%;
+
+  @container team-settings (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+const InviteHeader = styled.div`
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+
+  @container team-settings (max-width: 1040px) {
+    flex-wrap: wrap;
+  }
+`;
 const InviteForm = styled.form`display: flex; flex-direction: column; gap: 12px; width: 100%;`;
 const Hint = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.muted}; white-space: pre-line;
@@ -91,8 +144,18 @@ const InvitationList = styled.ul`display: flex; flex-direction: column; gap: 0; 
 const InvitationRow = styled.li`
   display: flex; min-width: 0; align-items: flex-start; gap: 12px; padding: 16px 0; border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   &:last-child { border-bottom: 0; }
+
+  @container team-settings (max-width: 1040px) {
+    flex-wrap: wrap;
+  }
 `;
-const InvitationCopy = styled.div`display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 8px;`;
+const InvitationCopy = styled.div`
+  display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 8px;
+
+  @container team-settings (max-width: 1040px) {
+    flex: 1 1 calc(100% - 32px);
+  }
+`;
 const InvitationEmail = styled.strong`
   overflow-wrap: anywhere; color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
@@ -101,13 +164,27 @@ const InvitationMeta = styled.span`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
-const InviteRowActions = styled.div`display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px;`;
+const InviteRowActions = styled.div`
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px;
+
+  @container team-settings (max-width: 1040px) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+`;
 const QuotaRows = styled.div`display: flex; flex-direction: column; gap: 16px;`;
 const QuotaRow = styled.div`display: flex; flex-direction: column; gap: 8px;`;
 const QuotaLabel = styled.div`display: flex; justify-content: space-between; gap: 16px; color: ${({ theme }) => theme.colors.muted}; font-size: 12px;`;
 const Meter = styled.div`height: 8px; overflow: hidden; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.field};`;
 const MeterFill = styled.div<{ $percent: number; $warning: boolean }>`height: 100%; width: ${({ $percent }) => `${$percent}%`}; background: ${({ theme, $warning }) => $warning ? theme.colors.warning : theme.colors.primary};`;
-const QuotaFooter = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 16px;`;
+const QuotaFooter = styled.div`
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+
+  @container team-settings (max-width: 560px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+`;
 const RoleCards = styled.div`display: flex; flex-direction: column; gap: 16px;`;
 const RoleCard = styled.div`display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 16px; align-items: start;`;
 const RoleIcon = styled.span`display: inline-flex; justify-content: center; color: ${({ theme }) => theme.colors.muted};`;
@@ -116,11 +193,24 @@ const RoleLabel = styled.strong`color: ${({ theme }) => theme.colors.faint}; fon
 const RoleDescription = styled.span`color: ${({ theme }) => theme.colors.text}; font-size: 14px; line-height: 22px;`;
 const DangerPanel = styled.section`
   display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.dangerSoft};
+
+  @container team-settings (max-width: 560px) {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: start;
+  }
 `;
 const DangerIcon = styled.span`display: inline-flex; flex: 0 0 20px; color: ${({ theme }) => theme.colors.danger};`;
 const DangerCopy = styled.div`display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 8px;`;
 const DangerTitle = styled.strong`color: ${({ theme }) => theme.colors.danger}; font-size: 14px; line-height: 20px;`;
-const DangerActions = styled.div`display: flex; gap: 8px;`;
+const DangerActions = styled.div`
+  display: flex; gap: 8px;
+
+  @container team-settings (max-width: 560px) {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+`;
 const InlineError = styled.p`
   margin: 0; color: ${({ theme }) => theme.colors.danger};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
@@ -356,7 +446,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
                   <MemberLabel>{member.name}</MemberLabel>
                 </MemberIdentity>
                 <RoleText $leader={member.role === 'leader'}>{roleLabels[member.role]}</RoleText>
-                <Muted>계약 정보 없음</Muted>
+                <JoinedDate><span>합류일 · </span>계약 정보 없음</JoinedDate>
                 <RowActions>
                   {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending && <>
                     <Button variant="ghost" onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
