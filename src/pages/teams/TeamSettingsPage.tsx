@@ -218,9 +218,16 @@ const InlineError = styled.p`
 
 const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps 엔지니어', member: '일반 팀원' };
 
-function formatDate(value: string) {
+function formatDate(value: string | null | undefined, display: 'short' | 'full' = 'short') {
+  if (typeof value !== 'string') return '날짜 확인 불가';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '날짜 확인 불가' : new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date);
+  if (Number.isNaN(date.getTime())) return '날짜 확인 불가';
+  if (display === 'full') {
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Seoul',
+    }).formatToParts(date).filter(part => part.type !== 'literal').map(part => part.value).join('.');
+  }
+  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date);
 }
 
 function getQuotaLabel(value: { used: number; limit: number } | undefined) {
@@ -446,7 +453,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
                   <MemberLabel>{member.name}</MemberLabel>
                 </MemberIdentity>
                 <RoleText $leader={member.role === 'leader'}>{roleLabels[member.role]}</RoleText>
-                <JoinedDate><span>합류일 · </span>계약 정보 없음</JoinedDate>
+                <JoinedDate><span>합류일 · </span>{formatDate(member.joined_at, 'full')}</JoinedDate>
                 <RowActions>
                   {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending && <>
                     <Button variant="ghost" onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
