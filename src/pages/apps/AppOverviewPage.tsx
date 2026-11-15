@@ -20,6 +20,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -35,6 +37,8 @@ const Heading = styled.section`
   justify-content: space-between;
   gap: 24px;
   width: 100%;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const TitleBlock = styled.div`
@@ -63,6 +67,8 @@ const HeaderActions = styled.div`
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
+
+  @media (max-width: 760px) { width: 100%; }
 `;
 
 const Tabs = styled.div`

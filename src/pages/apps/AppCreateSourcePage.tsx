@@ -26,6 +26,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -48,6 +50,8 @@ const StepRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const Steps = styled.div`

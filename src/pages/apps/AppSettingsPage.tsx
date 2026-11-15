@@ -19,6 +19,8 @@ const Page = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 28px 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -32,6 +34,8 @@ const HeadingRow = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const HeadingContent = styled.div`
@@ -39,6 +43,8 @@ const HeadingContent = styled.div`
   min-width: 0;
   flex-direction: column;
   gap: 8px;
+
+  @media (max-width: 760px) { width: 100%; }
 `;
 
 const NameInput = styled.input`
@@ -66,6 +72,8 @@ const HeadingActions = styled.div`
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
+
+  @media (max-width: 760px) { width: 100%; }
 `;
 
 const Tabs = styled.nav`
@@ -103,6 +111,8 @@ const CardHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 560px) { flex-wrap: wrap; }
 `;
 
 const CardTitle = styled.h2`
@@ -121,6 +131,8 @@ const Table = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 `;
 
 const TableHead = styled.div`
@@ -134,6 +146,8 @@ const TableHead = styled.div`
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @media (max-width: 760px) { min-width: 592px; }
 `;
 
 const EnvRow = styled.div`
@@ -146,6 +160,8 @@ const EnvRow = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  @media (max-width: 760px) { min-width: 592px; }
 `;
 
 const Mono = styled.code`
@@ -231,14 +247,25 @@ const Overlay = styled.div`
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow-y: auto;
   background: #0009;
 `;
 
 const DeleteDialogContent = styled.div`
   display: flex;
-  width: 480px;
+  width: min(480px, 100%);
+  min-width: 0;
   flex-direction: column;
   gap: 12px;
+`;
+
+const ResponsiveDeleteConfirmDialog = styled(DeleteConfirmDialog)`
+  @media (max-width: 528px) {
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
 `;
 
 const DeleteFailure = styled.p`
@@ -531,7 +558,7 @@ export default function AppSettingsPage() {
       {deleteOpen && current && <Overlay onMouseDown={event => { if (event.target === event.currentTarget && !deleting) setDeleteOpen(false); }}>
         <DeleteDialogContent>
           {deleteMessage && <DeleteFailure role="alert">{deleteMessage}</DeleteFailure>}
-        <DeleteConfirmDialog
+        <ResponsiveDeleteConfirmDialog
           open
           title="앱을 삭제할까요?"
           description="삭제 작업을 시작하면 앱이 삭제 중 상태로 바뀝니다. 삭제를 확인하려면 앱 이름을 정확히 입력해 주세요."
