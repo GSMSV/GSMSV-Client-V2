@@ -1,3 +1,4 @@
+import { canManageDemoVm, getDemoVmState } from '../../vm/model/demoVmStore';
 import { readDemoState, writeDemoState } from '../../../shared/demo';
 import type { DomainList, FirewallRule, FirewallRulePage, NetworkProtocol, PortForward, PortForwardList } from './types';
 
@@ -97,11 +98,19 @@ export function demoFirewallList(vmGrn: string): FirewallRulePage {
   return { enabled: state.firewallEnabled, items: state.rules, limits: { per_vm: 20 }, next_cursor: null };
 }
 
+function requireNetworkWritePermission(vmGrn: string) {
+  const vm = getDemoVmState().vms.find(item => item.grn === vmGrn);
+  if (!vm || vm.status === 'queued' || !canManageDemoVm(vm)) {
+    throw new Error('현재 상태에서는 Network 설정을 변경할 수 없습니다.');
+  }
+}
+
 function persistDemoNetwork(vmGrn: string, state: DemoNetworkState) {
   if (!saveDemoNetworkState(vmGrn, state)) throw new Error('Network 변경사항을 저장하지 못했습니다.');
 }
 
 export function demoCreatePort(vmGrn: string, input: { internal_port: number; protocol: NetworkProtocol; allowed_source?: string; description?: string }) {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const externalPort = Math.max(32000, ...state.ports.map(port => port.external_port)) + 1;
   const id = `${vmGrn}-custom-${state.sequence}`;
@@ -114,11 +123,13 @@ export function demoCreatePort(vmGrn: string, input: { internal_port: number; pr
 }
 
 export function demoDeletePort(vmGrn: string, portId: string): void {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   persistDemoNetwork(vmGrn, { ...state, ports: state.ports.filter(port => port.id !== portId) });
 }
 
 export function demoRestorePorts(vmGrn: string) {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const presentKinds = new Set(state.ports.map(port => port.kind));
   const template = seed(vmGrn).ports;
@@ -128,6 +139,7 @@ export function demoRestorePorts(vmGrn: string) {
 }
 
 export function demoCreateDomain(vmGrn: string, input: { subdomain: string; internal_port: number }) {
+  requireNetworkWritePermission(vmGrn);
   const validationError = getDemoDomainValidationError(vmGrn, input.subdomain, input.internal_port);
   if (validationError) throw new Error(validationError);
   const state = getDemoNetworkState(vmGrn);
@@ -145,6 +157,7 @@ export function demoCreateDomain(vmGrn: string, input: { subdomain: string; inte
 }
 
 export function demoUpdateDomain(vmGrn: string, domainId: string, input: { subdomain?: string; internal_port?: number }) {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const old = state.domains.find(domain => domain.id === domainId);
   if (!old) throw new Error('Domain을 찾을 수 없습니다.');
@@ -154,6 +167,7 @@ export function demoUpdateDomain(vmGrn: string, domainId: string, input: { subdo
 }
 
 export function demoRetryDomain(vmGrn: string, domainId: string): void {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const current = state.domains.find(domain => domain.id === domainId);
   if (!current || current.sync_status !== 'failed') throw new Error('다시 연결할 Domain을 찾을 수 없습니다.');
@@ -162,6 +176,7 @@ export function demoRetryDomain(vmGrn: string, domainId: string): void {
 }
 
 export function demoDeleteDomain(vmGrn: string, domainId: string): void {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const starts = { ...state.domainSyncStarts };
   delete starts[domainId];
@@ -169,6 +184,7 @@ export function demoDeleteDomain(vmGrn: string, domainId: string): void {
 }
 
 export function demoCreateFirewallRule(vmGrn: string, input: Omit<FirewallRule, 'id'>) {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   const id = `${vmGrn}-rule-${state.sequence}`;
   persistDemoNetwork(vmGrn, { ...state, sequence: state.sequence + 1, firewallEnabled: true, rules: [...state.rules, { ...input, id }] });
@@ -176,11 +192,13 @@ export function demoCreateFirewallRule(vmGrn: string, input: Omit<FirewallRule, 
 }
 
 export function demoDeleteFirewallRule(vmGrn: string, ruleId: string): void {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   persistDemoNetwork(vmGrn, { ...state, rules: state.rules.filter(rule => rule.id !== ruleId) });
 }
 
 export function demoSetFirewallEnabled(vmGrn: string, enabled: boolean): boolean {
+  requireNetworkWritePermission(vmGrn);
   const state = getDemoNetworkState(vmGrn);
   return saveDemoNetworkState(vmGrn, { ...state, firewallEnabled: enabled });
 }

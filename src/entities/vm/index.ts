@@ -1,19 +1,26 @@
 export {
+  canCreateDemoTeamVm,
   canExtendDemoTeamVm,
+  canManageDemoVm,
+  canRecoverDemoVm,
   cancelDemoVmCreateRequest,
   demoTeamReferenceTime,
   formatDemoVmDate,
   getDemoVmDraft,
   getDemoVmDaysRemaining,
   getDemoVmExpiryTime,
+  getDemoVmGraceEnd,
   getDemoVmQuota,
   getDemoVmState,
+  isDemoVmExpired,
   isDemoVmInitializing,
   listDemoTeamVms,
   makeDemoVm,
+  removeDemoVm,
   resetDemoVmDraft,
   saveDemoVmDraft,
   saveDemoVmState,
+  type DeletedDemoVm,
   type DemoSnapshot,
   type DemoVmQuota,
   type DemoVm,
@@ -22,3 +29,5 @@ export {
   type VmOwner,
   type VmStatus,
 } from './model/demoVmStore';
+
+export { useDemoVmResourceState } from './model/useDemoVmResourceState';

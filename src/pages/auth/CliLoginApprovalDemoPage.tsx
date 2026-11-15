@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoCliRequest, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
+import { getDemoCliRequestByCode, isDemoCliRequestExpired, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
 import { getDemoProfile, saveDemoProfile, updateDemoProfile } from '../../entities/profile';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
-import { CliCodeForm, normalizeCliCode } from './CliLoginEntryDemoPage';
+import { CliCodeForm } from './CliLoginEntryDemoPage';
 import { CliLoginFrame } from './CliLoginFrame';
 
 const Title = styled.h1`
@@ -83,43 +83,54 @@ const StateActions = styled(Actions)`
 `;
 
 export default function CliLoginApprovalDemoPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [request, setRequest] = useState(getDemoCliRequest);
+  const requestedCode = searchParams.get('code') ?? '';
+  if (!isDemoMode()) return <CliLoginFrame><StateTitle>목데이터 CLI 미리보기</StateTitle><Description>?demo=1 모드에서 CLI 로그인 승인을 확인할 수 있습니다.</Description></CliLoginFrame>;
+  return <CliApproval key={requestedCode} requestedCode={requestedCode} />;
+}
+
+function getCliStudent() {
+  const profile = getDemoProfile();
+  const user = getSessionUser();
+  return profile && !profile.signedOut && !profile.accountDeleted && user?.id === 'demo-student' && user.role === 'user' ? profile : null;
+}
+
+function CliApproval({ requestedCode }: { requestedCode: string }) {
+  const navigate = useNavigate();
+  const [request, setRequest] = useState(() => getDemoCliRequestByCode(requestedCode));
   const [outcome, setOutcome] = useState<'승인 완료' | '거부됨'>();
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now);
-  const profile = getDemoProfile();
-  const user = profile?.signedOut ? null : getSessionUser();
-  const email = user?.id === 'demo-admin' ? 'admin@example.com' : profile?.email;
-  const requestedCode = searchParams.get('code') ?? '';
-  const codeMatches = normalizeCliCode(requestedCode) === normalizeCliCode(request.code);
-  const expired = request.status === '만료됨'
-    || (request.status === '확인 대기' && now >= (request.expiresAtMs ?? 0));
-  const consumed = request.status === '승인 완료' || request.status === '거부됨';
+  const student = getCliStudent();
+  const expired = request ? isDemoCliRequestExpired(request, now) : false;
 
   useEffect(() => {
-    if (request.status !== '확인 대기' || expired) return;
+    if (request?.status !== '확인 대기' || expired) return;
     const timer = window.setInterval(() => {
       setNow(Date.now());
-      setRequest(getDemoCliRequest());
+      setRequest(getDemoCliRequestByCode(requestedCode));
     }, 1_000);
     return () => window.clearInterval(timer);
-  }, [expired, request.status]);
+  }, [expired, request?.status, requestedCode]);
+
+  if (!request) return <CliLoginFrame email={student?.email}>
+    <CliCodeForm initialCode={requestedCode} initialError={requestedCode.trim() ? '코드를 다시 확인하세요. 계속 안 되면 터미널에서 gsmsv login을 다시 실행하세요.' : ''} />
+  </CliLoginFrame>;
+
+  const consumed = request.status === '승인 완료' || request.status === '거부됨';
 
   function decide(status: '승인 완료' | '거부됨') {
-    if (!isDemoMode() || !user || !codeMatches || outcome) return;
-    const latest = getDemoCliRequest();
-    if (latest.status !== '확인 대기' || latest.code !== request.code || Date.now() >= (latest.expiresAtMs ?? 0)) {
+    const latestProfile = getCliStudent();
+    if (!isDemoMode() || !latestProfile || outcome) return;
+    const latest = getDemoCliRequestByCode(requestedCode);
+    if (!latest || latest.status !== '확인 대기' || isDemoCliRequestExpired(latest)) {
       setNow(Date.now());
       setRequest(latest);
       return;
     }
 
     const updated = { ...latest, status } satisfies CliLoginRequest;
-    const latestProfile = getDemoProfile();
     if (status === '승인 완료') {
-      if (!latestProfile || latestProfile.signedOut) return;
       const device = { id: 'device-macbook', name: 'MacBook-Air', platform: 'macOS', lastUsed: '마지막 사용 방금' };
       const cliDevices = [...latestProfile.cliDevices.filter(item => item.id !== device.id), device];
       if (!updateDemoProfile({ cliDevices })) {
@@ -139,6 +150,7 @@ export default function CliLoginApprovalDemoPage() {
   }
 
   function logOutDevices() {
+    if (!getCliStudent()) return;
     if (!updateDemoProfile({ cliDevices: [], signedOut: true })) {
       setNotice('로그아웃 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
@@ -152,17 +164,13 @@ export default function CliLoginApprovalDemoPage() {
   const requestSummary = <Description>· 코드 {request.code} · {request.device}</Description>;
   const error = notice && <Warning role="alert"><Octicon name="alert" size={18} />{notice}</Warning>;
 
-  if (!isDemoMode()) return <CliLoginFrame><StateTitle>목데이터 CLI 미리보기</StateTitle><Description>?demo=1 모드에서 CLI 로그인 승인을 확인할 수 있습니다.</Description></CliLoginFrame>;
-
   let content;
-  if (!codeMatches) {
-    content = <CliCodeForm initialCode={requestedCode} initialError={requestedCode.trim() ? '코드를 다시 확인하세요. 계속 안 되면 터미널에서 gsmsv login을 다시 실행하세요.' : ''} />;
-  } else if (outcome === '승인 완료') {
+  if (outcome === '승인 완료') {
     content = <>
       <StateTitle><Octicon name="check-circle" size={24} />승인했습니다</StateTitle>
       <Description>목데이터 CLI 기기가 연결되었습니다. 계정 설정에서 연결을 해제할 수 있습니다.</Description>
       <Description>· 기기 · {request.device}</Description>
-      <StateActions><Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => void navigate('/settings')}>연결된 CLI 기기 보기</Button></StateActions>
+      <StateActions><Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => void navigate('/settings?tab=cli')}>연결된 CLI 기기 보기</Button></StateActions>
     </>;
   } else if (outcome === '거부됨') {
     content = <>
@@ -185,7 +193,7 @@ export default function CliLoginApprovalDemoPage() {
       {requestSummary}
       <StateActions>{close}</StateActions>
     </>;
-  } else if (!user) {
+  } else if (!student) {
     const target = `/cli/approve?code=${encodeURIComponent(request.code)}`;
     content = <>
       <StateTitle><Octicon name="sign-in" size={24} />로그인하면 승인 화면으로 돌아옵니다</StateTitle>
@@ -202,7 +210,7 @@ export default function CliLoginApprovalDemoPage() {
       <Warning><Octicon name="alert" size={20} /><span><strong>직접 실행한 요청이 아니면 거부하세요</strong><br />승인하면 이 기기에서 내 계정으로 VM과 함수를 다룰 수 있고, 로그인은 30일 동안 유지됩니다. 계정 설정 · 연결된 CLI 기기에서 언제든 해제할 수 있습니다.</span></Warning>
       <InfoLine><Octicon name="terminal" size={16} /><span><Label>기기</Label><Value>{request.device}</Value></span></InfoLine>
       <InfoLine><Octicon name="clock" size={16} /><span><Label>요청 시각</Label><Value>{request.requestedAt} · 방금</Value></span></InfoLine>
-      <InfoLine><Octicon name="person" size={16} /><span><Label>로그인 계정</Label><Value>{user.id === 'demo-admin' ? user.name : profile?.name} · {email}</Value></span></InfoLine>
+      <InfoLine><Octicon name="person" size={16} /><span><Label>로그인 계정</Label><Value>{student.name} · {student.email}</Value></span></InfoLine>
       <InfoLine><Octicon name="key" size={16} /><span><Label>받는 권한</Label><Value>웹과 같은 권한 · VM·함수 조회, 생성, 전원, 연장</Value></span></InfoLine>
       {error}
       <Actions>
@@ -211,5 +219,5 @@ export default function CliLoginApprovalDemoPage() {
       </Actions>
     </>;
   }
-  return <CliLoginFrame email={user ? email : undefined}>{content}</CliLoginFrame>;
+  return <CliLoginFrame email={student?.email}>{content}</CliLoginFrame>;
 }

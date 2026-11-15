@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmState } from '../../entities/vm';
+import { getDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Fact, FactLabel, FactValue, Grid2, Heading, Hint, MetricCard, StatusText } from './VmDemoPrimitives';
+import { VmUnavailablePage } from './VmUnavailablePage';
 
 const Title = styled.h1`
   margin: 0;
@@ -164,12 +165,13 @@ export function VmMonitoringPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [range, setRange] = useState<MonitoringRange>('1시간');
   const [refresh, setRefresh] = useState(0);
-  const state = useMemo(() => getDemoVmState(), [refresh]);
+  const [state, setState] = useDemoVmResourceState(vmId);
   const vm = state.vms.find(item => item.id === vmId);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
-  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
+  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -184,7 +186,7 @@ export function VmMonitoringPage() {
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText> · Resource 사용 기록</StatusLine></div><RangeButtons>
         {(['6시간', '24시간', '1시간'] as const).map(value => <Button key={value} variant={range === value ? 'primary' : 'secondary'} icon={range === value ? <Octicon name="clock" /> : undefined} onClick={() => setRange(value)}>{value}</Button>)}
-        <Button variant="secondary" icon={<Octicon name="sync" />} onClick={() => setRefresh(value => value + 1)}>새로고침</Button>
+        <Button variant="secondary" icon={<Octicon name="sync" />} onClick={() => { setState(getDemoVmState()); setRefresh(value => value + 1); }}>새로고침</Button>
       </RangeButtons></Heading>
       <DetailTabs vmId={vm.id} active="Monitoring" teamId={vm.teamId} networkVmGrn={vm.grn} />
       {vm.status === 'running' && <BannerWarning />}

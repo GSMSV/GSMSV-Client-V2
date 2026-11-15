@@ -1,13 +1,14 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmState, saveDemoVmState, type DemoSnapshot } from '../../entities/vm';
+import { canManageDemoVm, getDemoVmState, isDemoVmExpired, saveDemoVmState, useDemoVmResourceState, type DemoSnapshot, type DemoVm } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button, Switch, TextField } from '../../shared/ui/controls';
 import { LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Facts, Heading, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle, Table, TableWrap } from './VmDemoPrimitives';
+import { VmUnavailablePage } from './VmUnavailablePage';
 
 const Title = styled.h1`
   margin: 0;
@@ -128,7 +129,7 @@ const IconButton = styled.button`
 
 export function VmSnapshotsPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
-  const [state, setState] = useState(() => getDemoVmState());
+  const [state, setState] = useDemoVmResourceState(vmId);
   const [notice, setNotice] = useState('');
   const [dialog, setDialog] = useState<SnapshotDialog>(null);
   const [snapshotName, setSnapshotName] = useState('');
@@ -137,8 +138,9 @@ export function VmSnapshotsPage() {
   const [deletingSnapshotId, setDeletingSnapshotId] = useState<string | null>(null);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
-  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
+  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -147,19 +149,28 @@ export function VmSnapshotsPage() {
   const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
-  const memberReadOnly = vmRecord.status === 'queued' || (vmRecord.owner === 'team' && vmRecord.role === 'member');
+  const memberReadOnly = vmRecord.status === 'queued' || !canManageDemoVm(vmRecord);
 
   const manualCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'manual').length;
   const automaticCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'automatic').length;
   const totalCount = vmRecord.snapshots.length;
 
-  function persist(update: (current: typeof state) => typeof state) {
+  function persist(update: (target: DemoVm) => DemoVm | string): string | null {
     const latest = getDemoVmState();
-    if (!latest.vms.some(item => item.id === vmRecord.id)) return false;
-    const next = update(latest);
-    if (!saveDemoVmState(next)) return false;
+    const target = latest.vms.find(item => item.id === vmRecord.id);
+    if (!target || target.status === 'queued' || !canManageDemoVm(target)) {
+      setState(latest);
+      return '현재 상태에서는 Snapshot을 변경할 수 없습니다.';
+    }
+    const updated = update(target);
+    if (typeof updated === 'string') {
+      setState(latest);
+      return updated;
+    }
+    const next = { ...latest, vms: latest.vms.map(item => item.id === target.id ? updated : item) };
+    if (!saveDemoVmState(next)) return 'Snapshot 변경사항을 저장하지 못했습니다. 다시 시도해 주세요.';
     setState(next);
-    return true;
+    return null;
   }
 
   function openCreateSnapshot() {
@@ -173,26 +184,26 @@ export function VmSnapshotsPage() {
     event.preventDefault();
     if (memberReadOnly) return;
     const name = snapshotName.trim();
-    if (totalCount >= 3 || manualCount >= 2) {
-      setDialogError('저장 가능한 Snapshot 개수를 모두 사용했습니다.');
-      return;
-    }
     if (!snapshotNamePattern.test(name)) {
       setDialogError('영문으로 시작하며 영문, 숫자, 밑줄, 하이픈을 사용해 1~40자로 입력해 주세요.');
-      return;
-    }
-    if (vmRecord.snapshots.some(snapshot => snapshot.name.toLowerCase() === name.toLowerCase())) {
-      setDialogError('같은 이름의 Snapshot이 이미 있습니다.');
       return;
     }
     setDialogError('');
     setOperation('create');
     await waitForDemoOperation();
-    const snapshot: DemoSnapshot = { id: `snapshot-${Date.now()}`, name, kind: 'manual', createdAt: formatSnapshotTime() };
-    const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, snapshots: [snapshot, ...item.snapshots] } : item) }));
+    const snapshot: DemoSnapshot = { id: 'snapshot-' + crypto.randomUUID(), name, kind: 'manual', createdAt: formatSnapshotTime() };
+    const error = persist(target => {
+      if (target.snapshots.length >= 3 || target.snapshots.filter(value => value.kind === 'manual').length >= 2) {
+        return '저장 가능한 Snapshot 개수를 모두 사용했습니다.';
+      }
+      if (target.snapshots.some(value => value.name.toLowerCase() === name.toLowerCase())) {
+        return '같은 이름의 Snapshot이 이미 있습니다.';
+      }
+      return { ...target, snapshots: [snapshot, ...target.snapshots] };
+    });
     setOperation(null);
-    if (!saved) {
-      setDialogError('Snapshot을 저장하지 못했습니다. 다시 시도해 주세요.');
+    if (error) {
+      setDialogError(error);
       return;
     }
     setDialog(null);
@@ -211,11 +222,11 @@ export function VmSnapshotsPage() {
     setDeletingSnapshotId(snapshot.id);
     setOperation('delete');
     await waitForDemoOperation();
-    const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, snapshots: item.snapshots.filter(value => value.id !== snapshot.id) } : item) }));
+    const error = persist(target => ({ ...target, snapshots: target.snapshots.filter(value => value.id !== snapshot.id) }));
     setDeletingSnapshotId(null);
     setOperation(null);
-    if (!saved) {
-      setNotice('Snapshot을 삭제하지 못했습니다. 다시 시도해 주세요.');
+    if (error) {
+      setNotice(error);
       return;
     }
     setNotice('Snapshot을 삭제했습니다.');
@@ -232,10 +243,12 @@ export function VmSnapshotsPage() {
     setDialogError('');
     setOperation('restore');
     await waitForDemoOperation();
-    const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: 'stopped' } : item) }));
+    const error = persist(target => target.snapshots.some(value => value.id === snapshot.id)
+      ? { ...target, status: 'stopped' }
+      : '복원할 Snapshot을 찾을 수 없습니다.');
     setOperation(null);
-    if (!saved) {
-      setDialogError('Snapshot을 복원하지 못했습니다. 다시 시도해 주세요.');
+    if (error) {
+      setDialogError(error);
       return;
     }
     setDialog({ kind: 'restore-complete', snapshot });
@@ -244,9 +257,11 @@ export function VmSnapshotsPage() {
 
   function startVmAfterRestore() {
     if (memberReadOnly) return;
-    const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, status: 'running' } : item) }));
-    if (!saved) {
-      setDialogError('VM을 시작하지 못했습니다. 다시 시도해 주세요.');
+    const error = persist(target => isDemoVmExpired(target)
+      ? '만료일을 연장한 뒤 VM을 시작할 수 있습니다.'
+      : { ...target, status: 'running' });
+    if (error) {
+      setDialogError(error);
       return;
     }
     setDialog(null);
@@ -256,10 +271,8 @@ export function VmSnapshotsPage() {
 
   function setAutomatic(enabled: boolean) {
     if (memberReadOnly) return;
-    const saved = persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? { ...item, autoSnapshots: enabled } : item) }));
-    setNotice(saved
-      ? enabled ? '자동 Snapshot을 켰습니다. 다음 자정부터 최신 1개를 보관합니다.' : '자동 Snapshot을 껐습니다.'
-      : '자동 Snapshot 설정을 저장하지 못했습니다.');
+    const error = persist(target => ({ ...target, autoSnapshots: enabled }));
+    setNotice(error ?? (enabled ? '자동 Snapshot을 켰습니다. 다음 자정부터 최신 1개를 보관합니다.' : '자동 Snapshot을 껐습니다.'));
   }
 
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>

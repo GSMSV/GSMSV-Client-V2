@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmQuota, getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canManageDemoVm, getDemoVmQuota, getDemoVmState, removeDemoVm, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { clearDemoNetworkState, getDemoNetworkState, saveDemoNetworkState } from '../../entities/network';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
@@ -10,6 +10,7 @@ import { DeleteConfirmDialog } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Heading, Hint, Input, Row, Surface, SurfaceTitle, Textarea } from './VmDemoPrimitives';
+import { VmUnavailablePage } from './VmUnavailablePage';
 
 const Title = styled.h1`
   margin: 0;
@@ -132,7 +133,7 @@ const FailureActions = styled.div`
 export function VmSettingsPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const navigate = useNavigate();
-  const [state, setState] = useState(() => getDemoVmState());
+  const [state, setState] = useDemoVmResourceState(vmId);
   const [purpose, setPurpose] = useState<string | null>(null);
   const [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const [passwordResetError, setPasswordResetError] = useState('');
@@ -151,8 +152,9 @@ export function VmSettingsPage() {
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
-  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
+  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -162,7 +164,7 @@ export function VmSettingsPage() {
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
   const network = getDemoNetworkState(vmRecord.grn);
-  const readOnly = vmRecord.status === 'queued' || (vmRecord.owner === 'team' && vmRecord.role === 'member');
+  const readOnly = vmRecord.status === 'queued' || !canManageDemoVm(vmRecord);
   const quota = vmRecord.owner === 'team' ? getDemoVmQuota(state, vmRecord.teamId ?? 'demo-team') : state.personalQuota;
   const remainingDisk = Math.max(0, quota.diskLimit - quota.disk);
   const resizableDiskLimit = vmRecord.disk + Math.floor(remainingDisk / 10) * 10;
@@ -182,6 +184,12 @@ export function VmSettingsPage() {
       return;
     }
     const latest = getDemoVmState();
+    const target = latest.vms.find(item => item.id === vmRecord.id);
+    if (!target || !canManageDemoVm(target)) {
+      setState(latest);
+      setNotice('현재 권한으로는 사용 목적을 저장할 수 없습니다.');
+      return;
+    }
     const next = { ...latest, vms: latest.vms.map(item => item.id === vmRecord.id ? { ...item, purpose: displayedPurpose.trim() } : item) };
     if (!persistState(next)) {
       setNotice('사용 목적을 저장하지 못했습니다. 다시 시도해 주세요.');
@@ -205,7 +213,7 @@ export function VmSettingsPage() {
       setResizeError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
       return;
     }
-    if (latestVm.owner === 'team' && latestVm.role === 'member') {
+    if (!canManageDemoVm(latestVm)) {
       setState(latest);
       setResizeOpen(false);
       return;
@@ -293,6 +301,12 @@ export function VmSettingsPage() {
         setNameError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
         return;
       }
+      if (!canManageDemoVm(latestVm)) {
+        setState(latest);
+        setNameSaving(false);
+        setNameError('현재 권한으로는 이름을 변경할 수 없습니다.');
+        return;
+      }
       if (duplicate) {
         setNameSaving(false);
         setNameError(vmRecord.owner === 'team'
@@ -318,8 +332,8 @@ export function VmSettingsPage() {
     if (readOnly) return;
     const latest = getDemoVmState();
     const target = latest.vms.find(item => item.id === vmRecord.id);
-    if (!target) {
-      setPasswordResetError('VM을 찾을 수 없습니다.');
+    if (!target || !canManageDemoVm(target)) {
+      setPasswordResetError('현재 상태에서는 비밀번호를 재설정할 수 없습니다.');
       return;
     }
     const password = 'gsvm-demo-' + crypto.randomUUID().slice(0, 12);
@@ -344,7 +358,15 @@ export function VmSettingsPage() {
     setDeleteSaving(true);
     window.setTimeout(() => {
       const latest = getDemoVmState();
-      if (!latest.vms.some(item => item.id === vmRecord.id)) {
+      const target = latest.vms.find(item => item.id === vmRecord.id);
+      if (target && !canManageDemoVm(target)) {
+        setState(latest);
+        setDeleteSaving(false);
+        setDeleteOpen(false);
+        setNotice('팀장 또는 DevOps만 VM을 삭제할 수 있습니다.');
+        return;
+      }
+      if (!target) {
         setDeleteSaving(false);
         setDeleteOpen(false);
         navigate(vmRecord.owner === 'team' ? `/teams/${encodeURIComponent(vmRecord.teamId ?? 'demo-team')}/vms` : '/');
@@ -357,7 +379,7 @@ export function VmSettingsPage() {
         setDeleteError('연결된 Network 정보를 정리하지 못했습니다. 기존 VM 상태를 유지했으니 잠시 후 다시 시도해 주세요.');
         return;
       }
-      const next = { ...latest, vms: latest.vms.filter(item => item.id !== vmRecord.id) };
+      const next = removeDemoVm(latest, target);
       if (!saveDemoVmState(next)) {
         const networkRestored = saveDemoNetworkState(vmRecord.grn, networkBeforeDelete);
         setDeleteSaving(false);

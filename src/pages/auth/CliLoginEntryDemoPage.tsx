@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { getDemoCliRequest } from '../../entities/demo-workflows';
+import { getDemoCliRequest, getDemoCliRequestByCode, isDemoCliRequestExpired, normalizeCliCode, reissueDemoCliRequest } from '../../entities/demo-workflows';
 import { isDemoMode } from '../../shared/demo';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
@@ -22,6 +22,8 @@ const Description = styled.p`
 const Actions = styled.div`
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 24px;
 `;
 
@@ -37,7 +39,38 @@ export function CliCodeForm({ initialCode = '', initialError = '' }: { initialCo
   const navigate = useNavigate();
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState(initialError);
-  const request = getDemoCliRequest();
+  const [request, setRequest] = useState(getDemoCliRequest);
+  const [now, setNow] = useState(Date.now);
+  const canReissue = request.status !== '확인 대기' || isDemoCliRequestExpired(request, now);
+
+  useEffect(() => {
+    function sync(event: StorageEvent) {
+      if (!event.key || event.key === 'gsmsv.demo.state.v1.auth.cliRequest') {
+        setRequest(getDemoCliRequest());
+        setNow(Date.now());
+      }
+    }
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+
+  useEffect(() => {
+    if (canReissue) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, (request.expiresAtMs ?? 0) - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [canReissue, request.expiresAtMs]);
+
+  function reissue() {
+    const next = reissueDemoCliRequest();
+    if (!next) {
+      setError('새 기기 코드를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setRequest(getDemoCliRequest());
+    setNow(Date.now());
+    setCode(next.code);
+    setError('');
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,11 +80,12 @@ export function CliCodeForm({ initialCode = '', initialError = '' }: { initialCo
       setError('8자리 코드를 입력하세요.');
       return;
     }
-    if (normalized !== normalizeCliCode(request.code)) {
+    const enteredRequest = getDemoCliRequestByCode(normalized);
+    if (!enteredRequest) {
       setError('코드를 다시 확인하세요. 계속 안 되면 터미널에서 gsmsv login을 다시 실행하세요.');
       return;
     }
-    void navigate(`/cli/approve?code=${encodeURIComponent(request.code)}`);
+    void navigate(`/cli/approve?code=${encodeURIComponent(enteredRequest.code)}`);
   }
 
   return <>
@@ -59,12 +93,7 @@ export function CliCodeForm({ initialCode = '', initialError = '' }: { initialCo
     {!error && <Description>브라우저가 자동으로 열리지 않았다면 gsmsv.site/cli에 직접 들어와 코드를 입력합니다.</Description>}
     <form onSubmit={submit}>
       <TextField label="기기 코드" autoComplete="one-time-code" autoCapitalize="characters" value={code} onChange={event => { setCode(event.target.value.toUpperCase()); setError(''); }} placeholder={request.code} hint="터미널의 gsmsv login이 보여준 8자리 코드" error={error} />
-      <Actions><Button type="submit" icon={<Octicon name="arrow-right" size={16} />}>다음</Button></Actions>
+      <Actions>{canReissue && <Button type="button" variant="secondary" onClick={reissue}>새 데모 코드 받기</Button>}<Button type="submit" icon={<Octicon name="arrow-right" size={16} />}>다음</Button></Actions>
     </form>
   </>;
-}
-
-export function normalizeCliCode(value: string): string | null {
-  const normalized = value.replace(/[-\s]/g, '').toUpperCase();
-  return /^[A-Z0-9]{8}$/.test(normalized) ? normalized : null;
 }

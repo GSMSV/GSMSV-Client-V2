@@ -22,13 +22,14 @@ import {
   type PortForward,
 } from '../../entities/network';
 import { getDemoTeam } from '../../entities/team/demo';
-import type { DemoVm } from '../../entities/vm';
+import { canManageDemoVm, useDemoVmResourceState } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { VmUnavailablePage } from '../vm/VmUnavailablePage';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
 const Page = styled.div`
@@ -424,25 +425,12 @@ export default function VMNetworkPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
   const demoMode = isDemoMode();
-  const [demoVm, setDemoVm] = useState<DemoVm>();
-  const [demoVmResolved, setDemoVmResolved] = useState(false);
-  useEffect(() => {
-    if (!demoMode || !vmGrn) {
-      setDemoVm(undefined);
-      setDemoVmResolved(true);
-      return;
-    }
-    let cancelled = false;
-    setDemoVmResolved(false);
-    void import('../../entities/vm').then(({ getDemoVmState }) => {
-      if (cancelled) return;
-      setDemoVm(getDemoVmState().vms.find(vm => (vm.grn === vmGrn || vm.id === vmGrn) && (!routeTeamId || vm.teamId === routeTeamId)));
-      setDemoVmResolved(true);
-    });
-    return () => { cancelled = true; };
-  }, [demoMode, routeTeamId, vmGrn]);
+  const [vmState] = useDemoVmResourceState(vmGrn);
+  const demoVm = demoMode ? vmState.vms.find(vm => (
+    (vm.grn === vmGrn || vm.id === vmGrn) && (!routeTeamId || vm.teamId === routeTeamId)
+  )) : undefined;
   const networkGrn = demoMode ? demoVm?.grn : vmGrn;
-  const readOnly = demoMode && (!demoVm || demoVm.status === 'queued' || demoVm.role === 'member');
+  const readOnly = demoMode && (!demoVm || demoVm.status === 'queued' || !canManageDemoVm(demoVm));
   const teamId = routeTeamId ?? (demoVm?.owner === 'team' ? demoVm.teamId : undefined);
   const resourceVmId = encodeURIComponent(demoVm?.id ?? vmGrn ?? '');
   const resourceBase = teamId
@@ -539,7 +527,9 @@ export default function VMNetworkPage() {
     setDomainForm({ subdomain: '', internalPort: '' });
   };
 
-  const handleActionError = (cause: unknown, label: string) => setError(apiMessage(cause, label));
+  const handleActionError = (cause: unknown, label: string) => {
+    setError(demoMode && cause instanceof Error ? cause.message : apiMessage(cause, label));
+  };
 
   async function submitPort(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -632,6 +622,10 @@ export default function VMNetworkPage() {
       const validationError = networkRepository.getDemoDomainValidationError(networkGrn, subdomain, expectedInternalPort, otherSubdomains);
       if (validationError) { setError(validationError); return; }
     }
+    if (demoMode && !isDemoMode()) {
+      setError('목데이터 모드가 종료되었습니다. 화면을 새로고침해 주세요.');
+      return;
+    }
     setSubmitting(true); setError('');
     try {
       const result = await createDomain(networkGrn, { subdomain, internal_port: expectedInternalPort });
@@ -688,11 +682,12 @@ export default function VMNetworkPage() {
   const publicHost = ports.value?.public_host;
   const userName = demoVm?.owner === 'team' ? '윤채원' : user?.name ?? '사용자';
 
-  if (demoMode && demoVmResolved && routeTeamId && (!getDemoTeam(routeTeamId) || !demoVm || demoVm.owner !== 'team' || demoVm.teamId !== routeTeamId)) {
-    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}/vms`} replace />;
+  if (demoMode && routeTeamId && !getDemoTeam(routeTeamId)) {
+    return <Navigate to="/teams" replace />;
   }
-  if (demoMode && demoVmResolved && !demoVm) return <Navigate to="/" replace />;
-  if (demoMode && demoVmResolved && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
+  if (demoMode && !demoVm) return <VmUnavailablePage teamId={routeTeamId}
+    deleted={vmState.deletedVms?.find(item => (item.grn === vmGrn || item.id === vmGrn) && item.teamId === routeTeamId)} />;
+  if (demoMode && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
     return <Navigate to={`/teams/${encodeURIComponent(demoVm.teamId)}/vms/${encodeURIComponent(demoVm.grn)}/network`} replace />;
   }
 

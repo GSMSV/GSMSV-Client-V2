@@ -714,7 +714,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const quota = (demoMode ? demoVmQuota?.vm : undefined) ?? currentTeam?.quota?.vm;
   const vcpu = quotaState(quota?.vcpu);
   const statusMessage = currentTeam ? getStatusMessage(currentTeam) : null;
-  const canCreateTeamVm = Boolean(currentTeam?.status === 'approved' && (currentTeam.my_role === null || currentTeam.my_role === 'leader' || currentTeam.my_role === 'devops'));
+  const canCreateTeamVm = Boolean(currentTeam?.status === 'approved' && (currentTeam.my_role === 'leader' || currentTeam.my_role === 'devops'));
 
   let content;
   if (empty) {

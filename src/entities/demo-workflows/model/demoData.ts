@@ -211,20 +211,69 @@ export function saveDemoGraduationDate(value: string): boolean {
 }
 export function getDemoAdminVms(): DemoAdminVm[] { return localState('admin.vms', demoAdminVms); }
 export function saveDemoAdminVms(items: DemoAdminVm[]): boolean { return saveState('admin.vms', items); }
-export function getDemoCliRequest(): CliLoginRequest {
+const cliRequestKey = 'auth.cliRequest';
+
+interface StoredCliLoginRequest extends CliLoginRequest {
+  previous?: CliLoginRequest[];
+}
+
+export function getDemoCliRequest(): StoredCliLoginRequest {
   if (!isDemoMode()) return demoCliRequest;
-  const stored = readDemoState<CliLoginRequest | null>('auth.cliRequest', null);
+  const stored = readDemoState<StoredCliLoginRequest | null>(cliRequestKey, null);
   if (!stored) {
     const request = { ...demoCliRequest, expiresAtMs: Date.now() + 9 * 60_000 };
-    writeDemoState('auth.cliRequest', request);
+    writeDemoState(cliRequestKey, request);
     return request;
   }
   if (typeof stored.expiresAtMs === 'number' && Number.isFinite(stored.expiresAtMs)) return stored;
   const remainingMinutes = Number(stored.expiresAt.match(/(\d+)\s*분/)?.[1] ?? 10);
   const migrated = { ...stored, expiresAtMs: Date.now() + Math.max(0, Math.min(10, remainingMinutes)) * 60_000 };
-  writeDemoState('auth.cliRequest', migrated);
+  writeDemoState(cliRequestKey, migrated);
   return migrated;
 }
-export function saveDemoCliRequest(item: CliLoginRequest): boolean { return saveState('auth.cliRequest', item); }
+
+export function normalizeCliCode(value: string): string | null {
+  const normalized = value.replace(/[-\s]/g, '').toUpperCase();
+  return /^[A-Z0-9]{8}$/.test(normalized) ? normalized : null;
+}
+
+export function getDemoCliRequestByCode(code: string): CliLoginRequest | undefined {
+  const normalized = normalizeCliCode(code);
+  if (!normalized) return undefined;
+  const current = getDemoCliRequest();
+  return [current, ...(current.previous ?? [])].find(request => normalizeCliCode(request.code) === normalized);
+}
+
+export function isDemoCliRequestExpired(request: CliLoginRequest, now = Date.now()): boolean {
+  return request.status === '만료됨'
+    || (request.status === '확인 대기' && now >= (request.expiresAtMs ?? 0));
+}
+
+export function reissueDemoCliRequest(): CliLoginRequest | null {
+  if (!isDemoMode()) return null;
+  const { previous = [], ...current } = getDemoCliRequest();
+  if (current.status === '확인 대기' && !isDemoCliRequestExpired(current)) return current;
+
+  const random = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const request: StoredCliLoginRequest = {
+    ...demoCliRequest,
+    code: random.slice(0, 4) + '-' + random.slice(4),
+    requestedAt: new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date()),
+    expiresAt: '10분 남음',
+    expiresAtMs: Date.now() + 10 * 60_000,
+    previous: [
+      isDemoCliRequestExpired(current) ? { ...current, status: '만료됨' } : current,
+      ...previous,
+    ],
+  };
+  return saveState(cliRequestKey, request) ? request : null;
+}
+
+export function saveDemoCliRequest(item: CliLoginRequest): boolean {
+  const current = getDemoCliRequest();
+  if (current.code !== item.code || current.status !== '확인 대기' || isDemoCliRequestExpired(current)) return false;
+  return saveState(cliRequestKey, { ...current, ...item });
+}
+
 export function getDemoQueryAudit(): QueryAudit[] { return localState('database.queryAudit', []); }
 export function saveDemoQueryAudit(items: QueryAudit[]): boolean { return saveState('database.queryAudit', items); }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmQuota, getDemoVmState, isDemoVmInitializing, listDemoTeamVms } from '../../entities/vm';
+import { canCreateDemoTeamVm, getDemoVmQuota, getDemoVmState, isDemoVmInitializing, listDemoTeamVms } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
@@ -37,7 +37,7 @@ export function TeamVmListPage() {
   const vms = listDemoTeamVms(state, teamId);
   const team = getDemoTeam(teamId);
   const quota = getDemoVmQuota(state, teamId);
-  const canCreateInTeam = Boolean(team?.status === 'approved' && (team.my_role === null || team.my_role === 'leader' || team.my_role === 'devops'));
+  const canCreateInTeam = canCreateDemoTeamVm(teamId);
   const createQuotaReason = quota.cpu >= quota.cpuLimit
     ? '팀 vCPU를 모두 사용 중입니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
     : quota.memory + 1 > quota.memoryLimit

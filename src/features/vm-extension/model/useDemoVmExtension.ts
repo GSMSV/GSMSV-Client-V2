@@ -34,7 +34,8 @@ export function useDemoVmExtension({ onStateChange, onExtended, onError }: DemoV
       const repository = await import('../../../entities/vm');
       const state = repository.getDemoVmState();
       const vm = state.vms.find(item => item.id === vmId);
-      if (!vm || vm.status === 'queued' || (vm.owner === 'team' && !repository.canExtendDemoTeamVm(vm))) {
+      if (!vm || vm.status === 'queued' || (vm.owner === 'team' && !repository.canExtendDemoTeamVm(vm))
+        || (repository.isDemoVmExpired(vm) && !repository.canRecoverDemoVm(vm))) {
         onStateChange(state);
         dismiss();
         onError('현재 상태에서는 사용 기간을 연장할 수 없습니다.');

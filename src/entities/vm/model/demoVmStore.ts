@@ -1,3 +1,4 @@
+import { getDemoTeam } from '../../team/demo';
 import { readDemoState, writeDemoState } from '../../../shared/demo';
 
 export type VmStatus = 'queued' | 'running' | 'stopped';
@@ -24,6 +25,7 @@ export interface DemoVm {
   role: 'leader' | 'member';
   status: VmStatus;
   lastRestartedAt?: string;
+  powerRequestTimes?: number[];
   requestedAtMs?: number;
   cpu: number;
   memory: number;
@@ -53,9 +55,17 @@ export interface DemoVmQuota {
   diskLimit: number;
 }
 
+export interface DeletedDemoVm {
+  id: string;
+  grn: string;
+  teamId?: string;
+  reason: 'expired' | 'manual';
+}
+
 export interface DemoVmState {
   schemaVersion?: number;
   vms: DemoVm[];
+  deletedVms?: DeletedDemoVm[];
   personalQuota: DemoVmQuota;
   /** Legacy default-team quota retained for callers and stored demos created before per-team quotas. */
   teamQuota: DemoVmQuota;
@@ -85,13 +95,43 @@ export function getDemoVmExpiryTime(expiresAt: string): number | undefined {
   return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4] ?? 14) - 9, Number(match[5] ?? 0));
 }
 
+const dayMs = 24 * 60 * 60 * 1000;
+
+export function getDemoVmGraceEnd(vm: DemoVm): number | undefined {
+  if (vm.status === 'queued' || vm.requestedAtMs === undefined) return undefined;
+  const expiry = getDemoVmExpiryTime(vm.expiresAt);
+  return expiry === undefined ? undefined : expiry + 3 * dayMs;
+}
+
+export function isDemoVmExpired(vm: DemoVm): boolean {
+  const graceEnd = getDemoVmGraceEnd(vm);
+  return graceEnd !== undefined && Date.now() >= graceEnd - 3 * dayMs;
+}
+
+export function canRecoverDemoVm(vm: DemoVm): boolean {
+  const graceEnd = getDemoVmGraceEnd(vm);
+  return graceEnd !== undefined && isDemoVmExpired(vm) && Date.now() < graceEnd;
+}
+
 export function getDemoVmDaysRemaining(expiresAt: string, referenceTime = demoTeamReferenceTime): number | undefined {
   const expiryTime = getDemoVmExpiryTime(expiresAt);
   if (expiryTime === undefined) return undefined;
   return Math.max(0, Math.ceil((expiryTime - referenceTime) / (24 * 60 * 60 * 1000)));
 }
 
-export function canExtendDemoTeamVm(vm: Pick<DemoVm, 'expiresAt' | 'status' | 'requestedAtMs'>): boolean {
+export function canCreateDemoTeamVm(teamId: string): boolean {
+  const team = getDemoTeam(teamId);
+  return team?.status === 'approved' && (team.my_role === 'leader' || team.my_role === 'devops');
+}
+
+export function canManageDemoVm(vm: DemoVm): boolean {
+  if (vm.owner === 'personal') return true;
+  return vm.role !== 'member' && Boolean(vm.teamId && canCreateDemoTeamVm(vm.teamId));
+}
+
+export function canExtendDemoTeamVm(vm: DemoVm): boolean {
+  if (!vm.teamId || !getDemoTeam(vm.teamId)?.my_role) return false;
+  if (isDemoVmExpired(vm)) return canRecoverDemoVm(vm);
   const expiryTime = getDemoVmExpiryTime(vm.expiresAt);
   const referenceTime = vm.requestedAtMs !== undefined ? Date.now() : demoTeamReferenceTime;
   return vm.status !== 'queued'
@@ -227,7 +267,7 @@ const teamDraft: VmDraft = {
   memory: 4,
   disk: 20,
   os: 'Linux Ubuntu 22.04 LTS',
-  name: 'connect-api',
+  name: 'connect-web',
   purpose: 'GSM Connect 서비스 API 서버 운영',
 };
 
@@ -247,25 +287,41 @@ export function getDemoVmState(): DemoVmState {
   const state = readStoredDemoVmState();
   const now = Date.now();
   let changed = false;
-  const vms = state.vms.map(vm => {
+  const deletedVms = [...(state.deletedVms ?? [])];
+  const vms = state.vms.flatMap(vm => {
+    const graceEnd = getDemoVmGraceEnd(vm);
+    if (graceEnd !== undefined && now >= graceEnd) {
+      changed = true;
+      deletedVms.push({ id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'expired' });
+      return [];
+    }
+    if (vm.status === 'running' && isDemoVmExpired(vm)) {
+      changed = true;
+      return { ...vm, status: 'stopped' as const };
+    }
     if (vm.status !== 'queued' || vm.requestedAtMs === undefined) return vm;
     const completedAt = vm.requestedAtMs + queueDurationMs + setupDurationMs;
     if (now < completedAt) return vm;
     changed = true;
     const duration = vm.owner === 'team' ? 30 : 7;
+    const expiresAt = completedAt + duration * dayMs;
+    if (now >= expiresAt + 3 * dayMs) {
+      deletedVms.push({ id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'expired' });
+      return [];
+    }
     return {
       ...vm,
-      status: 'running' as const,
+      status: now >= expiresAt ? 'stopped' as const : 'running' as const,
       createdAt: formatDemoVmDate(completedAt),
-      expiresAt: formatDemoVmDate(completedAt + duration * 24 * 60 * 60 * 1000),
+      expiresAt: formatDemoVmDate(expiresAt),
       internalIp: '10.20.0.' + (100 + vm.requestedAtMs % 100),
       sshPort: vm.owner === 'team' ? 32117 : 32104,
       password: 'gsvm-demo-' + vm.requestedAtMs.toString(36),
     };
   });
   if (!changed) return state;
-  const next = { ...state, vms };
-  return saveDemoVmState(next) ? next : state;
+  const next = { ...state, vms, deletedVms };
+  return saveDemoVmState(next) ? readStoredDemoVmState() : state;
 }
 
 function readStoredDemoVmState(): DemoVmState {
@@ -362,10 +418,18 @@ function readStoredDemoVmState(): DemoVmState {
   return migratedState;
 }
 
+export function removeDemoVm(state: DemoVmState, vm: DemoVm): DemoVmState {
+  return {
+    ...state,
+    vms: state.vms.filter(item => item.id !== vm.id),
+    deletedVms: [...(state.deletedVms ?? []), { id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'manual' }],
+  };
+}
+
 export function cancelDemoVmCreateRequest(vmId: string): boolean {
   const current = getDemoVmState();
   const target = current.vms.find(vm => vm.id === vmId);
-  if (!target || target.status !== 'queued' || isDemoVmInitializing(target) || (target.owner === 'team' && target.role === 'member')) return false;
+  if (!target || target.status !== 'queued' || isDemoVmInitializing(target) || !canManageDemoVm(target)) return false;
   return saveDemoVmState({ ...current, vms: current.vms.filter(vm => vm.id !== vmId) });
 }
 
@@ -425,6 +489,10 @@ export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
     && draft.os === 'Linux Ubuntu 22.04 LTS'
     && draft.name === 'portfolio-batch'
     && draft.purpose === '포트폴리오 프로젝트의 배치 작업 서버 운영';
+  const isPreviousTeamSeed = owner === 'team' && draft.name === 'connect-api'
+    && draft.purpose === teamDraft.purpose && draft.cpu === teamDraft.cpu
+    && draft.memory === teamDraft.memory && draft.disk === teamDraft.disk && draft.os === teamDraft.os;
+  if (isPreviousTeamSeed) return teamDraft;
   return isPreviousPersonalSeed ? personalDraft : draft;
 }
 
@@ -437,8 +505,16 @@ export function resetDemoVmDraft(owner: VmOwner, teamId?: string): void {
 }
 
 export function getDemoVmQuota(state: DemoVmState, teamId: string): DemoVmQuota {
-  if (teamId === 'demo-team') return state.teamQuota;
-  return state.teamQuotas?.[teamId] ?? { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 };
+  const quota = (teamId === 'demo-team' ? state.teamQuota : state.teamQuotas?.[teamId])
+    ?? { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 };
+  const limits = getDemoTeam(teamId)?.quota?.vm;
+  if (!limits) return quota;
+  return {
+    ...quota,
+    cpuLimit: limits.vcpu.limit,
+    memoryLimit: limits.ram_gb.limit,
+    diskLimit: limits.ssd_gb.limit,
+  };
 }
 
 export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmState, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
+import { canCreateDemoTeamVm, getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmState, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
+import { getSessionUser } from '../../entities/session';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
-import { SliderField, StepConnector, StepIndicator } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
+import { Button, SliderField, StepConnector, StepIndicator } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import {
   Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, Fact, FactLabel, FactValue, Field, Hint, InlineFact,
@@ -127,21 +129,36 @@ const QuotaFill = styled.div<{ $percent: number }>`
   background: ${({ theme }) => theme.colors.primary};
 `;
 
+const RequestDialog = styled(Surface)`
+  width: 480px;
+  max-width: calc(100vw - 32px);
+`;
+
+const studentPoolCpuLimit = 14;
+
+function hasDemoStudentSession() {
+  const user = getSessionUser();
+  return user?.id === 'demo-student' && user.role === 'user';
+}
+
 export type VmCreateStep = 'spec' | 'details' | 'review';
 
 export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateStep }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
   const isTeam = owner === 'team';
   const [draft, setDraft] = useState<VmDraft>(() => getDemoVmDraft(owner, routeTeamId));
   const [state, setState] = useState(getDemoVmState);
   const [error, setError] = useState('');
+  const [reauthenticate, setReauthenticate] = useState(() => owner === 'personal' && !hasDemoStudentSession());
+  const [sharedQuotaBlocked, setSharedQuotaBlocked] = useState(false);
   const teamId = routeTeamId || 'demo-team';
   const prefix = isTeam ? `/teams/${encodeURIComponent(teamId)}/vms/new` : '/vms/new';
   const team = isTeam ? getDemoTeam(teamId) : undefined;
   const teamName = team?.name ?? 'GSM Connect';
   const creatorName = team?.members.find(member => member.role === team.my_role)?.name ?? team?.members[0]?.name ?? '김지민';
-  const canCreateInTeam = Boolean(team?.status === 'approved' && (team.my_role === null || team.my_role === 'leader' || team.my_role === 'devops'));
+  const canCreateInTeam = canCreateDemoTeamVm(teamId);
 
   useEffect(() => saveDemoVmDraft(owner, draft, isTeam ? teamId : undefined), [draft, isTeam, owner, teamId]);
 
@@ -186,7 +203,14 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
     return true;
   }
 
+  function ensureSession() {
+    if (isTeam || hasDemoStudentSession()) return true;
+    setReauthenticate(true);
+    return false;
+  }
+
   function next() {
+    if (!ensureSession()) return;
     if (step === 'spec') {
       changeDraft({
         cpu: Math.min(draft.cpu, available.cpu),
@@ -204,9 +228,23 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   }
 
   function createRequest() {
+    if (!ensureSession()) return;
+    if (isTeam && !canCreateDemoTeamVm(teamId)) {
+      setError('팀장 또는 DevOps만 팀 VM을 만들 수 있습니다.');
+      return;
+    }
     const latest = getDemoVmState();
     setState(latest);
-    if (!validDraft(latest)) return;
+    if (!validDraft(latest)) {
+      setSharedQuotaBlocked(false);
+      return;
+    }
+    const allocatedCpu = latest.vms.reduce((total, vm) => total + vm.cpu, 0);
+    if (allocatedCpu + draft.cpu > studentPoolCpuLimit) {
+      setSharedQuotaBlocked(true);
+      return;
+    }
+    setSharedQuotaBlocked(false);
     const { state: nextState, vm } = makeDemoVm(latest, draft, owner, teamId, teamName, creatorName);
     if (!saveDemoVmState(nextState)) {
       setError('VM 생성 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
@@ -336,6 +374,28 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       <Divider />
       <Hint>{isTeam ? '팀 VM도 만료 시 정지되고 3일 유예 후 삭제됩니다. 팀원 모두에게 알림을 보냅니다.' : 'VM 생성 요청은 로컬 미리보기에서만 반영됩니다.'}</Hint>
     </DemoPage>
+    {reauthenticate && <ModalSurface labelledBy="vm-create-reauth-title" onDismiss={() => void navigate('/')}>
+      <RequestDialog>
+        <SurfaceTitle id="vm-create-reauth-title"><Octicon name="lock" size={24} /> 다시 로그인해 주세요</SurfaceTitle>
+        <Hint>세션이 만료됐습니다. 로그인 후 지금 보던 화면으로 돌아옵니다.</Hint>
+        <Hint>· 작성 중이던 VM 생성 내용은 보존됩니다.</Hint>
+        <TopActions><PrimaryButton icon={<Octicon name="sign-in" />} onClick={() => {
+          saveDemoVmDraft(owner, draft);
+          const returnTo = location.pathname + location.search;
+          void navigate('/login?returnTo=' + encodeURIComponent(returnTo));
+        }}>DataGSM으로 로그인</PrimaryButton></TopActions>
+      </RequestDialog>
+    </ModalSurface>}
+    {sharedQuotaBlocked && !reauthenticate && <ModalSurface labelledBy="vm-create-shared-quota-title" onDismiss={() => setSharedQuotaBlocked(false)}>
+      <RequestDialog>
+        <SurfaceTitle id="vm-create-shared-quota-title"><Octicon name="alert" size={24} /> 지금은 학생 전체 자원이 부족합니다</SurfaceTitle>
+        <Hint>내 할당량은 남아 있지만, 목데이터의 학생 전체 몫이 모두 사용 중입니다. 잠시 후 다시 시도하세요.</Hint>
+        <TopActions>
+          <Button variant="secondary" onClick={() => void navigate('/status')}>서비스 상태</Button>
+          <PrimaryButton onClick={createRequest}>다시 시도</PrimaryButton>
+        </TopActions>
+      </RequestDialog>
+    </ModalSurface>}
   </DemoShell>;
 }
 
