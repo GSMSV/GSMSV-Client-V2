@@ -19,6 +19,16 @@ const Header = styled.header`
   justify-content: space-between;
   padding: 0 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 480px) {
+    height: auto;
+    min-height: 74px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+  }
 `;
 const Logo = styled.div`
   display: flex;
@@ -33,10 +43,16 @@ const LogoMark = styled.img`
 `;
 const SignedIn = styled.span`
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   color: ${({ theme }) => theme.colors.muted};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
+
+  @media (max-width: 480px) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 `;
 const Center = styled.main`
   display: flex;
