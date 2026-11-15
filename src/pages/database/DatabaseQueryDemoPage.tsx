@@ -36,6 +36,29 @@ const QueryActions = styled.div`
   justify-content: space-between;
   gap: 16px;
   margin-top: 16px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-direction: column;
+
+    > button { align-self: flex-end; }
+  }
+`;
+const DatabaseTabs = styled.nav`
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+
+  @media (max-width: 600px) {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+
+    > button { flex: 0 0 auto; }
+  }
+`;
+const ResultsTable = styled(Table)`
+  min-width: 720px;
 `;
 const FooterNote = styled.div`
   display: flex;
@@ -140,9 +163,12 @@ export default function DatabaseQueryDemoPage() {
   const [ran, setRan] = useState(false);
   const [database, setDatabase] = useState<{ name: string; engine: 'mysql' | 'postgresql'; isolation: 'shared' | 'dedicated'; status: string; write_locked: boolean; owner?: { type: 'user' | 'team'; id: string; name: string } } | null>(null);
   const [databaseResolved, setDatabaseResolved] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     setDatabaseResolved(false);
     setDatabase(null);
+    setLoadError(false);
     if (!(import.meta.env.DEV && isDemoMode())) {
       setDatabase(null);
       setDatabaseRows([]);
@@ -167,6 +193,11 @@ export default function DatabaseQueryDemoPage() {
           : null;
       setDatabase(databaseValue);
       setDatabaseResolved(true);
+    }).catch(() => {
+      if (cancelled) return;
+      setDatabase(null);
+      setDatabaseResolved(true);
+      setLoadError(true);
     });
     return () => {
       cancelled = true;
@@ -175,7 +206,7 @@ export default function DatabaseQueryDemoPage() {
         timeoutRef.current = null;
       }
     };
-  }, [databaseId]);
+  }, [databaseId, retryKey]);
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
   }, []);
@@ -275,12 +306,13 @@ export default function DatabaseQueryDemoPage() {
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={teamScopeId ? `${database?.owner?.name ?? '팀'} · 팀` : '내 Resources'} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>Database</Breadcrumb>
     <Heading><TitleGroup><Title>{databaseName}</Title><Subtitle>{database ? `${database.engine === 'postgresql' ? 'PostgreSQL' : 'MySQL'} · ${database.isolation === 'dedicated' ? '전용형' : '공유형'}` : databaseResolved ? 'Database를 사용할 수 없습니다' : 'Database 확인 중'}</Subtitle></TitleGroup></Heading>
-    <nav aria-label="Database 메뉴" style={{ display: 'flex', gap: 8 }}>
-      <Button variant="ghost" onClick={() => navigate(`/databases/${databaseId}`)}>접속 정보</Button>
+    <DatabaseTabs aria-label="Database 메뉴">
+      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}`)}>접속 정보</Button>
       <Button variant="primary">쿼리 콘솔</Button>
-      <Button variant="ghost" onClick={() => navigate(`/databases/${databaseId}/backups`)}>백업</Button>
-      <Button variant="ghost" onClick={() => navigate(`/databases/${databaseId}/settings`)}>설정</Button>
-    </nav>
+      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/backups`)}>백업</Button>
+      <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/settings`)}>설정</Button>
+    </DatabaseTabs>
+    {loadError && <Banner title="불러오지 못했습니다" description="Database 정보를 확인하지 못했습니다. 다시 시도해 주세요." tone="danger" action={<Button variant="secondary" onClick={() => setRetryKey(value => value + 1)}>다시 시도</Button>} />}
     {database?.status === 'suspended' && <Banner title="Database가 정지되어 쿼리를 실행하지 않았습니다" description="사용 기간을 연장한 뒤 다시 실행해 주세요." tone="danger" icon={<Octicon name="clock" size={20} />} />}
     {database?.write_locked && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
     {outcome === 'timeout' && <Banner title="쿼리가 45초를 넘어 멈췄습니다" description="조건을 좁히거나 LIMIT을 넣어 다시 실행해 주세요." tone="danger" icon={<Octicon name="alert" size={20} />} />}
@@ -290,12 +322,12 @@ export default function DatabaseQueryDemoPage() {
       <EditorHeader><Octicon name="code" size={16} /><SectionTitle>쿼리</SectionTitle></EditorHeader>
       <Editor aria-label="SQL 쿼리" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} />
       <QueryActions><Muted>45초가 지나면 멈추고, 결과는 1,000행 또는 1 MB까지 보입니다.</Muted><Button icon={<Octicon name="play" size={16} />} disabled={!databaseResolved || !database || database.status !== 'active' || executing} onClick={runQuery}>실행</Button></QueryActions>
-      {databaseResolved && !database && <ErrorText role="alert">Database를 찾을 수 없거나 삭제되었습니다. Database 목록에서 사용 가능한 Database를 선택해 주세요.</ErrorText>}
+      {databaseResolved && !database && !loadError && <ErrorText role="alert">Database를 찾을 수 없거나 삭제되었습니다. Database 목록에서 사용 가능한 Database를 선택해 주세요.</ErrorText>}
       {database && error && ran && <ErrorText role="alert">{error}</ErrorText>}
     </Card>
     <Card>
       <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행 · 0.04초</ResultHeading></CardHeader>
-      <TableWrap><Table><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></Table></TableWrap>
+      <TableWrap><ResultsTable><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
     </Card>
     <FooterNote><span>SQL과 결과는 저장하지 않습니다</span><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
   </PageStack></WorkflowLayout></DemoOnlyGate>;

@@ -13,6 +13,10 @@ const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 const InfoRow = styled.div`
   display: flex;
@@ -48,22 +52,15 @@ export default function DedicatedDatabaseRequestPage() {
 
   function submitRequest() {
     if (!isDemoMode() || !canRequestDedicatedDatabase) return;
+    if (pending) {
+      setNotice('신청을 검토 중입니다. 결과가 나오기 전에는 다시 신청할 수 없습니다.');
+      return;
+    }
     if (getDemoTeamDedicatedDatabaseQuota(teamScopeId).available === 0) {
       setNotice(`${teamName} 팀은 전용 Database를 이미 사용 중이라 추가 신청할 수 없습니다.`);
       return;
     }
     if (!description.trim()) { setNotice('사용 목적을 입력해 주세요.'); return; }
-    if (pending) {
-      const updated = { ...pending, teamId: teamScopeId, engine, reason, description: description.trim(), status: '대기 중' as const, rejectReason: '', databaseGrn: undefined, databaseName: undefined, requestedAt: '2026.11.14' };
-      const nextRequests = requests.map((item) => item.id === pending.id ? updated : item);
-      if (!saveDemoDbRequests(nextRequests)) {
-        setNotice('신청을 저장하지 못했습니다. 다시 시도해 주세요.');
-        return;
-      }
-      setRequests(nextRequests);
-      setNotice('전용 Database 신청을 등록했습니다. 관리자 검토 후 결과를 확인할 수 있습니다.');
-      return;
-    }
     const request: DedicatedDatabaseRequest = {
       id: `db-request-${crypto.randomUUID()}`, team: teamName, teamId: teamScopeId, applicant: '김지민 · 팀장', members: team?.members.length ?? 3,
       engine, reason, description: description.trim(), requestedAt: '2026.11.14', status: '대기 중', rejectReason: '',
@@ -84,9 +81,10 @@ export default function DedicatedDatabaseRequestPage() {
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="database" scopeLabel={`${teamName} · 팀`} teamScopeId={teamScopeId}><PageStack>
     <Breadcrumb>{teamName} / Database / 전용형 신청</Breadcrumb>
     <Heading><TitleGroup><Title>전용형 Database 신청</Title><Subtitle>DB 서버 하나를 팀 전용으로 받습니다. 관리자가 승인하면 만들어집니다.</Subtitle></TitleGroup></Heading>
-    {notice && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
+    {notice && !notice.startsWith('전용 Database 신청') && <Alert $tone={notice.startsWith('전용 Database') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} /><span>{notice}</span></Alert>}
     <Card>
-      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>신청</Button></CardHeader>
+      <CardHeader><SectionTitle>신청 정보</SectionTitle><Button disabled={Boolean(pending) || latestRequest?.status === '승인 완료'} icon={<Octicon name="people" size={16} />} onClick={submitRequest}>{latestRequest?.status === '거절' ? '고쳐서 다시 신청' : '신청'}</Button></CardHeader>
+      {pending && <Alert $tone="success" role="status"><Octicon name="check" size={16} /><span>전용형 신청을 보냈습니다. 관리자가 확인하면 알림으로 알려 드립니다. 결과가 나오기 전에는 다시 신청할 수 없습니다.</span></Alert>}
       <Muted>팀당 1개까지이고, 팀 Database 4개 안에 들어갑니다. 팀장과 DevOps만 신청할 수 있습니다.</Muted>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
         <Field>엔진<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: 4, borderRadius: 8, background: '#403d45' }}>{(['MySQL', 'PostgreSQL'] as const).map((item) => <button key={item} type="button" onClick={() => setEngine(item)} style={{ minHeight: 34, border: 0, borderRadius: 6, background: engine === item ? '#203d30' : 'transparent', color: engine === item ? '#00ff90' : '#c0bbc6', cursor: 'pointer' }}>{item}</button>)}</div></Field>

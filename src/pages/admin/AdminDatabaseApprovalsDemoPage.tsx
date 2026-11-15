@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import styled from 'styled-components';
 import { getDemoDbRequests, saveDemoDbRequests, type DedicatedDatabaseRequest } from '../../entities/demo-workflows';
 import { createDemoDatabase, getDemoDatabase, getDemoTeamDedicatedDatabaseQuota, listDemoDatabases } from '../../entities/database/demo';
 import type { DatabaseEngine } from '../../entities/database';
@@ -8,6 +9,30 @@ import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
+const AdminToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+`;
+const ApprovalTabs = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+`;
+const ApprovalTable = styled(Table)`
+  min-width: 800px;
+`;
+
 export default function AdminDatabaseApprovalsDemoPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState(() => getDemoDbRequests());
@@ -15,8 +40,12 @@ export default function AdminDatabaseApprovalsDemoPage() {
   const [filter, setFilter] = useState<'pending' | 'done'>('pending');
   const [rejectReason, setRejectReason] = useState('');
   const [notice, setNotice] = useState('');
-  const current = requests.find((item) => item.id === selectedId) ?? requests[0];
   const visible = useMemo(() => requests.filter((item) => filter === 'pending' ? item.status === '검토 중' || item.status === '대기 중' : item.status === '승인 완료' || item.status === '거절'), [requests, filter]);
+  const current = visible.find((item) => item.id === selectedId) ?? visible[0];
+
+  useEffect(() => {
+    setRejectReason(current?.rejectReason ?? '');
+  }, [current?.id, current?.rejectReason]);
 
   function update(next: DedicatedDatabaseRequest) {
     const updated = requests.map((item) => item.id === next.id ? next : item);
@@ -84,16 +113,16 @@ export default function AdminDatabaseApprovalsDemoPage() {
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 승인</p>
     <Heading><TitleGroup><Title>승인</Title><Muted>공유형으로 할 수 없는 이유인지 확인하고 승인하세요.</Muted></TitleGroup></Heading>
     {notice && <Alert $tone={notice.includes('입력') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+    <AdminToolbar>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Button variant="ghost" onClick={() => navigate('/admin/team-approvals')}>팀 <Badge>3</Badge></Button>
         <Button variant="primary">전용형 Database <Badge>1</Badge></Button>
       </div>
       <Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { setRequests(getDemoDbRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button>
-    </div>
+    </AdminToolbar>
     <Card>
-      <CardHeader><SectionTitle>승인 대기 신청</SectionTitle><div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 8, background: '#403d45' }}><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => setFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => setFilter('done')}>처리 완료</Button></div></CardHeader>
-      <TableWrap><Table><thead><tr><th>팀</th><th>신청자</th><th>엔진</th><th>이유</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} aria-selected={item.id === current?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }}><td>{item.team}</td><td>{item.applicant}</td><td>{item.engine}</td><td>{item.reason}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></Table></TableWrap>
+      <CardHeader><SectionTitle>승인 대기 신청</SectionTitle><ApprovalTabs><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => setFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => setFilter('done')}>처리 완료</Button></ApprovalTabs></CardHeader>
+      <TableWrap><ApprovalTable><thead><tr><th>팀</th><th>신청자</th><th>엔진</th><th>이유</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.length ? visible.map((item) => <tr key={item.id} aria-selected={item.id === current?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }}><td>{item.team}</td><td>{item.applicant}</td><td>{item.engine}</td><td>{item.reason}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>) : <tr><td colSpan={6}>표시할 신청이 없습니다.</td></tr>}</tbody></ApprovalTable></TableWrap>
       <Hint>{visible.length}개 중 {visible.length ? 1 : 0}–{visible.length}</Hint>
     </Card>
     {current && <>
