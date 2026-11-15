@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { AppResourceCard, listPersonalApps, type AppSummary } from '../../entities/app';
+import { AppResourceCard, listPersonalApps, type AppListItem } from '../../entities/app';
 import { getMyQuota, type MyQuota, type QuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
@@ -144,7 +144,7 @@ const DialogActions = styled.div`
 `;
 
 interface LoadableApps {
-  value: AppSummary[] | null;
+  value: AppListItem[] | null;
   loading: boolean;
   error: boolean;
 }
@@ -180,7 +180,7 @@ function quotaPercentage(amount: QuotaAmount) {
 export default function AppsListPage() {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const [apps, setApps] = useState<LoadableApps>({ value: null, loading: true, error: false });
   const [quota, setQuota] = useState<LoadableQuota>(initialQuota);
   const [teams, setTeams] = useState<LoadableTeams>(initialTeams);
@@ -190,7 +190,7 @@ export default function AppsListPage() {
   const loadApps = useCallback(async (signal: AbortSignal) => {
     setApps(current => ({ ...current, loading: true, error: false }));
     try {
-      if (import.meta.env.DEV && demoMode) {
+      if (demoMode) {
         const { getDemoAppSummaries } = await import('../../entities/app/demo');
         const value = getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' });
         if (!signal.aborted) setApps({ value, loading: false, error: false });
@@ -206,7 +206,7 @@ export default function AppsListPage() {
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
-      if (import.meta.env.DEV && demoMode) {
+      if (demoMode) {
         const [{ demoHomeQuota }, { demoAppMemoryLimit, demoPersonalAppOwner, getDemoAppQuota }] = await Promise.all([
           import('../../entities/home'),
           import('../../entities/app/demo'),
@@ -235,7 +235,7 @@ export default function AppsListPage() {
   const loadTeams = useCallback(async (signal: AbortSignal) => {
     setTeams(current => ({ ...current, loading: true }));
     try {
-      if (import.meta.env.DEV && demoMode) {
+      if (demoMode) {
         const { listDemoTeams } = await import('../../entities/team/demo');
         if (!signal.aborted) setTeams({ value: listDemoTeams(), loading: false });
         return;
@@ -289,7 +289,7 @@ export default function AppsListPage() {
     else navigate('/apps/new');
   };
 
-  const openApp = (app: AppSummary) => navigate(demoMode
+  const openApp = (app: AppListItem) => navigate(demoMode
     ? `/apps/${encodeURIComponent(app.id)}/demo`
     : `/apps/${encodeURIComponent(app.grn)}`);
 
@@ -334,13 +334,14 @@ export default function AppsListPage() {
                 label="메모리 할당량"
                 icon={<Octicon name="cpu" size={16} />}
                 value={quota.value ? formatMemoryQuota(quota.value.app.memory_mb) : '— / — GB'}
-                caption={quota.value ? '개인 앱 메모리 사용량' : <QuotaCaption>할당량을 확인할 수 없습니다</QuotaCaption>}
+                meter={demoMode && quota.value ? { value: quotaPercentage(quota.value.app.memory_mb), tone: 'primary', label: '메모리 사용량' } : undefined}
+                caption={quota.value ? (demoMode ? '잠든 서비스도 설정한 메모리만큼 세요' : '개인 앱 메모리 사용량') : <QuotaCaption>할당량을 확인할 수 없습니다</QuotaCaption>}
               />
               <FlexibleUsageCard
                 label="상시 실행"
                 icon={<Octicon name="pulse" size={16} />}
                 value={quota.value ? formatQuota(quota.value.app.always_on) : '— / —'}
-                caption={quota.value ? '상시 실행 앱 사용량' : <QuotaCaption>할당량을 확인할 수 없습니다</QuotaCaption>}
+                caption={quota.value ? (demoMode ? '잠들지 않게 둘 서비스는 1개까지입니다' : '상시 실행 앱 사용량') : <QuotaCaption>할당량을 확인할 수 없습니다</QuotaCaption>}
               />
             </>
           )}

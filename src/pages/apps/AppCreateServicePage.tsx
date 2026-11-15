@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { createPersonalApp, createTeamApp } from '../../features/app/create-app';
-import { checkAppSubdomain, useAppServiceDraft, type AppServiceType } from '../../features/app/create-app/service';
+import { checkAppSubdomain, useAppServiceDraft, type AppServiceDraft, type AppServiceType } from '../../features/app/create-app/service';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamStatus, type TeamSummary } from '../../entities/team';
 import { ApiRequestError } from '../../shared/api';
@@ -10,6 +10,7 @@ import { Button, SegmentedControl, SliderField, StepIndicator, TextField } from 
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
+import { DemoCreateFormState } from './DemoCreateFormState';
 
 type DemoServiceModules = {
   team: typeof import('../../entities/team/demo');
@@ -28,7 +29,7 @@ const Page = styled.div`
   gap: 24px;
   padding: 40px;
 
-  @media (max-width: 760px) { padding: 24px; }
+  @media (max-width: 760px) { padding: 24px 16px; }
 `;
 
 const PageMeta = styled.div`
@@ -219,16 +220,23 @@ function serviceDescription(type: AppServiceType) {
 export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const sourceDraftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
   const [demoModules, setDemoModules] = useState<DemoServiceModules | null>(null);
   const [source, setSource] = useState<ReturnType<DemoServiceModules['draft']['readDemoAppDraft']> | null>(null);
-  const { draft: serviceDraft, update, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
-  const draft = demoMode ? { ...serviceDraft, appName: source?.name ?? '' } : serviceDraft;
-  const owner = import.meta.env.DEV && demoMode && demoModules ? (teamId ? { type: 'team' as const, id: teamId, name: '' } : demoModules.app.demoPersonalAppOwner) : null;
-  const quota = import.meta.env.DEV && demoMode && owner && demoModules ? demoModules.app.getDemoAppQuota(owner) : null;
+  const [demoServiceDraft, setDemoServiceDraft] = useState<ReturnType<DemoServiceModules['draft']['readDemoAppServiceDraft']>>(null);
+  const { draft: serviceDraft, update: updateLiveDraft, hasUnsavedInput } = useAppServiceDraft(sourceDraftKey);
+  const draft = demoMode ? { ...serviceDraft, ...demoServiceDraft, appName: source?.name ?? '' } : serviceDraft;
+  const owner = demoMode && demoModules ? (teamId ? { type: 'team' as const, id: teamId, name: '' } : demoModules.app.demoPersonalAppOwner) : null;
+  const quota = demoMode && owner && demoModules ? demoModules.app.getDemoAppQuota(owner) : null;
   const listPath = teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps';
   const sourcePath = `${listPath}/new`;
+  const [demoLoadError, setDemoLoadError] = useState(false);
+  const [demoLoadAttempt, setDemoLoadAttempt] = useState(0);
+  const retryDemoLoad = () => {
+    setDemoLoadError(false);
+    setDemoLoadAttempt(value => value + 1);
+  };
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [availability, setAvailability] = useState<AvailabilityState>('idle');
   const [availabilityError, setAvailabilityError] = useState('');
@@ -240,11 +248,20 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
   const requestController = useRef<AbortController | null>(null);
   const subdomainInputId = 'app-service-subdomain';
-  const [demoDomain, setDemoDomain] = useState('');
-  const subdomainValue = demoMode ? demoDomain : draft.subdomain;
+  const subdomainValue = draft.subdomain;
+  const retryTeamStatus = () => setTeamStatusRetry(value => value + 1);
+
+  const update = <K extends keyof Omit<AppServiceDraft, 'appName'>>(key: K, value: AppServiceDraft[K]) => {
+    if (!demoMode) { updateLiveDraft(key, value); return; }
+    if (!demoModules || !demoServiceDraft) return;
+    const next = { ...demoServiceDraft, [key]: value };
+    setDemoServiceDraft(next);
+    setCreateError(demoModules.draft.saveDemoAppServiceDraft(teamId, next)
+      ? null : { message: '서비스 입력을 저장하지 못했습니다. 다시 시도해 주세요.' });
+  };
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !demoMode) { setDemoModules(null); setSource(null); return; }
+    if (!demoMode) { setDemoModules(null); setSource(null); setDemoServiceDraft(null); return; }
     let active = true;
     void Promise.all([
       import('../../entities/team/demo'),
@@ -258,19 +275,28 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
       const current = teamId ? team.getDemoTeam(teamId) : undefined;
       setDemoModules(modules);
       setSource(loadedSource);
-      setDemoDomain(loadedSource?.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') ?? '');
+      setDemoServiceDraft(draftModule.readDemoAppServiceDraft(teamId) ?? {
+        serviceType: 'web',
+        serviceName: 'web',
+        subdomain: loadedSource?.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') ?? '',
+        memoryMb: 512,
+        cpu: 0.5,
+      });
       setTeams(team.listDemoTeams());
       setCurrentTeam(current ?? null);
       setTeamStatus(current?.status ?? (teamId ? 'error' : 'approved'));
       setDialog(current?.status === 'pending' ? 'team-pending' : null);
+      if (!loadedSource && (!teamId || current?.status === 'approved')) navigate(sourcePath, { replace: true });
+    }).catch(() => {
+      if (active) setDemoLoadError(true);
     });
     return () => { active = false; };
-  }, [demoMode, teamId]);
+  }, [demoMode, demoLoadAttempt, navigate, sourcePath, teamId, teamStatusRetry]);
 
   useEffect(() => () => requestController.current?.abort(), []);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) return;
+    if (demoMode) return;
     const controller = new AbortController();
     void listMyTeams(controller.signal)
       .then(value => { if (!controller.signal.aborted) setTeams(value); })
@@ -279,7 +305,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   }, [demoMode]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       return;
     }
     if (!teamId) {
@@ -338,7 +364,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     }
 
     requestController.current?.abort();
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       if (!demoModules) return;
       const available = demoModules.app.isDemoAppSubdomainAvailable(value);
       setAvailability(available ? 'available' : 'unavailable');
@@ -374,8 +400,8 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
     setCreating(true);
     setCreateError(null);
     try {
-      if (import.meta.env.DEV && demoMode && owner) {
-        if (!demoModules) return;
+      if (demoMode) {
+        if (!demoModules || !owner) return;
         if (!source) { navigate(sourcePath); return; }
         if (teamId && (!currentTeam || currentTeam.status !== 'approved' || currentTeam.my_role === 'member')) return;
         if (source.sourceType === 'github' && (!demoModules.profile.getDemoProfile()?.github ||
@@ -397,6 +423,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         });
         if (!appId) { setCreateError({ message: '앱을 저장하지 못했습니다. 다시 시도해 주세요.' }); return; }
         demoModules.draft.saveDemoAppDraft(teamId, null);
+        demoModules.draft.saveDemoAppServiceDraft(teamId, null);
         navigate(`/apps/${encodeURIComponent(appId)}/demo`);
         return;
       }
@@ -421,8 +448,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
   };
 
   const updateSubdomain = (value: string) => {
-    if (demoMode) setDemoDomain(value.toLowerCase());
-    else update('subdomain', value.toLowerCase());
+    update('subdomain', value.toLowerCase());
     setAvailability('idle');
     setAvailabilityError('');
   };
@@ -486,7 +512,7 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
         {teamId && teamStatus !== 'approved' && teamStatus !== 'loading' && <PreviewBlock role={teamStatus === 'error' ? 'alert' : 'note'}>
           <Octicon name={teamStatus === 'error' ? 'alert' : 'info'} size={16} aria-hidden="true" />
           <span>{teamStatus === 'error' ? '팀 승인 상태를 확인하지 못해 앱을 만들 수 없습니다. 다시 시도해 주세요.' : '팀이 승인되면 앱을 만들 수 있어요'}</span>
-          {teamStatus === 'error' && <Button variant="ghost" onClick={() => setTeamStatusRetry(value => value + 1)}>다시 시도</Button>}
+          {teamStatus === 'error' && <Button variant="ghost" onClick={retryTeamStatus}>다시 시도</Button>}
         </PreviewBlock>}
 
         {createError && <PreviewBlock role="alert">
@@ -500,77 +526,81 @@ export default function AppCreateServicePage({ teamId }: { teamId?: string }) {
           <span>{`앱 이름 ${draft.appName || '미입력'}으로 만들 수 있습니다. 현재 API 계약은 이름만 저장하고 기본 production 환경을 만들며, 이 화면의 소스와 서비스 설정은 전송되지 않습니다.`}</span>
         </PreviewBlock>}
 
-        <Card>
-          <CardTitle>서비스</CardTitle>
-          <SegmentedControl
-            label="서비스 유형"
-            options={[...serviceOptions]}
-            value={draft.serviceType}
-            disabled={!demoMode}
-            onChange={value => update('serviceType', value as AppServiceType)}
-          />
-          <Hint>{demoMode ? '웹은 주소로 요청을 받습니다. 워커는 주소 없이 계속 실행되고, 크론은 정한 시각에 실행됩니다.' : serviceDescription(draft.serviceType)}</Hint>
-          <TextField
-            label="서비스 이름"
-            value={draft.serviceName}
-            maxLength={30}
-            disabled={!demoMode}
-            onChange={event => update('serviceName', event.currentTarget.value)}
-            hint="앱 안에서 서비스를 구분하는 이름입니다."
-          />
-        </Card>
-
-        {draft.serviceType === 'web' && <Card>
-          <CardTitle>주소</CardTitle>
-          <TextField
-            id={subdomainInputId}
-            label="서브도메인"
-            value={subdomainValue}
-            maxLength={63}
-            disabled={!demoMode}
-            onChange={event => updateSubdomain(event.currentTarget.value)}
-            onBlur={() => { if (subdomainValue.trim()) void checkSubdomain(); }}
-            hint={demoMode ? `production 주소는 https://${subdomainValue}.{앱 도메인}입니다. staging·PR 환경에는 이름이 자동으로 붙습니다.` : 'production 주소의 이름입니다. 실제 도메인 주소는 계약에 정의되어 있지 않습니다.'}
-            error={availability === 'unavailable' ? availabilityError : undefined}
-          />
-          {availability === 'loading' && <Hint role="status">주소를 확인하고 있습니다…</Hint>}
-          {availability === 'available' && <Hint $tone="success" role="status">현재 사용할 수 있는 이름입니다.</Hint>}
-          {availability === 'error' && <Hint $tone="error" role="alert">{availabilityError}</Hint>}
-        </Card>}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>자원</CardTitle>
-            <QuotaMeta>{quota ? `메모리 할당량 ${quota.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 ${quota.freeMemory} MB` : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
-          </CardHeader>
-          <ResourceFields>
-            <SliderField
-              label="메모리"
-              value={draft.memoryMb}
-              min={256}
-              max={1024}
-              step={128}
-              minLabel="최소 256 MB"
-              maxLabel="최대 1 GB"
-              valueLabel={draft.memoryMb >= 1024 ? '1 GB' : `${draft.memoryMb} MB`}
+        {demoMode && (demoLoadError || !demoModules) ? (
+          <DemoCreateFormState step="service" onRetry={demoLoadError ? retryDemoLoad : undefined} />
+        ) : <>
+          <Card>
+            <CardTitle>서비스</CardTitle>
+            <SegmentedControl
+              label="서비스 유형"
+              options={[...serviceOptions]}
+              value={draft.serviceType}
               disabled={!demoMode}
-              onChange={value => update('memoryMb', value)}
+              onChange={value => update('serviceType', value as AppServiceType)}
             />
-            <SliderField
-              label="CPU"
-              value={draft.cpu}
-              min={0.25}
-              max={1}
-              step={0.25}
-              minLabel="최소 0.25 vCPU"
-              maxLabel="최대 1 vCPU"
-              valueLabel={`${draft.cpu} vCPU`}
+            <Hint>{demoMode ? '웹은 주소로 요청을 받습니다. 워커는 주소 없이 계속 실행되고, 크론은 정한 시각에 실행됩니다.' : serviceDescription(draft.serviceType)}</Hint>
+            <TextField
+              label="서비스 이름"
+              value={draft.serviceName}
+              maxLength={30}
               disabled={!demoMode}
-              onChange={value => update('cpu', value)}
+              onChange={event => update('serviceName', event.currentTarget.value)}
+              hint="앱 안에서 서비스를 구분하는 이름입니다."
             />
-          </ResourceFields>
-          <Hint>컨테이너 안 파일은 재시작하면 사라집니다. 남길 데이터는 Database에 저장하세요.</Hint>
-        </Card>
+          </Card>
+
+          {draft.serviceType === 'web' && <Card>
+            <CardTitle>주소</CardTitle>
+            <TextField
+              id={subdomainInputId}
+              label="서브도메인"
+              value={subdomainValue}
+              maxLength={63}
+              disabled={!demoMode}
+              onChange={event => updateSubdomain(event.currentTarget.value)}
+              onBlur={() => { if (subdomainValue.trim()) void checkSubdomain(); }}
+              hint={demoMode ? `production 주소는 https://${subdomainValue}.{앱 도메인}입니다. staging·PR 환경에는 이름이 자동으로 붙습니다.` : 'production 주소의 이름입니다. 실제 도메인 주소는 계약에 정의되어 있지 않습니다.'}
+              error={availability === 'unavailable' ? availabilityError : undefined}
+            />
+            {availability === 'loading' && <Hint role="status">주소를 확인하고 있습니다…</Hint>}
+            {availability === 'available' && <Hint $tone="success" role="status">현재 사용할 수 있는 이름입니다.</Hint>}
+            {availability === 'error' && <Hint $tone="error" role="alert">{availabilityError}</Hint>}
+          </Card>}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>자원</CardTitle>
+              <QuotaMeta>{quota ? `메모리 할당량 ${quota.usedMemory} MB / 2 GB 사용 중 · 남은 할당량 ${quota.freeMemory} MB` : '메모리 할당량 API가 없어 값을 확인할 수 없습니다.'}</QuotaMeta>
+            </CardHeader>
+            <ResourceFields>
+              <SliderField
+                label="메모리"
+                value={draft.memoryMb}
+                min={256}
+                max={1024}
+                step={128}
+                minLabel="최소 256 MB"
+                maxLabel="최대 1 GB"
+                valueLabel={draft.memoryMb >= 1024 ? '1 GB' : `${draft.memoryMb} MB`}
+                disabled={!demoMode}
+                onChange={value => update('memoryMb', value)}
+              />
+              <SliderField
+                label="CPU"
+                value={draft.cpu}
+                min={0.25}
+                max={1}
+                step={0.25}
+                minLabel="최소 0.25 vCPU"
+                maxLabel="최대 1 vCPU"
+                valueLabel={`${draft.cpu} vCPU`}
+                disabled={!demoMode}
+                onChange={value => update('cpu', value)}
+              />
+            </ResourceFields>
+            <Hint>컨테이너 안 파일은 재시작하면 사라집니다. 남길 데이터는 Database에 저장하세요.</Hint>
+          </Card>
+        </>}
       </Page>
 
       {dialog && <DialogBackdrop onMouseDown={event => { if (event.target === event.currentTarget) setDialog(null); }}>

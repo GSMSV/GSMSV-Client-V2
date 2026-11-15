@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import styled from "styled-components";
 import { Button } from "../../shared/ui/controls";
+import { Octicon, type OcticonName } from "../../shared/ui/icons";
 
 const Panel = styled.dialog`
   width: min(480px, calc(100% - 32px));
@@ -14,6 +15,9 @@ const Panel = styled.dialog`
 `;
 
 const Title = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 16px;
   font-size: ${({ theme }) => theme.typography.h2.size}px;
 `;
@@ -28,25 +32,28 @@ const Copy = styled.div`
 const Actions = styled.div`
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
 `;
 
 export function DemoAppDialog({
-  title, children, confirmLabel, onConfirm, onClose,
+  title, children, confirmLabel, onConfirm, onClose, icon, showCancel = true,
 }: {
   title: string;
   children: ReactNode;
   confirmLabel?: string;
+  icon?: OcticonName;
+  showCancel?: boolean;
   onConfirm?: () => void;
   onClose: () => void;
 }) {
   return (
     <Modal onClose={onClose}>
-      <Title id="demo-app-dialog-title">{title}</Title>
+      <Title id="demo-app-dialog-title">{icon && <Octicon name={icon} size={24} />}{title}</Title>
       <Copy>{children}</Copy>
       <Actions>
-        <Button variant="secondary" onClick={onClose}>{onConfirm ? "취소" : "확인"}</Button>
+        {(!onConfirm || showCancel) && <Button variant="secondary" onClick={onClose}>{onConfirm ? "취소" : "확인"}</Button>}
         {onConfirm && <Button onClick={onConfirm}>{confirmLabel}</Button>}
       </Actions>
     </Modal>

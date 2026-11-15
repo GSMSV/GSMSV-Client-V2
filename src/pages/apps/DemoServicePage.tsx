@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import styled from "styled-components";
 import {
   canManageDemoApp,
@@ -56,6 +56,13 @@ const Breadcrumb = styled.p`
       ${({ theme }) => theme.typography.caption.lineHeight}px
       ${({ theme }) => theme.typography.caption.family},
     sans-serif;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover, &:focus-visible { text-decoration: underline; }
+  }
 `;
 const Heading = styled.section`
   display: flex;
@@ -462,7 +469,8 @@ export default function DemoServicePage() {
 type VariableChanges = { variables?: DemoAppVariable[]; databaseId?: string };
 type ServiceDialog =
   | { kind: "deploy" | "rollback"; deployment: DemoDeployment }
-  | { kind: "variables" | "port" | "read-only" | "domain" };
+  | { kind: "variables"; changes: VariableChanges }
+  | { kind: "port" | "read-only" | "domain" };
 
 function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string }) {
   const navigate = useNavigate();
@@ -553,6 +561,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
 
   const canManage = canManageDemoApp(app);
   const expired = isDemoAppExpired(app);
+  const memoryRestart = service.restartReason === "memory" || service.id === "demo-web";
   const shellExpired = Boolean(service.shellOpen && (!expiresAt || Math.max(clock, Date.now()) >= expiresAt));
   const shellActive = service.shellOpen && !shellExpired && !expired && service.status !== "정지";
   const quota = tab === "metrics" || tab === "settings" ? getDemoAppQuota(app.owner ?? demoPersonalAppOwner) : null;
@@ -570,25 +579,38 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
     setNotice(updated ? "" : "변경사항을 저장하지 못했습니다. 다시 시도해 주세요.");
     return updated;
   };
-  const requestVariables = () => {
-    if (!canManage) { setDialog({ kind: "read-only" }); return; }
-    if (variableKey.trim() === "PORT") { setDialog({ kind: "port" }); return; }
-    if (variableSize > 32 * 1024) { setNotice("변수는 32 KB까지 저장할 수 있습니다."); return; }
-    if (Object.keys(variableChanges).length) setDialog({ kind: "variables" });
-  };
-  const addVariable = (event: FormEvent) => {
-    event.preventDefault();
-    if (!canManage || expired) return;
-    const key = variableKey.trim();
-    if (key === "PORT") { setDialog({ kind: "port" }); return; }
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return;
-    setVariableChanges(current => ({
-      ...current,
-      variables: [...variables.filter(item => item.key !== key), { key, value: variableValue, secret: variableSecret }],
-    }));
+  const clearVariableInput = () => {
     setVariableKey("");
     setVariableValue("");
     setVariableSecret(false);
+  };
+  const requestVariables = (save: boolean) => {
+    if (!canManage) { setDialog({ kind: "read-only" }); return; }
+    const key = variableKey.trim();
+    const input = document.getElementById("demo-new-variable-key");
+    if (!key && !save) { input?.focus(); return; }
+    if (key === "PORT") { setDialog({ kind: "port" }); return; }
+    if (key && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      setNotice("변수 이름은 영문 또는 밑줄로 시작하고 영문, 숫자, 밑줄만 쓸 수 있습니다.");
+      input?.focus();
+      return;
+    }
+    const changes = key ? {
+      ...variableChanges,
+      variables: [...variables.filter(item => item.key !== key), { key, value: variableValue, secret: variableSecret }],
+    } : variableChanges;
+    if (new TextEncoder().encode(JSON.stringify(changes.variables ?? variables)).length > 32 * 1024) {
+      setNotice("변수는 32 KB까지 저장할 수 있습니다.");
+      return;
+    }
+    setNotice("");
+    if (save) {
+      if (Object.keys(changes).length) setDialog({ kind: "variables", changes });
+    } else {
+      setVariableChanges(changes);
+      clearVariableInput();
+      input?.focus();
+    }
   };
   const openShell = () => {
     if (!canManage || expired) return;
@@ -610,7 +632,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       setNotice("메모리 또는 상시 실행 할당량을 확인해 주세요.");
       return;
     }
-    if (update(settingsDraft)) { setSettingsDraft({}); setNotice(""); }
+    if (update(settingsDraft)) { setSettingsDraft({}); setNotice("설정을 저장했습니다."); }
   };
   const actionButton =
     tab === "deployments" ? (
@@ -628,10 +650,8 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       </Button>
     ) : tab === "variables" ? (
       <>
-        <Button variant="secondary" disabled={expired} onClick={() => canManage
-          ? document.getElementById("demo-new-variable-key")?.focus()
-          : setDialog({ kind: "read-only" })}>변수 추가</Button>
-        <Button disabled={expired} onClick={requestVariables}>변경사항 저장</Button>
+        <Button variant="secondary" disabled={expired} onClick={() => requestVariables(false)}>변수 추가</Button>
+        <Button disabled={expired} onClick={() => requestVariables(true)}>변경사항 저장</Button>
       </>
     ) : tab === "shell" ? (
       <Button variant="secondary" disabled={!canManage || expired || service.status === "정지"} onClick={openShell}>
@@ -642,8 +662,9 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
     ) : tab === "domains" ? (
       <Button disabled={!canManage || expired || service.type !== "웹"} onClick={() => {
         const subdomain = (domainDraft ?? service.subdomain).trim();
+        if (subdomain === service.subdomain) { setDomainDraft(undefined); return; }
         if (!isDemoAppSubdomainAvailable(subdomain, service.id)) { setDialog({ kind: "domain" }); return; }
-        if (update({ subdomain })) setDomainDraft(undefined);
+        if (update({ subdomain })) { setDomainDraft(undefined); setNotice("주소를 저장했습니다."); }
       }}>저장</Button>
     ) : null;
 
@@ -774,6 +795,14 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   } else if (tab === "metrics") {
     content = (
       <>
+        {memoryRestart && <Banner $warning role="status">
+          <Octicon name="alert" size={18} />
+          <BannerCopy>
+            메모리 상한에 닿아 다시 시작했습니다
+            <small>11월 2일 09:40에 512 MB를 넘어 강제로 종료한 뒤 다시 시작했습니다. 메모리를 늘리거나 코드를 확인해 주세요.</small>
+          </BannerCopy>
+          <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => move("settings")}>설정 열기</Button>
+        </Banner>}
         {quota?.freeMemory === 0 && <Banner $warning role="status">
           <Octicon name="alert" size={18} />
           <BannerCopy>
@@ -786,12 +815,12 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
           <Metric>
             <CardTitle>메모리</CardTitle>
             <BigValue>
-              418 <small>MB</small>
+              {Math.min(service.memoryMb, 418)} <small>MB</small>
             </BigValue>
-            <MiniPlot restart />
+            <MiniPlot restart={memoryRestart} />
             <Help>
-              최근 24시간 · 최대 512 MB · 할당 512 MB · 빨간 선은 09:40 다시
-              시작
+              최근 24시간 · 최대 {Math.min(service.memoryMb, 512)} MB · 할당 {service.memoryMb} MB
+              {memoryRestart && " · 빨간 선은 09:40 다시 시작"}
             </Help>
           </Metric>
           <Metric>
@@ -800,7 +829,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
               12 <small>%</small>
             </BigValue>
             <MiniPlot />
-            <Help>최근 24시간 · 최대 64% · 할당 0.5 vCPU</Help>
+            <Help>최근 24시간 · 최대 64% · 할당 {service.cpu} vCPU</Help>
           </Metric>
         </Grid>
       </>
@@ -888,17 +917,13 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
             </VariableRow>
           ))}
         </Card>
-        <Card as="form" onSubmit={addVariable}>
+        <Card>
           <NavRow>
             <CardTitle>새 변수</CardTitle>
             <Button
               variant="ghost"
               disabled={!canManage || expired}
-              onClick={() => {
-                setVariableKey("");
-                setVariableValue("");
-                setVariableSecret(false);
-              }}
+              onClick={clearVariableInput}
             >
               이 행 삭제
             </Button>
@@ -938,9 +963,6 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
               }
             />
           </ToggleRow>
-          <Button type="submit" disabled={!canManage || expired || !variableKey.trim()}>
-            변수 추가
-          </Button>
         </Card>
         <Card>
           <CardTitle>Database 연결</CardTitle>
@@ -1192,23 +1214,15 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!shellInput.trim()) return;
-                const lines = [
-                  ...service.shellLines.slice(0, -1),
-                  `$ ${shellInput}`,
-                  shellInput === "node -v"
-                    ? "v20.11.1"
-                    : shellInput === "ls"
-                      ? "dist  node_modules  package.json  src"
-                      : shellInput === "echo $NODE_ENV"
-                        ? "production"
-                        : shellInput
-                          ? `명령을 실행했습니다: ${shellInput}`
-                          : "",
-                  "$",
-                ];
-                update({ shellLines: lines });
-                setShellInput("");
+                const command = shellInput.trim();
+                if (!command) return;
+                const echo = /^echo \$([A-Za-z_][A-Za-z0-9_]*)$/.exec(command);
+                const output = command === "node -v" ? "v20.11.1"
+                  : command === "ls" ? "dist  node_modules  package.json  src"
+                  : echo ? (service.variables.find(variable => variable.key === echo[1])?.value ?? "")
+                  : "미리보기에서는 이 명령을 실행할 수 없습니다.";
+                const shellLines = [...service.shellLines.slice(0, -1), `$ ${command}`, output, "$"];
+                if (update({ shellLines })) setShellInput("");
               }}
             >
               <Field>
@@ -1232,7 +1246,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
 
   return shell(
     <Page>
-      <Breadcrumb>Apps / {app.name}</Breadcrumb>
+      <Breadcrumb><Link to={listPath}>Apps</Link> / <Link to={`/apps/${encodeURIComponent(appId)}/demo`}>{app.name}</Link></Breadcrumb>
       <Heading>
         <Title>{service.name}</Title>
         <Subtitle>
@@ -1278,7 +1292,10 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
       </DemoAppDialog>}
       {dialog?.kind === "variables" && <DemoAppDialog title="변수를 저장하시겠습니까?"
         confirmLabel="저장하고 다시 시작" onClose={() => setDialog(undefined)} onConfirm={() => {
-          if (update({ ...variableChanges, ...restartService(service, "variables"), databasePasswordVersion: databasePasswordVersion(databaseId) })) setVariableChanges({});
+          if (update({ ...dialog.changes, ...restartService(service, "variables"), databasePasswordVersion: databasePasswordVersion(databaseId) })) {
+            setVariableChanges({});
+            clearVariableInput();
+          }
           setDialog(undefined);
         }}>
         {`· 저장하면 빌드 없이 ${service.name}이 다시 시작됩니다.
@@ -1299,75 +1316,38 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   );
 }
 
-export function DemoStoppedPublicAppPage() {
-  const navigate = useNavigate();
-  const { appId = "demo-portfolio-web" } = useParams<{ appId: string }>();
+export function DemoStoppedAppContent() {
+  const { appId = "" } = useParams<{ appId: string }>();
+  const [searchParams] = useSearchParams();
+  const serviceId = searchParams.get("service");
   const app = getDemoApp(appId);
-  if (!isDemoMode() || !app || !isDemoAppExpired(app))
-    return (
-      <PublicPage>
-        <PublicHeader>
-          <button type="button" onClick={() => navigate("/")}>GSM SV</button>
-        </PublicHeader>
-        <StoppedCard>
-          <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>
-        </StoppedCard>
-      </PublicPage>
-    );
+  const service = app?.services.find(item => item.type === "웹" && (!serviceId || item.id === serviceId));
+  const stopped = app && service && isDemoAppExpired(app);
+
   return (
-    <PublicPage>
-      <PublicHeader>
-        <button type="button" onClick={() => navigate("/")}>GSM SV</button>
-      </PublicHeader>
-      <StoppedCard>
-        <StoppedTitle>
-          <Octicon name="stop" size={24} />이 앱은 지금 정지돼 있습니다
-        </StoppedTitle>
-        <Subtitle>
-          사용 기간이 끝나 잠시 멈췄습니다. 만든 사람이 연장하면 다시 열립니다.
-        </Subtitle>
-        <VariableRow>
+    <StoppedCard>
+      {stopped ? <>
+        <StoppedTitle><Octicon name="stop" size={24} />이 앱은 지금 정지돼 있습니다</StoppedTitle>
+        <Subtitle>사용 기간이 끝나 잠시 멈췄습니다. 만든 사람이 연장하면 다시 열립니다.</Subtitle>
+        <StoppedAddress>
+          <Octicon name="globe" size={16} />
           <VariableText>
             <strong>주소</strong>
-            <span>{app.services.find(service => service.type === "웹")?.subdomain ?? app.name}.{"{앱 도메인}"}</span>
+            <span>{service.subdomain}.{"{앱 도메인}"}</span>
           </VariableText>
-          <Octicon name="globe" size={16} />
-        </VariableRow>
-        <Button variant="secondary" onClick={() => navigate("/")}>GSM SV 열기</Button>
-      </StoppedCard>
-    </PublicPage>
+        </StoppedAddress>
+      </> : <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>}
+    </StoppedCard>
   );
 }
-const PublicPage = styled.main`
-  min-height: 100vh;
-  background: ${({ theme }) => theme.colors.canvas};
-  color: ${({ theme }) => theme.colors.text};
-`;
-const PublicHeader = styled.header`
-  height: 74px;
-  padding: 16px 32px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
-  @media (max-width: 600px) { padding: 16px; }
-  @media (max-width: 380px) { padding: 16px 12px; }
-
-  button {
-    border: 0;
-    background: none;
-    color: ${({ theme }) => theme.colors.text};
-    font: inherit;
-    font-size: 20px;
-    cursor: pointer;
-  }
-`;
 const StoppedCard = styled.section`
   display: flex;
   width: min(560px, calc(100% - 32px));
   margin: 80px auto;
   flex-direction: column;
-  gap: 24px;
+  gap: 8px;
   padding: 24px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
 
@@ -1376,6 +1356,13 @@ const StoppedCard = styled.section`
     padding: 16px;
   }
 `;
+const StoppedAddress = styled.div`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+`;
 const StoppedTitle = styled.h1`
   display: flex;
   align-items: center;
@@ -1383,11 +1370,13 @@ const StoppedTitle = styled.h1`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font:
-    ${({ theme }) => theme.typography.h2.weight}
-      ${({ theme }) => theme.typography.h2.size}px /
-      ${({ theme }) => theme.typography.h2.lineHeight}px
-      ${({ theme }) => theme.typography.h2.family},
+    ${({ theme }) => theme.typography.h1.weight}
+      ${({ theme }) => theme.typography.h1.size}px /
+      ${({ theme }) => theme.typography.h1.lineHeight}px
+      ${({ theme }) => theme.typography.h1.family},
     sans-serif;
+
+  svg { flex: 0 0 24px; }
 
   @media (max-width: 420px) {
     align-items: flex-start;

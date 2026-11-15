@@ -1,26 +1,33 @@
 import { lazy, Suspense } from 'react';
-import type { RouteObject } from 'react-router';
+import { Navigate, Outlet, type RouteObject } from 'react-router';
+import { isDemoMode } from '../../shared/demo';
+import { DemoAppRouteLoading } from './DemoAppRouteLoading';
+import { DemoStoppedAppLayout, DemoStoppedAppLoading } from './DemoStoppedAppLayout';
 
 const DemoAppOverviewPage = lazy(() => import('./DemoAppOverviewPage').then(module => ({ default: module.DemoAppOverviewPage })));
 const DemoAppSettingsPage = lazy(() => import('./DemoAppOverviewPage').then(module => ({ default: module.DemoAppSettingsPage })));
 const DemoAddServicePage = lazy(() => import('./DemoAppOverviewPage').then(module => ({ default: module.DemoAddServicePage })));
 const DemoServicePage = lazy(() => import('./DemoServicePage'));
-const DemoStoppedPublicAppPage = lazy(() => import('./DemoServicePage').then(module => ({ default: module.DemoStoppedPublicAppPage })));
+const DemoStoppedAppContent = lazy(() => import('./DemoServicePage').then(module => ({ default: module.DemoStoppedAppContent })));
 
-export const demoAppRoutes: RouteObject[] = [
-  { path: '/apps/:appId/demo', element: <Suspense fallback={null}><DemoAppOverviewPage /></Suspense> },
-  { path: '/apps/:appId/demo-settings', element: <Suspense fallback={null}><DemoAppSettingsPage /></Suspense> },
-  { path: '/apps/:appId/services/new', element: <Suspense fallback={null}><DemoAddServicePage /></Suspense> },
-  { path: '/apps/:appId/services/:serviceId/:tab', element: <Suspense fallback={null}><DemoServicePage /></Suspense> },
-  { path: '/public/:appId/stopped', element: <Suspense fallback={null}><DemoStoppedPublicAppPage /></Suspense> },
-];
+function DemoAppsRoute() {
+  return isDemoMode() ? <Outlet /> : <Navigate to="/apps" replace />;
+}
 
-export {
-  default as DemoServicePage,
-  DemoStoppedPublicAppPage,
-} from "./DemoServicePage";
-export {
-  DemoAppOverviewPage,
-  DemoAppSettingsPage,
-  DemoAddServicePage,
-} from "./DemoAppOverviewPage";
+export const demoAppRoutes: RouteObject[] = [{
+  Component: DemoAppsRoute,
+  children: [
+    { path: '/apps/:appId/demo', element: <Suspense fallback={<DemoAppRouteLoading page="overview" />}><DemoAppOverviewPage /></Suspense> },
+    { path: '/apps/:appId/demo-settings', element: <Suspense fallback={<DemoAppRouteLoading page="app-settings" />}><DemoAppSettingsPage /></Suspense> },
+    { path: '/apps/:appId/services/new', element: <Suspense fallback={<DemoAppRouteLoading page="add-service" />}><DemoAddServicePage /></Suspense> },
+    { path: '/apps/:appId/services/:serviceId/:tab?', element: <Suspense fallback={<DemoAppRouteLoading page="service" />}><DemoServicePage /></Suspense> },
+    {
+      path: '/public/:appId/stopped',
+      element: (
+        <DemoStoppedAppLayout>
+          <Suspense fallback={<DemoStoppedAppLoading />}><DemoStoppedAppContent /></Suspense>
+        </DemoStoppedAppLayout>
+      ),
+    },
+  ],
+}];

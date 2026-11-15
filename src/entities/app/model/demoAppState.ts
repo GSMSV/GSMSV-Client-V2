@@ -3,7 +3,7 @@ import {
   readDemoState,
   writeDemoState,
 } from "../../../shared/demo";
-import type { AppOwner, AppSummary } from "./types";
+import type { AppOwner, AppListItem } from "./types";
 import { getDemoTeam } from "../../team/demo";
 import { getDemoDatabaseState, saveDemoDatabaseState } from "../../database/demo";
 
@@ -350,7 +350,7 @@ export function getDemoApps(): DemoManagedApp[] {
   }));
 }
 
-export function getDemoAppSummaries(owner?: AppOwner): AppSummary[] {
+export function getDemoAppSummaries(owner?: AppOwner): AppListItem[] {
   if (owner?.type === "team" && !getDemoTeam(owner.id)) return [];
   return getDemoApps()
     .filter((app) => (!isDemoAppExpired(app) || Date.now() < getDemoAppDeletionTime(app)) &&
@@ -364,6 +364,13 @@ export function getDemoAppSummaries(owner?: AppOwner): AppSummary[] {
       created_by: "demo-student",
       created_at: "2026-10-01T00:00:00.000Z",
       updated_at: "2026-11-13T04:00:00.000Z",
+      demoDetails: {
+        repository: app.repository,
+        branch: app.branch,
+        serviceCount: app.services.length,
+        environmentCount: app.environments.length,
+        memoryMb: app.services.reduce((total, service) => total + service.memoryMb, 0),
+      },
       expires_at: new Date(app.expiresAtMs ?? demoNow + 7 * day).toISOString(),
       permissions: { view: true, update: canManageDemoApp(app), extend: true, delete: canManageDemoApp(app) },
     }));

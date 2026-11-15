@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { AppResourceCard, listTeamApps, type AppSummary } from '../../entities/app';
+import { AppResourceCard, listTeamApps, type AppListItem } from '../../entities/app';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
@@ -116,9 +116,9 @@ const roleLabel: Record<TeamRole, string> = {
 export default function TeamAppsListPage({ teamId }: { teamId: string }) {
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const [team, setTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
-  const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
+  const [apps, setApps] = useState<Loadable<AppListItem[]>>(initialLoadable);
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -127,7 +127,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
     setApps(current => ({ ...current, loading: true, error: false }));
     setTeams(current => ({ ...current, loading: true, error: false }));
 
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       void Promise.all([
         import('../../entities/team/demo'),
         import('../../entities/app/demo'),

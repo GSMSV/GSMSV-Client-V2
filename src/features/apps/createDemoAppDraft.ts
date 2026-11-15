@@ -1,3 +1,4 @@
+import type { AppServiceDraft } from '../app/create-app/service';
 import { readDemoState, writeDemoState } from '../../shared/demo';
 
 export interface DemoAppSourceDraft {
@@ -19,6 +20,22 @@ export const defaultDemoAppSourceDraft: DemoAppSourceDraft = {
 };
 
 const key = (teamId?: string) => `apps.create-draft.${teamId ?? 'personal'}`;
+const serviceKey = (teamId?: string) => `apps.create-service-draft.${teamId ?? 'personal'}`;
+
+type DemoAppServiceDraft = Omit<AppServiceDraft, 'appName'>;
+
+export function readDemoAppServiceDraft(teamId?: string): DemoAppServiceDraft | null {
+  const draft = readDemoState<DemoAppServiceDraft | null>(serviceKey(teamId), null);
+  if (!draft || !['web', 'worker', 'cron'].includes(draft.serviceType) ||
+    typeof draft.serviceName !== 'string' || typeof draft.subdomain !== 'string' ||
+    ![256, 384, 512, 640, 768, 896, 1024].includes(draft.memoryMb) ||
+    ![0.25, 0.5, 0.75, 1].includes(draft.cpu)) return null;
+  return draft;
+}
+
+export function saveDemoAppServiceDraft(teamId: string | undefined, draft: DemoAppServiceDraft | null) {
+  return writeDemoState(serviceKey(teamId), draft);
+}
 const installedRepositoriesKey = 'apps.installed-repositories';
 const legacyInstalledRepositoryKey = 'apps.installed-repository';
 const supportedDemoRepositories = [defaultDemoAppSourceDraft.repository, 'gsm-jimin/study-log'] as const;
