@@ -310,8 +310,17 @@ export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Res
   const activeDemo = isDemoMode();
   const routeTo = useNavigate();
   const navigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const teamPath = teamScopeId ? `/teams/${encodeURIComponent(teamScopeId)}` : undefined;
     const paths: Record<Exclude<StudentNavigationKey, 'none'>, string> = {
-      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/docs', support: '/support/inquiries', settings: '/settings',
+      home: teamPath ?? '/',
+      'vm-create': teamPath ? `${teamPath}/vms/new` : '/vms/new',
+      serverless: '/serverless',
+      database: teamScopeId ? `/databases?owner=${encodeURIComponent(teamScopeId)}` : '/databases',
+      apps: teamPath ? `${teamPath}/apps` : '/apps',
+      team: teamPath ?? '/teams',
+      docs: '/docs',
+      support: '/support/inquiries',
+      settings: '/settings',
     };
     routeTo(paths[item]);
 

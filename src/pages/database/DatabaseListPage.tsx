@@ -374,10 +374,8 @@ export default function DatabaseListPage() {
     return () => controller.abort();
   }, [demoMode, teamId]);
 
-  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
-    if (item === 'database') navigate('/databases');
-
-    return ['database'].includes(item);
+  const navigateFromShell = (_item: Exclude<StudentNavigationKey, 'none'>) => {
+    return false;
   };
 
   const availableTeams = teams.value ?? [];

@@ -508,10 +508,8 @@ export default function VMNetworkPage() {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
     if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
-    if (item === 'apps') navigate('/apps');
-    if (item === 'database') navigate('/databases');
 
-    return ['home', 'team', 'apps', 'database'].includes(item);
+    return ['home', 'team'].includes(item);
   };
 
   const finishAction = () => {
