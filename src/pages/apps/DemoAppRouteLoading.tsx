@@ -20,10 +20,6 @@ const Heading = styled.div`
   align-content: center;
 `;
 
-const PublicLoadingCard = styled(LoadingCard)`
-  margin: 154px auto 0;
-`;
-
 const serviceHeights = {
   deployments: [450, 282],
   logs: [348],
@@ -82,8 +78,4 @@ export function DemoAppRouteLoading({ page }: { page: 'overview' | 'app-settings
       </ResourceListPage>
     </StudentShell>
   );
-}
-
-export function DemoStoppedAppRouteLoading() {
-  return <PublicLoadingCard width="min(560px, calc(100% - 32px))" height={182} />;
 }

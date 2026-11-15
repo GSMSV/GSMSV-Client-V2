@@ -1316,8 +1316,7 @@ function ServiceDetail({ appId, serviceId }: { appId: string; serviceId: string 
   );
 }
 
-export function DemoStoppedPublicAppPage() {
-  const navigate = useNavigate();
+export function DemoStoppedAppContent() {
   const { appId = "" } = useParams<{ appId: string }>();
   const [searchParams] = useSearchParams();
   const serviceId = searchParams.get("service");
@@ -1326,60 +1325,22 @@ export function DemoStoppedPublicAppPage() {
   const stopped = app && service && isDemoAppExpired(app);
 
   return (
-    <PublicPage>
-      <PublicHeader>
-        <PublicBrand to="/" aria-label="GSM SV 홈">
-          <img src="/assets/gsmsv-logo.svg" alt="" />GSM SV
-        </PublicBrand>
-        <Button variant="secondary" icon={<Octicon name="link-external" size={16} />} onClick={() => navigate("/")}>
-          GSM SV 열기
-        </Button>
-      </PublicHeader>
-      <StoppedCard>
-        {stopped ? <>
-          <StoppedTitle><Octicon name="stop" size={24} />이 앱은 지금 정지돼 있습니다</StoppedTitle>
-          <Subtitle>사용 기간이 끝나 잠시 멈췄습니다. 만든 사람이 연장하면 다시 열립니다.</Subtitle>
-          <StoppedAddress>
-            <Octicon name="globe" size={16} />
-            <VariableText>
-              <strong>주소</strong>
-              <span>{service.subdomain}.{"{앱 도메인}"}</span>
-            </VariableText>
-          </StoppedAddress>
-        </> : <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>}
-      </StoppedCard>
-    </PublicPage>
+    <StoppedCard>
+      {stopped ? <>
+        <StoppedTitle><Octicon name="stop" size={24} />이 앱은 지금 정지돼 있습니다</StoppedTitle>
+        <Subtitle>사용 기간이 끝나 잠시 멈췄습니다. 만든 사람이 연장하면 다시 열립니다.</Subtitle>
+        <StoppedAddress>
+          <Octicon name="globe" size={16} />
+          <VariableText>
+            <strong>주소</strong>
+            <span>{service.subdomain}.{"{앱 도메인}"}</span>
+          </VariableText>
+        </StoppedAddress>
+      </> : <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>}
+    </StoppedCard>
   );
 }
 
-const PublicPage = styled.main`
-  min-height: 100vh;
-  background: ${({ theme }) => theme.colors.canvas};
-  color: ${({ theme }) => theme.colors.text};
-`;
-const PublicHeader = styled.header`
-  display: flex;
-  min-height: 74px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  column-gap: 16px;
-  row-gap: 8px;
-  padding: 16px 40px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-
-  @media (max-width: 600px) { padding: 12px 16px; }
-`;
-const PublicBrand = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
-  text-decoration: none;
-
-  img { display: block; width: 24px; height: 24px; }
-`;
 const StoppedCard = styled.section`
   display: flex;
   width: min(560px, calc(100% - 32px));
