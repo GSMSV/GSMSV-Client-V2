@@ -71,6 +71,8 @@ export interface DemoVmState {
   teamQuota: DemoVmQuota;
   teamQuotas?: Record<string, DemoVmQuota>;
   sequence: number;
+  /** Demo-only: when the simulated student-wide pool shortage ends (other students' work finishes). */
+  studentPoolReleaseAt?: number;
 }
 
 export interface VmDraft {
@@ -140,8 +142,20 @@ export function canExtendDemoTeamVm(vm: DemoVm): boolean {
     && referenceTime < expiryTime;
 }
 
+/**
+ * connect-db is the Figma "만료되어 정지됐습니다" / "연장했습니다 · VM은 정지 상태입니다" fixture:
+ * it expired one day before the visitor opened the demo and is inside the 3-day grace period.
+ */
+function expiredTeamVmTimes(now = Date.now()): Pick<DemoVm, 'requestedAtMs' | 'createdAt' | 'expiresAt'> {
+  const expiresAt = now - dayMs;
+  const createdAt = expiresAt - 30 * dayMs;
+  return { requestedAtMs: createdAt, createdAt: formatDemoVmDate(createdAt), expiresAt: formatDemoVmDate(expiresAt) };
+}
+
+const currentSchemaVersion = 5;
+
 const initialVmState: DemoVmState = {
-  schemaVersion: 4,
+  schemaVersion: currentSchemaVersion,
   vms: [
     {
       id: 'portfolio-api',
@@ -182,7 +196,7 @@ const initialVmState: DemoVmState = {
       cpu: 2,
       memory: 4,
       disk: 20,
-      demoQuotaDisk: 20,
+      demoQuotaDisk: 10,
       os: 'Linux Ubuntu 22.04 LTS',
       nodeType: '자원이 많이 남은 Node에 자동 배분',
       createdAt: '요청 접수 · 대기 2건',
@@ -232,13 +246,12 @@ const initialVmState: DemoVmState = {
       creator: '한도윤',
       role: 'member',
       status: 'stopped',
+      ...expiredTeamVmTimes(),
       cpu: 2,
       memory: 2,
       disk: 30,
       os: 'Linux Ubuntu 22.04 LTS',
       nodeType: '일반 Node',
-      createdAt: '2026.10.02 14:00 (KST)',
-      expiresAt: '2026.10.31 14:00 (KST)',
       internalIp: '10.20.0.118',
       sshPort: 32118,
       sshUser: 'ubuntu',
@@ -324,10 +337,28 @@ export function getDemoVmState(): DemoVmState {
   return saveDemoVmState(next) ? readStoredDemoVmState() : state;
 }
 
+function migrateToSchema5(stored: DemoVmState): DemoVmState {
+  const vms = stored.vms.map(vm => {
+    if (vm.id === 'portfolio-worker' && vm.owner === 'personal' && vm.status === 'queued'
+      && vm.requestedAtMs === undefined && vm.demoQuotaDisk === 20) {
+      return { ...vm, demoQuotaDisk: 10 };
+    }
+    if (vm.id === 'connect-db' && vm.owner === 'team' && vm.status === 'stopped'
+      && vm.requestedAtMs === undefined && vm.expiresAt === '2026.10.31 14:00 (KST)') {
+      return { ...vm, ...expiredTeamVmTimes() };
+    }
+    return vm;
+  });
+  const migrated = { ...stored, schemaVersion: currentSchemaVersion, vms };
+  saveDemoVmState(migrated);
+  return readDemoState<DemoVmState | null>(stateKey, migrated) ?? migrated;
+}
+
 function readStoredDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
   if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
-  if ((stored.schemaVersion ?? 0) >= 4) return stored;
+  if ((stored.schemaVersion ?? 0) >= currentSchemaVersion) return stored;
+  if ((stored.schemaVersion ?? 0) === 4) return migrateToSchema5(stored);
 
   if ((stored.schemaVersion ?? 0) >= 3) {
     const vms = stored.vms.map(vm => {
@@ -341,9 +372,7 @@ function readStoredDemoVmState(): DemoVmState {
       }
       return vm;
     });
-    const migrated = { ...stored, schemaVersion: 4, vms };
-    saveDemoVmState(migrated);
-    return readDemoState<DemoVmState | null>(stateKey, migrated) ?? migrated;
+    return migrateToSchema5({ ...stored, schemaVersion: 4, vms });
   }
 
   const legacySeedVms = initialVmState.vms
@@ -414,8 +443,7 @@ function readStoredDemoVmState(): DemoVmState {
     teamQuotas,
     teamQuota: teamQuotas['demo-team'],
   };
-  saveDemoVmState(migratedState);
-  return migratedState;
+  return migrateToSchema5(migratedState);
 }
 
 export function removeDemoVm(state: DemoVmState, vm: DemoVm): DemoVmState {
@@ -456,7 +484,7 @@ export function saveDemoVmState(state: DemoVmState): boolean {
   }));
   return writeDemoState(stateKey, {
     ...state,
-    schemaVersion: 4,
+    schemaVersion: currentSchemaVersion,
     personalQuota: {
       ...state.personalQuota,
       cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),

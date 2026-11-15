@@ -9,6 +9,8 @@ import { LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Facts, Heading, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle, Table, TableWrap } from './VmDemoPrimitives';
 import { VmUnavailablePage } from './VmUnavailablePage';
+import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
+import { findDeletedDemoVm } from './vmDemoHelpers';
 
 const Title = styled.h1`
   margin: 0;
@@ -136,10 +138,14 @@ export function VmSnapshotsPage() {
   const [dialogError, setDialogError] = useState('');
   const [operation, setOperation] = useState<SnapshotOperation>(null);
   const [deletingSnapshotId, setDeletingSnapshotId] = useState<string | null>(null);
+  const load = useVmPageLoad('vm-snapshots', vmId);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
-  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (!vm) {
+    const deleted = findDeletedDemoVm(state, vmId, routeTeamId);
+    return <VmUnavailablePage teamId={routeTeamId ?? deleted?.teamId} deleted={deleted} />;
+  }
   if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
@@ -280,6 +286,7 @@ export function VmSnapshotsPage() {
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '생성 대기 중'} · 디스크의 특정 시점을 보관하고 복원합니다</StatusLine></div><Button variant="primary" icon={<Octicon name="plus" />} disabled={memberReadOnly || totalCount >= 3 || manualCount >= 2 || operation !== null} onClick={openCreateSnapshot}>Snapshot 만들기</Button></Heading>
       <DetailTabs vmId={vm.id} active="Snapshot" teamId={vm.teamId} networkVmGrn={vm.grn} />
+      {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={[[150, 150, 150], [183], [193]]} /> : <>
       <Facts>
         <MetricCard><MetricLabel><Octicon name="database" />　전체 Snapshot</MetricLabel><MetricValue>{totalCount} / 3</MetricValue><Hint>현재 수동 {manualCount}개 + 자동 {automaticCount}개 · 최대 3개</Hint></MetricCard>
         <MetricCard><MetricLabel><Octicon name="history" />　수동 Snapshot</MetricLabel><MetricValue>{manualCount} / 2</MetricValue><Hint>{Math.max(0, 2 - manualCount)}개 더 만들 수 있습니다</Hint></MetricCard>
@@ -310,6 +317,7 @@ export function VmSnapshotsPage() {
         <Row><Octicon name="info" size={20} /><div><FactValue>Snapshot은 디스크 데이터만 저장합니다</FactValue><Hint>메모리 상태와 실행 중인 작업은 저장되지 않습니다. 복원하면 해당 시점 이후 디스크 변경 사항이 사라지고, VM은 정지 상태가 됩니다.</Hint></div></Row>
       </Surface>
       {notice && <Hint role="status">{notice}</Hint>}
+      </>}
     </DemoPage>
     {dialog && <Overlay onMouseDown={event => {
       if (event.currentTarget === event.target && operation === null) {

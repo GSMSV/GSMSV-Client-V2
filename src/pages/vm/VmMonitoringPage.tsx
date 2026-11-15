@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmState, useDemoVmResourceState } from '../../entities/vm';
+import { canManageDemoVm, getDemoVmState, isDemoVmExpired, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Fact, FactLabel, FactValue, Grid2, Heading, Hint, MetricCard, StatusText } from './VmDemoPrimitives';
 import { VmUnavailablePage } from './VmUnavailablePage';
+import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
+import { findDeletedDemoVm } from './vmDemoHelpers';
 
 const Title = styled.h1`
   margin: 0;
@@ -166,11 +168,16 @@ export function VmMonitoringPage() {
   const [range, setRange] = useState<MonitoringRange>('1시간');
   const [refresh, setRefresh] = useState(0);
   const [state, setState] = useDemoVmResourceState(vmId);
+  const [notice, setNotice] = useState('');
+  const load = useVmPageLoad('vm-monitoring', vmId);
   const vm = state.vms.find(item => item.id === vmId);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
-  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (!vm) {
+    const deleted = findDeletedDemoVm(state, vmId, routeTeamId);
+    return <VmUnavailablePage teamId={routeTeamId ?? deleted?.teamId} deleted={deleted} />;
+  }
   if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
@@ -180,23 +187,56 @@ export function VmMonitoringPage() {
   const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const sample = monitoringSamples[range];
+  const vmRecord = vm;
+  const canStart = vm.status === 'stopped' && canManageDemoVm(vm) && !isDemoVmExpired(vm);
+
+  function reloadHistory() {
+    setState(getDemoVmState());
+    setRefresh(value => value + 1);
+    load.retry();
+  }
+
+  function startVm() {
+    const latest = getDemoVmState();
+    const target = latest.vms.find(item => item.id === vmRecord.id);
+    if (!target || target.status !== 'stopped' || !canManageDemoVm(target) || isDemoVmExpired(target)) {
+      setState(latest);
+      setNotice('현재 상태에서는 VM을 시작할 수 없습니다.');
+      return;
+    }
+    const next = { ...latest, vms: latest.vms.map(item => item.id === target.id ? { ...item, status: 'running' as const } : item) };
+    if (!saveDemoVmState(next)) {
+      setState(latest);
+      setNotice('전원 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setState(next);
+    setNotice('VM을 시작했습니다.');
+  }
 
   return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText> · Resource 사용 기록</StatusLine></div><RangeButtons>
         {(['6시간', '24시간', '1시간'] as const).map(value => <Button key={value} variant={range === value ? 'primary' : 'secondary'} icon={range === value ? <Octicon name="clock" /> : undefined} onClick={() => setRange(value)}>{value}</Button>)}
-        <Button variant="secondary" icon={<Octicon name="sync" />} onClick={() => { setState(getDemoVmState()); setRefresh(value => value + 1); }}>새로고침</Button>
+        <Button variant="secondary" icon={<Octicon name="sync" />} onClick={reloadHistory}>새로고침</Button>
       </RangeButtons></Heading>
       <DetailTabs vmId={vm.id} active="Monitoring" teamId={vm.teamId} networkVmGrn={vm.grn} />
+      {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={[[338, 338], [338, 338]]} /> : <>
       {vm.status === 'running' && <BannerWarning />}
-      {vm.status === 'stopped' && <Banner><Octicon name="stop" size={20} /><BannerCopy><strong>지금은 정지 상태입니다</strong><span>정지되기 전의 사용 기록을 볼 수 있습니다.</span></BannerCopy></Banner>}
+      {vm.status === 'stopped' && <Banner><Octicon name="stop" size={20} /><BannerCopy>
+        <strong>지금은 정지 상태입니다</strong>
+        <span>VM이 정지되기 전까지의 Monitoring 기록을 계속 확인할 수 있습니다.</span>
+        <span>· CPU·메모리·Network·디스크 I/O의 지난 기록은 유지됩니다.<br />· 기록 조회 실패 시: 사용 기록을 불러오지 못했습니다. 다시 시도해 주세요.</span>
+      </BannerCopy><Button variant="secondary" icon={<Octicon name="sync" />} onClick={reloadHistory}>기록 다시 불러오기</Button><Button variant="primary" disabled={!canStart} title={!canStart ? '팀장 또는 DevOps만, 만료되지 않은 VM을 시작할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={startVm}>VM 시작</Button></Banner>}
+      {notice && <Hint role="status">{notice}</Hint>}
       {vm.status === 'queued' ? <Banner><Octicon name="clock" size={20} /><BannerCopy><strong>아직 사용 기록이 없습니다</strong><span>VM이 실행된 뒤 사용 기록을 확인할 수 있습니다.</span></BannerCopy></Banner> : <Grid2>
         <MetricCardWide><MetricHeading>CPU 사용률</MetricHeading><ValueRow><Value>{sample.cpu + (refresh % 3)}</Value><Percent>%</Percent></ValueRow><ChartGraph range={range} variant="cpu" /><DataGrid><Hint>{sample.interval} · 최대 {sample.cpuMaximum}% · 할당 {vm.cpu} vCPU</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>메모리 사용률</MetricHeading><ValueRow><Value>{sample.memory}</Value><Percent>%</Percent></ValueRow><ChartGraph range={range} variant="memory" /><DataGrid><Hint>현재 {sample.memoryGb.toFixed(2)} GB / {vm.memory} GB · 최대 {sample.memoryMaximum}%</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>Network</MetricHeading><ValueRow><Value>{sample.network}</Value><Percent>MB/s</Percent></ValueRow><ChartGraph range={range} variant="network" /><DataGrid><Hint>수신 {sample.receive} MB/s · 송신 {sample.send} MB/s · Network 전송량</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>디스크 I/O</MetricHeading><ValueRow><Value>{sample.disk}</Value><Percent>MB/s</Percent></ValueRow><ChartGraph range={range} variant="disk" /><DataGrid><Hint>읽기 {sample.read} MB/s · 쓰기 {sample.write} MB/s · 디스크 처리량</Hint></DataGrid></MetricCardWide>
       </Grid2>}
+      </>}
       <Fact><FactLabel>기록 확인</FactLabel><FactValue>시간은 KST 기준입니다. VM을 정지해도 이전 사용 기록을 확인할 수 있습니다.</FactValue></Fact>
     </DemoPage>
   </DemoShell>;
