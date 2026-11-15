@@ -27,6 +27,10 @@ const Page = styled.div`
   gap: ${({ theme }) => theme.space[24]}px;
   margin: 0 auto;
   padding: 40px;
+
+  @media (max-width: 600px) {
+    padding: 24px 16px;
+  }
 `;
 
 const Breadcrumb = styled.p`
@@ -78,6 +82,10 @@ const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 
 const Fields = styled.dl`
