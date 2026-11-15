@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { useEffect, useState } from 'react';
 import { getDemoProfile } from '../../entities/profile';
 import { getSessionUser } from '../../entities/session';
+import { isDemoMode } from '../../shared/demo';
 
 export default function DemoSessionGate() {
   const location = useLocation();
@@ -14,6 +15,8 @@ export default function DemoSessionGate() {
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
+  if (!isDemoMode()) return <Outlet />;
+
   const profile = getDemoProfile();
   const canVisitSignedOut = pathname === '/login'
     || pathname === '/__demo/role-selection'

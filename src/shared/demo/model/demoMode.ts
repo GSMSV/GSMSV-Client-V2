@@ -14,9 +14,7 @@ export function getDemoResetGeneration(): string {
 }
 
 export function isDemoMode(): boolean {
-  if (!import.meta.env.DEV || typeof window === 'undefined') {
-    return false;
-  }
+  if (typeof window === 'undefined') return false;
 
   try {
     if (new URLSearchParams(window.location.search).get('demo') === '1') {
@@ -29,7 +27,7 @@ export function isDemoMode(): boolean {
 }
 
 export function startDemoSession(role: SessionUserRole): boolean {
-  if (!import.meta.env.DEV || typeof window === 'undefined') {
+  if (typeof window === 'undefined' || !isDemoMode()) {
     return false;
   }
 
@@ -73,7 +71,7 @@ export function writeDemoState<T>(slice: string, value: T): boolean {
 }
 
 export function resetDemoState(): void {
-  if (typeof window === 'undefined' || !import.meta.env.DEV) return;
+  if (typeof window === 'undefined') return;
 
   try {
     const nextGeneration = String(Math.max(0, Number(getDemoResetGeneration()) || 0) + 1);

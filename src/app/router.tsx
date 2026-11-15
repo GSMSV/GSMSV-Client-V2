@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
+import { isDemoMode } from '../shared/demo';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
 const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
@@ -57,7 +58,7 @@ function VMNetworkRoute() {
 let demoRoutes: RouteObject[] = [];
 let demoSessionGate: RouteObject['Component'];
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV || isDemoMode()) {
   const [roleSelection, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
     import('../pages/auth/RoleSelectionDemoPage'),
     import('../pages/vm/demoRoutes'),

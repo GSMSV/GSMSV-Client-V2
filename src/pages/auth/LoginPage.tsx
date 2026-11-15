@@ -217,7 +217,7 @@ export function LoginPage() {
   const errorKind = getLoginErrorKind(searchParams.get('error'));
 
   async function login() {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       const { resumeDemoProfile } = await import('../../entities/profile');
       if (resumeDemoProfile()) {
         const returnTo = getCliReturnPath(searchParams.get('returnTo'));
