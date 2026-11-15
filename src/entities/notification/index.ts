@@ -1,6 +1,7 @@
 export {
   addDemoNotification,
   deleteNotification,
+  getDemoNotificationPath,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,

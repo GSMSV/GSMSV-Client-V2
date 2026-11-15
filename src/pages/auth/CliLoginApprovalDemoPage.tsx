@@ -95,6 +95,12 @@ function getCliStudent() {
   return profile && !profile.signedOut && !profile.accountDeleted && user?.id === 'demo-student' && user.role === 'user' ? profile : null;
 }
 
+/** `?demoError=cli-expired`: 10분을 기다리지 않고 만료된 코드 화면을 확인한다. */
+function isExpiryForced() {
+  const scopes = new URLSearchParams(window.location.search).get('demoError')?.split(',').map(scope => scope.trim()) ?? [];
+  return isDemoMode() && (scopes.includes('cli-expired') || scopes.includes('all'));
+}
+
 function CliApproval({ requestedCode }: { requestedCode: string }) {
   const navigate = useNavigate();
   const [request, setRequest] = useState(() => getDemoCliRequestByCode(requestedCode));
@@ -102,7 +108,8 @@ function CliApproval({ requestedCode }: { requestedCode: string }) {
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now);
   const student = getCliStudent();
-  const expired = request ? isDemoCliRequestExpired(request, now) : false;
+  const [forcedExpiry] = useState(isExpiryForced);
+  const expired = request ? forcedExpiry || isDemoCliRequestExpired(request, now) : false;
 
   useEffect(() => {
     if (request?.status !== '확인 대기' || expired) return;
@@ -123,7 +130,7 @@ function CliApproval({ requestedCode }: { requestedCode: string }) {
     const latestProfile = getCliStudent();
     if (!isDemoMode() || !latestProfile || outcome) return;
     const latest = getDemoCliRequestByCode(requestedCode);
-    if (!latest || latest.status !== '확인 대기' || isDemoCliRequestExpired(latest)) {
+    if (!latest || latest.status !== '확인 대기' || forcedExpiry || isDemoCliRequestExpired(latest)) {
       setNow(Date.now());
       setRequest(latest);
       return;
@@ -168,8 +175,9 @@ function CliApproval({ requestedCode }: { requestedCode: string }) {
   if (outcome === '승인 완료') {
     content = <>
       <StateTitle><Octicon name="check-circle" size={24} />승인했습니다</StateTitle>
-      <Description>목데이터 CLI 기기가 연결되었습니다. 계정 설정에서 연결을 해제할 수 있습니다.</Description>
+      <Description>터미널로 돌아가세요. 5초 안에 터미널 로그인이 끝납니다.</Description>
       <Description>· 기기 · {request.device}</Description>
+      <Description>· 계정 설정 › 연결된 CLI 기기에서 해제할 수 있습니다</Description>
       <StateActions><Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => void navigate('/settings?tab=cli')}>연결된 CLI 기기 보기</Button></StateActions>
     </>;
   } else if (outcome === '거부됨') {
@@ -177,7 +185,7 @@ function CliApproval({ requestedCode }: { requestedCode: string }) {
       <StateTitle><Octicon name="x" size={24} />요청을 거부했습니다</StateTitle>
       <Description>이 기기는 로그인되지 않았습니다. 직접 실행한 요청이 아니었다면 모든 기기에서 로그아웃하고 문의해 주세요.</Description>
       {error}
-      <StateActions><Button variant="secondary" onClick={() => void navigate('/support/inquiries')}>문의하기</Button><Button variant="danger" onClick={logOutDevices}>모든 기기에서 로그아웃</Button></StateActions>
+      <StateActions><Button variant="secondary" icon={<Octicon name="comment-discussion" size={16} />} onClick={() => void navigate('/support/inquiries')}>문의하기</Button><Button variant="danger" icon={<Octicon name="sign-out" size={16} />} onClick={logOutDevices}>모든 기기에서 로그아웃</Button></StateActions>
     </>;
   } else if (consumed) {
     content = <>

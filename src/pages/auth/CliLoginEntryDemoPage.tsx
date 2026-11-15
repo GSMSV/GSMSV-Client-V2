@@ -85,7 +85,9 @@ export function CliCodeForm({ initialCode = '', initialError = '' }: { initialCo
       setError('코드를 다시 확인하세요. 계속 안 되면 터미널에서 gsmsv login을 다시 실행하세요.');
       return;
     }
-    void navigate(`/cli/approve?code=${encodeURIComponent(enteredRequest.code)}`);
+    // 목데이터 상태 확인용 ?demoError(예: cli-expired)는 승인 화면까지 이어 준다.
+    const demoError = new URLSearchParams(window.location.search).get('demoError');
+    void navigate(`/cli/approve?code=${encodeURIComponent(enteredRequest.code)}${demoError ? `&demoError=${encodeURIComponent(demoError)}` : ''}`);
   }
 
   return <>

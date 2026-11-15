@@ -177,14 +177,20 @@ const TocLink = styled.a<{ $active?: boolean }>`
   &:hover { color: ${({ theme }) => theme.colors.text}; }
 `;
 
-type NavEntry = { label: string; icon: OcticonName; active?: boolean };
+type DocsArticle = 'policy' | 'ssh';
+type NavEntry = { label: string; icon: OcticonName; article?: DocsArticle };
 const groups: { label: string; items: NavEntry[] }[] = [
-  { label: '시작하기', items: [{ label: 'VM 만들기', icon: 'server' }, { label: 'SSH로 접속하기', icon: 'terminal' }] },
-  { label: '정책', items: [{ label: '사용 기간과 연장', icon: 'calendar', active: true }, { label: '할당량', icon: 'cpu' }, { label: '팀으로 사용하기', icon: 'people' }] },
+  { label: '시작하기', items: [{ label: 'VM 만들기', icon: 'server' }, { label: 'SSH로 접속하기', icon: 'terminal', article: 'ssh' }] },
+  { label: '정책', items: [{ label: '사용 기간과 연장', icon: 'calendar', article: 'policy' }, { label: '할당량', icon: 'cpu' }, { label: '팀으로 사용하기', icon: 'people' }] },
   { label: 'Serverless', items: [{ label: '함수 만들기', icon: 'zap' }, { label: '호출 주소 인증하기', icon: 'shield' }, { label: '실행 사이 상태 저장', icon: 'history' }] },
   { label: 'Database', items: [{ label: '이름에 따옴표 쓰기', icon: 'database' }, { label: 'SSH 터널로 접속하기', icon: 'database' }, { label: '용량 줄이기', icon: 'database' }] },
   { label: 'Apps', items: [{ label: '파일 저장과 볼륨', icon: 'upload' }] },
   { label: '도움', items: [{ label: '자주 묻는 질문', icon: 'question' }, { label: '문의하기', icon: 'comment-discussion' }] },
+];
+
+const sshSections = [
+  { id: 'ssh-steps', label: '접속 순서' },
+  { id: 'ssh-faq', label: '연결이 되지 않으면' },
 ];
 
 const sections = [
@@ -224,19 +230,27 @@ export default function PublicDocsPage() {
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
   const [activeSection, setActiveSection] = useState(() => window.location.hash.slice(1) || 'overview');
+  const [article, setArticle] = useState<DocsArticle>(() => sshSections.some(section => section.id === window.location.hash.slice(1)) ? 'ssh' : 'policy');
+  const tocSections = article === 'ssh' ? sshSections : sections;
   const query = search.trim().toLocaleLowerCase();
   useEffect(() => {
     const initialHash = window.location.hash.slice(1);
     if (sections.some(section => section.id === initialHash)) {
       requestAnimationFrame(() => document.getElementById(initialHash)?.scrollIntoView({ block: 'start' }));
     }
-    const updateSection = () => setActiveSection(window.location.hash.slice(1) || 'overview');
+    const updateSection = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveSection(hash || 'overview');
+      // 다른 문서의 해시로 바뀌면 본문도 함께 바꿔 목차와 본문이 같은 문서를 가리키게 한다.
+      if (sshSections.some(section => section.id === hash)) setArticle('ssh');
+      else if (sections.some(section => section.id === hash)) setArticle('policy');
+    };
     window.addEventListener('hashchange', updateSection);
     return () => window.removeEventListener('hashchange', updateSection);
   }, []);
   const visibleGroups = useMemo(() => groups.map(group => ({
     ...group,
-    items: group.items.filter(item => !query || (item.active && `${group.label} ${item.label}`.toLocaleLowerCase().includes(query))),
+    items: group.items.filter(item => !query || (item.article && `${group.label} ${item.label}`.toLocaleLowerCase().includes(query))),
   })).filter(group => group.items.length > 0), [query]);
 
   function signIn(returnTo = `/docs${location.hash}`) {
@@ -302,8 +316,18 @@ export default function PublicDocsPage() {
             {visibleGroups.length === 0 && <GroupLabel role="status">검색 결과가 없습니다.</GroupLabel>}
             {visibleGroups.map(group => <NavGroup key={group.label}>
               <GroupLabel>{group.label}</GroupLabel>
-              {group.items.map(item => item.active
-                ? <NavItem href="#overview" key={item.label} $active aria-current="page" onClick={() => setSearch('')}>
+              {group.items.map(item => item.article
+                ? <NavItem
+                    href={item.article === 'ssh' ? '#ssh-steps' : '#overview'}
+                    key={item.label}
+                    $active={item.article === article}
+                    aria-current={item.article === article ? 'page' : undefined}
+                    onClick={() => {
+                      setSearch('');
+                      setArticle(item.article ?? 'policy');
+                      setActiveSection(item.article === 'ssh' ? 'ssh-steps' : 'overview');
+                    }}
+                  >
                     <Octicon name={item.icon} size={16} aria-hidden="true" />{item.label}
                   </NavItem>
                 : <StaticNavItem as="span" key={item.label} aria-disabled="true">
@@ -314,7 +338,24 @@ export default function PublicDocsPage() {
         </Sidebar>
         <Main>
           <MainGrid>
-            <MobileArticle>
+            {article === 'ssh' ? <MobileArticle>
+              <Breadcrumb>Docs / 시작하기</Breadcrumb>
+              <PageHeading>
+                <Title>SSH로 접속하기</Title>
+                <Intro>Instance 개요에서 내 접속 명령을 복사하면 빠르게 시작할 수 있습니다. 먼저 VM이 실행 중인지 확인하세요.</Intro>
+              </PageHeading>
+              <Card id="ssh-steps">
+                <CardTitle>접속 순서</CardTitle>
+                <TimelineItem><TimelineIcon><Octicon name="clock" size={20} /></TimelineIcon><TimelineCopy><strong>1. 초기 설정이 끝날 때까지 기다리세요</strong><span>설정 중 배지가 사라지면 SSH 계정을 사용할 수 있습니다. 보통 약 3분이 걸립니다.</span></TimelineCopy></TimelineItem>
+                <TimelineItem><TimelineIcon><Octicon name="copy" size={20} /></TimelineIcon><TimelineCopy><strong>2. 개요의 SSH 명령을 복사하세요</strong><span>외부 SSH 포트는 VM마다 다릅니다. 개요에 표시되는 현재 포트로 접속하세요.</span></TimelineCopy></TimelineItem>
+                <TimelineItem><TimelineIcon><Octicon name="terminal" size={20} /></TimelineIcon><TimelineCopy><strong>3. 터미널에서 실행하고 인증하세요</strong><span>비밀번호 또는 등록한 SSH 키를 사용해 접속하세요.</span></TimelineCopy></TimelineItem>
+              </Card>
+              <Card id="ssh-faq">
+                <CardTitle>연결이 되지 않으면</CardTitle>
+                <TimelineItem><TimelineIcon><Octicon name="question" size={20} /></TimelineIcon><TimelineCopy><strong>SSH 연결이 되지 않습니다</strong><span>VM 상태와 SSH 기본 포트가 있는지 확인하세요. 포트가 없다면 Network에서 기본 포트를 복원하세요.</span></TimelineCopy></TimelineItem>
+                <TimelineItem><TimelineIcon><Octicon name="question" size={20} /></TimelineIcon><TimelineCopy><strong>기간을 연장하면 VM이 자동으로 시작됩니까?</strong><span>만료 후 연장한 VM은 시작 버튼을 눌러 다시 실행해야 합니다.</span></TimelineCopy></TimelineItem>
+              </Card>
+            </MobileArticle> : <MobileArticle>
               <Breadcrumb>Docs / 정책</Breadcrumb>
               <PageHeading>
                 <Title>VM 사용 기간과 연장</Title>
@@ -365,8 +406,8 @@ export default function PublicDocsPage() {
                 </FeedbackButtons></FeedbackHead>
                 <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : demoMode ? '「아니요」를 누르면 이 문서 링크가 첨부된 문의를 작성할 수 있습니다. 문의는 로그인한 뒤 보낼 수 있습니다.' : feedback === 'no' ? '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.'}</FeedbackHint>
               </Card>
-            </MobileArticle>
-            <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
+            </MobileArticle>}
+            <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{tocSections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
           </MainGrid>
         </Main>
       </Layout>

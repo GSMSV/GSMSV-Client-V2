@@ -219,7 +219,16 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequ
 
   const openAdmin = () => {
     setOpen(false);
-    onRequestNavigation(() => { void navigate('/admin/infra'); });
+    onRequestNavigation(() => {
+      // 목데이터 모드에서는 역할을 실제로 관리자로 바꿔야 관리자 콘솔에서 홈으로 되돌려지지 않는다.
+      if (isDemoMode()) {
+        void import('../../../features/auth/select-demo-role').then(({ selectDemoRole }) => {
+          void navigate(selectDemoRole('admin') ?? '/admin/infra');
+        });
+        return;
+      }
+      void navigate('/admin/infra');
+    });
   };
 
   const handleLogout = () => {

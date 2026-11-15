@@ -6,7 +6,7 @@ import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/tea
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
-import { Octicon } from '../../shared/ui/icons';
+import { Octicon, type OcticonName } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
 const Page = styled.div`
@@ -56,8 +56,10 @@ const TopicBar = styled.nav`
   &::-webkit-scrollbar { display: none; }
 `;
 
-const Topic = styled.a<{ $active?: boolean }>`
+const Topic = styled.button<{ $active?: boolean }>`
   display: inline-flex;
+  border: 0;
+  cursor: pointer;
   min-height: 42px;
   flex: 0 0 auto;
   align-items: center;
@@ -69,18 +71,6 @@ const Topic = styled.a<{ $active?: boolean }>`
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   text-decoration: none;
   &:hover { background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : theme.colors.overlayHover}; }
-`;
-
-const UnavailableTopic = styled.span`
-  display: inline-flex;
-  min-height: 42px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  color: ${({ theme }) => theme.colors.muted};
-  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
-  opacity: 0.72;
 `;
 
 const TopicAction = styled.div`
@@ -240,7 +230,101 @@ const FeedbackMessage = styled.p`
 `;
 
 const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
-const unsupportedTopics = ['시작하기', 'Instance', 'SSH Key 등록', 'Public IP / GPU', 'Docker', 'Database', 'Serverless', 'Apps', '팀'];
+type DocsStep = { icon: OcticonName; title: string; description: string };
+type DocsTopic = { id: string; label: string; icon: OcticonName; title: string; description: string; stepsTitle: string; steps: DocsStep[] };
+
+const docsTopics: DocsTopic[] = [
+  {
+    id: 'start', label: '시작하기', icon: 'home', title: 'GSM SV 시작하기', stepsTitle: '시작 순서',
+    description: '학교 계정으로 로그인하면 개인 VM과 Serverless 함수를 바로 만들 수 있습니다.',
+    steps: [
+      { icon: 'sign-in', title: '1. DataGSM으로 로그인하세요', description: '재학생은 첫 로그인 시 일반 계정이 자동으로 만들어집니다.' },
+      { icon: 'plus', title: '2. 첫 VM이나 함수를 만드세요', description: '홈의 VM 만들기 또는 함수 만들기에서 시작할 수 있습니다.' },
+      { icon: 'calendar', title: '3. 사용 기간을 확인하세요', description: '일반 사용자 VM은 생성 7일 뒤 만료되며, 만료 7일 전부터 14일씩 연장할 수 있습니다.' },
+    ],
+  },
+  {
+    id: 'instance', label: 'Instance', icon: 'server', title: 'VM 관리하기', stepsTitle: '관리 순서',
+    description: 'VM 개요에서 상태와 접속 정보, 남은 사용 기간을 확인하고 전원을 관리합니다.',
+    steps: [
+      { icon: 'pulse', title: '1. 개요에서 상태를 확인하세요', description: '실행 중·중지됨·설정 중 상태와 남은 사용 기간이 표시됩니다.' },
+      { icon: 'play', title: '2. 전원을 관리하세요', description: '시작·재시작·종료는 이전 작업이 끝난 뒤에 할 수 있습니다.' },
+      { icon: 'calendar', title: '3. 만료 전에 연장하세요', description: '만료 7일 전부터 사용 목적을 다시 확인하고 14일씩 연장할 수 있습니다.' },
+    ],
+  },
+  {
+    id: 'connection', label: '접속방법', icon: 'terminal', title: 'VM에 SSH로 접속하기', stepsTitle: '접속 순서',
+    description: 'Instance 개요에서 내 접속 명령을 복사하면 빠르게 시작할 수 있습니다. 먼저 VM이 실행 중인지 확인하세요.',
+    steps: [
+      { icon: 'clock', title: '1. 초기 설정이 끝날 때까지 기다리세요', description: '설정 중 배지가 사라지면 SSH 계정을 사용할 수 있습니다. 보통 약 3분이 걸립니다.' },
+      { icon: 'copy', title: '2. 개요의 SSH 명령을 복사하세요', description: '외부 SSH 포트는 VM마다 다릅니다. 개요에 표시되는 현재 포트로 접속하세요.' },
+      { icon: 'terminal', title: '3. 터미널에서 실행하고 인증하세요', description: '비밀번호 또는 등록한 SSH 키를 사용해 접속하세요.' },
+    ],
+  },
+  {
+    id: 'ssh-key', label: 'SSH Key 등록', icon: 'key', title: 'SSH 키 등록', stepsTitle: '등록 순서',
+    description: '키를 등록해 VM에 편리하게 접속하세요.',
+    steps: [
+      { icon: 'terminal', title: '1. 터미널에서 키를 만드세요', description: 'ssh-keygen -t ed25519 명령으로 공개 키와 개인 키를 만듭니다.' },
+      { icon: 'copy', title: '2. 공개 키를 VM에 추가하세요', description: 'VM에 접속한 뒤 ~/.ssh/authorized_keys에 공개 키를 붙여 넣습니다.' },
+      { icon: 'key', title: '3. 키로 접속하세요', description: '개요의 SSH 명령에 -i 옵션으로 개인 키 파일을 지정합니다.' },
+    ],
+  },
+  {
+    id: 'network', label: 'Public IP / GPU', icon: 'globe', title: 'Public IP와 GPU', stepsTitle: '외부 공개 순서',
+    description: 'VM은 학교 Network 안에서 실행됩니다. 외부 접속은 VM Network의 포트와 HTTPS Domain으로 엽니다.',
+    steps: [
+      { icon: 'link', title: '1. 외부 접속 포트를 여세요', description: 'VM Network에서 포트를 추가하면 외부 포트가 배정됩니다.' },
+      { icon: 'globe', title: '2. HTTPS Domain을 연결하세요', description: '웹 서비스는 Domain을 연결해 HTTPS로 공개할 수 있습니다.' },
+      { icon: 'cpu', title: '3. GPU가 필요하면 문의하세요', description: 'GPU VM은 기본으로 제공하지 않습니다. 사용 목적과 함께 문의를 남겨주세요.' },
+    ],
+  },
+  {
+    id: 'docker', label: 'Docker', icon: 'file-code', title: 'VM에서 Docker 쓰기', stepsTitle: '실행 순서',
+    description: 'Ubuntu VM에 Docker를 설치하면 컨테이너로 서비스를 실행할 수 있습니다.',
+    steps: [
+      { icon: 'download', title: '1. Docker를 설치하세요', description: '공식 apt 저장소를 추가하고 Docker Engine을 설치합니다.' },
+      { icon: 'play', title: '2. 컨테이너를 실행하세요', description: 'docker run -p 옵션으로 컨테이너 포트를 VM 포트에 연결합니다.' },
+      { icon: 'link', title: '3. 포트를 외부에 여세요', description: 'VM Network에 같은 포트를 추가해야 외부에서 접속할 수 있습니다.' },
+    ],
+  },
+  {
+    id: 'database', label: 'Database', icon: 'database', title: 'Database 발급과 접속', stepsTitle: '사용 순서',
+    description: 'VM에 설치하지 않고 바로 쓰는 MySQL입니다.',
+    steps: [
+      { icon: 'plus', title: '1. Database를 발급하세요', description: 'Database 화면에서 이름을 정하고 발급합니다.' },
+      { icon: 'key', title: '2. 접속 정보를 확인하세요', description: '상세 화면에서 호스트, 포트, 사용자와 비밀번호를 확인합니다.' },
+      { icon: 'graph', title: '3. 용량을 관리하세요', description: '용량을 80% 넘게 쓰면 알림을 보내고, 가득 차면 쓰기가 막힙니다.' },
+    ],
+  },
+  {
+    id: 'serverless', label: 'Serverless', icon: 'zap', title: 'Serverless 함수', stepsTitle: '사용 순서',
+    description: 'HTTP 요청이나 정해진 시간에 JavaScript·TypeScript 함수를 실행하세요.',
+    steps: [
+      { icon: 'code', title: '1. 함수를 만드세요', description: '런타임을 고르고 코드를 작성합니다.' },
+      { icon: 'link', title: '2. 트리거를 연결하세요', description: 'HTTP 호출 주소나 실행 일정을 연결합니다.' },
+      { icon: 'history', title: '3. 실행 Log를 확인하세요', description: '테스트 실행 결과와 실행 Log에서 오류를 확인합니다.' },
+    ],
+  },
+  {
+    id: 'apps', label: 'Apps', icon: 'upload', title: 'Apps 배포', stepsTitle: '배포 순서',
+    description: 'GitHub 저장소를 연결하면 빌드해서 띄워 줍니다.',
+    steps: [
+      { icon: 'link', title: '1. 저장소를 연결하세요', description: '앱 만들기에서 GitHub 저장소와 브랜치를 고릅니다.' },
+      { icon: 'gear', title: '2. 서비스를 설정하세요', description: '웹 서비스와 환경 변수를 설정합니다.' },
+      { icon: 'sync', title: '3. push하면 다시 배포됩니다', description: 'GitHub에 push하면 자동으로 다시 배포됩니다.' },
+    ],
+  },
+  {
+    id: 'team', label: '팀', icon: 'people', title: '팀으로 사용하기', stepsTitle: '사용 순서',
+    description: '팀을 만들면 팀 VM과 공유 Resource를 함께 관리할 수 있습니다.',
+    steps: [
+      { icon: 'people', title: '1. 팀을 만드세요', description: '팀 만들기에서 신청하면 관리자가 확인한 뒤 승인합니다.' },
+      { icon: 'person', title: '2. 팀원을 초대하세요', description: '팀 설정에서 이메일로 초대하고 역할을 정합니다.' },
+      { icon: 'shield', title: '3. 역할을 확인하세요', description: '팀장과 DevOps 엔지니어는 팀 VM을 만들고 관리할 수 있습니다.' },
+    ],
+  },
+];
 const navigationPaths: Partial<Record<StudentNavigationKey, string>> = {
   home: '/',
   database: '/databases',
@@ -255,6 +339,11 @@ export default function AuthenticatedDocsPage() {
   const demoMode = isDemoMode();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
+  const [topicId, setTopicId] = useState(() => {
+    const hash = window.location.hash.slice(1);
+    return docsTopics.some(topic => topic.id === hash) ? hash : 'connection';
+  });
+  const topic = docsTopics.find(item => item.id === topicId) ?? docsTopics[2];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -281,7 +370,7 @@ export default function AuthenticatedDocsPage() {
 
   useEffect(() => {
     const sectionId = window.location.hash.slice(1);
-    if (sectionId === 'connection' || sectionId === 'faq') {
+    if (sectionId === 'faq' || docsTopics.some(item => item.id === sectionId)) {
       requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: 'start' }));
     }
   }, []);
@@ -326,39 +415,38 @@ export default function AuthenticatedDocsPage() {
           <Intro>처음 만드는 VM부터 SSH 접속까지, 필요한 내용을 찾아보세요.</Intro>
         </TitleBlock>
         <TopicBar aria-label="Docs 주제">
-          {unsupportedTopics.slice(0, 2).map(topic => <UnavailableTopic key={topic} aria-disabled="true" title="이 문서는 아직 제공되지 않습니다">{topic}</UnavailableTopic>)}
-          <Topic href="#connection" $active aria-current="page">접속방법</Topic>
-          {unsupportedTopics.slice(2).map(topic => <UnavailableTopic key={topic} aria-disabled="true" title="이 문서는 아직 제공되지 않습니다">{topic}</UnavailableTopic>)}
-          <Topic href="#faq">FAQ</Topic>
+          {docsTopics.map(item => <Topic
+            key={item.id}
+            type="button"
+            $active={item.id === topic.id}
+            aria-current={item.id === topic.id ? 'page' : undefined}
+            onClick={() => {
+              setTopicId(item.id);
+              window.history.replaceState(window.history.state, '', `#${item.id}`);
+            }}
+          >{item.label}</Topic>)}
+          <Topic as="a" href="#faq">FAQ</Topic>
           <TopicAction>
             <Button variant="secondary" disabled={!demoMode} title={!demoMode ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </TopicAction>
         </TopicBar>
 
-        <InfoBanner id="connection">
-          <BannerIcon><Octicon name="terminal" size={16} aria-hidden="true" /></BannerIcon>
+        <InfoBanner id={topic.id}>
+          <BannerIcon><Octicon name={topic.icon} size={16} aria-hidden="true" /></BannerIcon>
           <BannerCopy>
-            <BannerTitle>VM에 SSH로 접속하기</BannerTitle>
-            <BannerDescription>Instance 개요에서 내 접속 명령을 복사하면 빠르게 시작할 수 있습니다. 먼저 VM이 실행 중인지 확인하세요.</BannerDescription>
+            <BannerTitle>{topic.title}</BannerTitle>
+            <BannerDescription>{topic.description}</BannerDescription>
           </BannerCopy>
           <Button variant="secondary" onClick={() => navigate('/')} icon={<Octicon name="server" size={16} />}>내 Resources 보기</Button>
         </InfoBanner>
 
-        <Card aria-labelledby="connection-steps-title">
-          <CardTitle id="connection-steps-title">접속 순서</CardTitle>
+        <Card aria-labelledby="topic-steps-title">
+          <CardTitle id="topic-steps-title">{topic.stepsTitle}</CardTitle>
           <Steps>
-            <Step>
-              <StepIcon><Octicon name="clock" size={20} aria-hidden="true" /></StepIcon>
-              <StepCopy><strong>1. 초기 설정이 끝날 때까지 기다리세요</strong><span>설정 중 배지가 사라지면 SSH 계정을 사용할 수 있습니다. 보통 약 3분이 걸립니다.</span></StepCopy>
-            </Step>
-            <Step>
-              <StepIcon><Octicon name="copy" size={20} aria-hidden="true" /></StepIcon>
-              <StepCopy><strong>2. 개요의 SSH 명령을 복사하세요</strong><span>외부 SSH 포트는 VM마다 다릅니다. 개요에 표시되는 현재 포트로 접속하세요.</span></StepCopy>
-            </Step>
-            <Step>
-              <StepIcon><Octicon name="terminal" size={20} aria-hidden="true" /></StepIcon>
-              <StepCopy><strong>3. 터미널에서 실행하고 인증하세요</strong><span>비밀번호 또는 등록한 SSH 키를 사용해 접속하세요.</span></StepCopy>
-            </Step>
+            {topic.steps.map(step => <Step key={step.title}>
+              <StepIcon><Octicon name={step.icon} size={20} aria-hidden="true" /></StepIcon>
+              <StepCopy><strong>{step.title}</strong><span>{step.description}</span></StepCopy>
+            </Step>)}
           </Steps>
         </Card>
 

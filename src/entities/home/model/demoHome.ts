@@ -11,10 +11,32 @@ export interface DemoFunctionSummary {
   executionsToday: number;
 }
 
+/** 홈 「VM을 만들지 못했어요」 배너에 다시 보여 줄 생성 요청 설정. */
+export interface DemoVmCreateFailure {
+  name: string;
+  purpose: string;
+  cpu: number;
+  memory: number;
+  disk: number;
+  os: 'Linux Ubuntu 22.04 LTS' | 'Ubuntu Server';
+}
+
 export interface DemoHomeState {
   firstVisit: boolean;
   functions: DemoFunctionSummary[];
+  vmCreateFailure?: DemoVmCreateFailure | null;
+  /** 졸업 안내를 닫은 졸업일(YYYY.MM.DD). 관리자가 날짜를 바꾸면 다시 안내한다. */
+  graduationNoticeDismissedFor?: string;
 }
+
+export const demoVmCreateFailureSeed: DemoVmCreateFailure = {
+  name: 'library-api',
+  purpose: '도서관 대출 현황 API 서버 운영',
+  cpu: 2,
+  memory: 4,
+  disk: 20,
+  os: 'Linux Ubuntu 22.04 LTS',
+};
 
 const seedHome: DemoHomeState = {
   firstVisit: false,
@@ -50,4 +72,22 @@ export function saveDemoHomeState(value: DemoHomeState): boolean {
 export function setDemoFirstVisit(firstVisit: boolean): boolean {
   const current = getDemoHomeState();
   return current ? saveDemoHomeState({ ...current, firstVisit }) : false;
+}
+
+function updateDemoHomeState(changes: Partial<DemoHomeState>): boolean {
+  const current = getDemoHomeState();
+  return current ? saveDemoHomeState({ ...current, ...changes }) : false;
+}
+
+/** VM 생성 요청이 자원 부족으로 실패했음을 기록한다. 홈에 실패 배너가 나타난다. */
+export function recordDemoVmCreateFailure(failure: DemoVmCreateFailure): boolean {
+  return updateDemoHomeState({ vmCreateFailure: failure });
+}
+
+export function clearDemoVmCreateFailure(): boolean {
+  return updateDemoHomeState({ vmCreateFailure: null });
+}
+
+export function dismissDemoGraduationNotice(graduationDate: string): boolean {
+  return updateDemoHomeState({ graduationNoticeDismissedFor: graduationDate });
 }
