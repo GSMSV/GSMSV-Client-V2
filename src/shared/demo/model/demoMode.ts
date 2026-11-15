@@ -39,7 +39,7 @@ export function startDemoSession(role: SessionUserRole): boolean {
 
   saveSessionUser({
     id: role === 'admin' ? 'demo-admin' : 'demo-student',
-    name: role === 'admin' ? 'Demo Admin' : '김민수',
+    name: role === 'admin' ? 'Demo Admin' : '김지민',
     role,
   });
   return true;

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
+import { prepareDemoFirstVisit } from './prepareDemoFirstVisit';
 import { startDemoSession, stopDemoMode } from '../../shared/demo';
 
 const Page = styled.main`
@@ -63,23 +64,7 @@ export default function DemoEntryPage() {
       const { resumeDemoProfile } = await import('../../entities/profile');
       if (!startDemoSession(role) || !resumeDemoProfile()) return;
     } else if (!startDemoSession(role)) return;
-    if (role === 'user') {
-      const [{ setDemoFirstVisit }, vm, serverless] = await Promise.all([
-        import('../../entities/home'),
-        import('../../entities/vm'),
-        import('../../entities/serverless'),
-      ]);
-      setDemoFirstVisit(firstVisit);
-      if (firstVisit) {
-        const state = vm.getDemoVmState();
-        vm.saveDemoVmState({
-          ...state,
-          vms: state.vms.filter(item => item.owner !== 'personal'),
-          personalQuota: { ...state.personalQuota, cpu: 0, memory: 0, disk: 0 },
-        });
-        await serverless.clearDemoServerlessFunctions();
-      }
-    }
+    if (role === 'user') await prepareDemoFirstVisit(firstVisit);
     navigate(role === 'admin' ? '/admin/infra' : '/');
   }
 

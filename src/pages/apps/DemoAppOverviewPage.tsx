@@ -456,7 +456,7 @@ export function DemoAppOverviewPage() {
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         scopeOptions={scopeOptions}
-        userName={user?.name ?? "김민수"}
+        userName={user?.name ?? "김지민"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
         onOpenStatus={() => navigate("/status")}
@@ -495,7 +495,7 @@ export function DemoAppOverviewPage() {
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       scopeOptions={scopeOptions}
-      userName={user?.name ?? "김민수"}
+      userName={user?.name ?? "김지민"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
       onOpenStatus={() => navigate("/status")}
@@ -699,7 +699,7 @@ export function DemoAppSettingsPage() {
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         scopeOptions={scopeOptions}
-        userName={user?.name ?? "김민수"}
+        userName={user?.name ?? "김지민"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
         onOpenStatus={() => navigate("/status")}
@@ -798,7 +798,7 @@ export function DemoAppSettingsPage() {
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       scopeOptions={scopeOptions}
-      userName={user?.name ?? "김민수"}
+      userName={user?.name ?? "김지민"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
       onOpenStatus={() => navigate("/status")}
@@ -1083,7 +1083,7 @@ export function DemoAddServicePage() {
         activeItem="apps"
         scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
         scopeOptions={scopeOptions}
-        userName={user?.name ?? "김민수"}
+        userName={user?.name ?? "김지민"}
         onNavigate={go}
         onCreateTeam={() => navigate("/teams/new")}
         onOpenStatus={() => navigate("/status")}
@@ -1104,7 +1104,7 @@ export function DemoAddServicePage() {
       activeItem="apps"
       scopeLabel={teamPath ? app?.owner?.name ?? "팀 Resources" : "내 Resources"}
       scopeOptions={scopeOptions}
-      userName={user?.name ?? "김민수"}
+      userName={user?.name ?? "김지민"}
       onNavigate={go}
       onCreateTeam={() => navigate("/teams/new")}
       onOpenStatus={() => navigate("/status")}

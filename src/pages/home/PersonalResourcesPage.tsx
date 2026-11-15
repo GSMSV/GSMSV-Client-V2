@@ -643,7 +643,7 @@ export default function PersonalResourcesPage() {
       } : null);
       setDemoVms(personalVms);
       setInitializingVms(personalVms.filter(vmRepository.isDemoVmInitializing).map(vm => vm.id));
-      setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' }), loading: false, error: false });
+      setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김지민' }), loading: false, error: false });
       setDatabases({ value: databaseRepository.listDemoDatabases('me'), loading: false, error: false });
       const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
       setQuota({

@@ -87,7 +87,7 @@ const demoAppSeed: DemoManagedApp[] = [
   {
     id: "demo-portfolio-web",
     name: "portfolio-web",
-    owner: { type: "user", id: "demo-student", name: "김민수" },
+    owner: { type: "user", id: "demo-student", name: "김지민" },
     sourceType: "github",
     repository: "gsm-jimin/portfolio-web",
     branch: "main",
@@ -359,7 +359,7 @@ export function getDemoAppSummaries(owner?: AppOwner): AppListItem[] {
       grn: `grn:gsmsv:app:${app.owner?.id ?? "demo-student"}:${app.id}`,
       id: app.id,
       name: app.name,
-      owner: app.owner ?? { type: "user", id: "demo-student", name: "김민수" },
+      owner: app.owner ?? { type: "user", id: "demo-student", name: "김지민" },
       status: isDemoAppExpired(app) ? "suspended" : "active",
       created_by: "demo-student",
       created_at: "2026-10-01T00:00:00.000Z",
@@ -542,7 +542,7 @@ export function getDemoAppQuota(owner: Pick<AppOwner, "type" | "id">) {
   };
 }
 
-export const demoPersonalAppOwner = { type: "user", id: "demo-student", name: "김민수" } as const;
+export const demoPersonalAppOwner = { type: "user", id: "demo-student", name: "김지민" } as const;
 
 export function isDemoAppSubdomainAvailable(value: string, currentServiceId?: string) {
   const reserved = ["www", "api", "admin", "status", "docs", "reserved", "login"];

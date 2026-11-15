@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { getLastUsedDemoRole, selectDemoRole } from '../../features/auth/select-demo-role';
 import type { SessionUserRole } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
+import { prepareDemoFirstVisit } from '../demo/prepareDemoFirstVisit';
 
 const Screen = styled.main`
   position: relative;
@@ -203,14 +204,23 @@ const ContinueActions = styled.div`
 
 export default function RoleSelectionDemoPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const firstVisit = searchParams.get('firstVisit') === '1';
   const [lastRole] = useState<SessionUserRole>(getLastUsedDemoRole);
-  const [selectedRole, setSelectedRole] = useState<SessionUserRole>(getLastUsedDemoRole);
+  // 검토용: `?role=admin|user`로 선택을 미리 지정할 수 있다(화면 구성은 그대로).
+  const [selectedRole, setSelectedRole] = useState<SessionUserRole>(() => {
+    const requested = searchParams.get('role');
+    return requested === 'admin' || requested === 'user' ? requested : getLastUsedDemoRole();
+  });
 
   if (!isDemoMode()) return <Navigate to="/login" replace />;
 
-  function continueWithRole() {
+  async function continueWithRole() {
     const destination = selectDemoRole(selectedRole);
-    if (destination) navigate(destination, { replace: true });
+    if (!destination) return;
+    // 검토용: `?firstVisit=1`이면 학생을 Figma 04(첫 방문) 상태로 시작한다.
+    if (selectedRole === 'user' && firstVisit) await prepareDemoFirstVisit(true);
+    navigate(destination, { replace: true });
   }
 
   return (
