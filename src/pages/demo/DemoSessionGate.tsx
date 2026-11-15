@@ -20,6 +20,8 @@ export default function DemoSessionGate() {
   const profile = getDemoProfile();
   const canVisitSignedOut = pathname === '/login'
     || pathname === '/__demo/role-selection'
+    || pathname === '/cli'
+    || pathname === '/cli/approve'
     || pathname === '/docs'
     || pathname === '/status'
     || pathname.startsWith('/public/')
