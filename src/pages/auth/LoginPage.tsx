@@ -220,7 +220,7 @@ export function LoginPage() {
     if (isDemoMode()) {
       const { resumeDemoProfile } = await import('../../entities/profile');
       if (resumeDemoProfile()) {
-        const returnTo = getCliReturnPath(searchParams.get('returnTo'));
+        const returnTo = getDemoReturnPath(searchParams.get('returnTo'));
         if (returnTo) {
           const { selectDemoRole } = await import('../../features/auth/select-demo-role');
           if (selectDemoRole('user')) void navigate(returnTo, { replace: true });
@@ -287,7 +287,7 @@ export function LoginPage() {
   );
 }
 
-function getCliReturnPath(value: string | null): string | null {
+function getDemoReturnPath(value: string | null): string | null {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
   try {
     const target = new URL(value, window.location.origin);
@@ -296,6 +296,12 @@ function getCliReturnPath(value: string | null): string | null {
     if (target.pathname === '/cli/approve') {
       if (!target.searchParams.get('code')?.trim()) return '/cli';
       return `${target.pathname}${target.search}`;
+    }
+    if (/^\/vms\/new(?:\/(?:details|review))?$/.test(target.pathname)) {
+      return `${target.pathname}${target.search}${target.hash}`;
+    }
+    if (/^\/vms\/[^/]+(?:\/(?:network|monitoring|snapshots|settings))?$/.test(target.pathname)) {
+      return `${target.pathname}${target.search}${target.hash}`;
     }
   } catch {
     return null;
