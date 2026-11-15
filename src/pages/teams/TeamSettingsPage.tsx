@@ -10,9 +10,10 @@ import { StudentShell, type StudentNavigationKey } from '../../widgets/student-s
 import { cancelTeamInvitation, inviteTeamMember, listTeamInvitations, type TeamInvitation } from '../../features/team/manage-invitations';
 import { ApiRequestError } from '../../shared/api';
 import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
-import type { DemoTeamDetail } from '../../entities/team/demo';
+import type { DemoStudentAccount, DemoTeamDetail } from '../../entities/team/demo';
 import type { TeamMember } from '../../entities/team';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { AccountDialog, DialogCopy } from '../../features/settings/demo-account/ui/AccountDialog';
 
 const TransferDemoTeamLeader = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader })));
 const DemoTeamDisbandRequest = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest })));
@@ -275,7 +276,9 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   const [memberAction, setMemberAction] = useState<{ member: TeamMember; action: 'grant' | 'revoke' | 'remove' } | null>(null);
   const demoMode = isDemoMode();
   const [confirmCancel, setConfirmCancel] = useState<TeamInvitation | null>(null);
-
+  const [findStudent, setFindStudent] = useState<{ find: (email: string) => DemoStudentAccount | undefined } | null>(null);
+  const [inviteDialog, setInviteDialog] = useState<{ email: string; account?: DemoStudentAccount; lookedUpEmail: string } | null>(null);
+  const [inviteDialogError, setInviteDialogError] = useState('');
   const selectedTeamId = routeTeamId ?? null;
   const scopeLabel = team ? `${team.name} · ${team.my_role ? roleLabels[team.my_role] : '관리자'}` : '팀 설정';
   const scopeOptions = useMemo(() => [
@@ -294,6 +297,13 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (isDemoMode()) {
       const demo = await import('../../entities/team/demo');
       const vmRepository = await import('../../entities/vm');
+      try {
+        // Figma 33-09 로딩, 33-10 오류(?demoError=team-settings)
+        await simulateDemoRequest('team-settings', signal);
+      } catch {
+        if (!signal?.aborted) { setError(true); setTeam(null); setLoading(false); }
+        return;
+      }
       if (signal?.aborted) return;
       const detail = demo.getDemoTeam(selectedTeamId);
       const myTeams = demo.listDemoTeams();
@@ -305,6 +315,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
         ssd_gb: { used: vmQuota.disk, limit: vmQuota.diskLimit },
       } } } : detail;
       setTeam(syncedDetail); setTeams(myTeams);
+      setFindStudent({ find: demo.findDemoStudentAccount });
       setInvitations(demo.listDemoTeamInvitations(selectedTeamId));
       setQuotaRequestSent(demo.listDemoTeamQuotaRequests(selectedTeamId).length > 0);
       setLoading(false);
@@ -351,20 +362,48 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
       setFormError('학교 이메일을 입력해 주세요.');
       return;
     }
+    if (isDemoMode()) {
+      // Figma 33-01/33-02: 보내기 전에 계정을 찾아 확인 대화상자를 띄운다.
+      setFormError(''); setInviteError('');
+      openInviteDialog(trimmed);
+      return;
+    }
     setBusyAction('invite'); setFormError(''); setInviteError('');
     try {
-      if (isDemoMode()) {
-        const { inviteDemoTeamMember } = await import('../../entities/team/demo');
-        inviteDemoTeamMember(selectedTeamId!, trimmed);
-        setEmail('');
-        refresh();
-        return;
-      }
       await inviteTeamMember(selectedTeamId!, trimmed);
       setEmail('');
       refresh();
     } catch (cause) {
       setInviteError(errorMessage(cause, '초대를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'));
+    } finally { setBusyAction(null); }
+  };
+
+  function openInviteDialog(target: string) {
+    setInviteDialogError('');
+    setInviteDialog({ email: target, lookedUpEmail: target, account: findStudent?.find(target) });
+  }
+
+  const confirmDemoInvite = async () => {
+    if (!inviteDialog || !selectedTeamId) return;
+    const target = inviteDialog.email.trim();
+    if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
+      setInviteDialogError('학교 이메일을 입력해 주세요.');
+      return;
+    }
+    // 주소를 고쳤거나 찾지 못한 상태라면 다시 찾는다.
+    if (target !== inviteDialog.lookedUpEmail || !inviteDialog.account) {
+      openInviteDialog(target);
+      return;
+    }
+    setBusyAction('invite');
+    try {
+      const { inviteDemoTeamMember } = await import('../../entities/team/demo');
+      inviteDemoTeamMember(selectedTeamId, target);
+      setInviteDialog(null);
+      setEmail('');
+      refresh();
+    } catch (cause) {
+      setInviteDialogError(errorMessage(cause, '초대를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'));
     } finally { setBusyAction(null); }
   };
 
@@ -430,6 +469,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
   } else {
     const quota = team.quota?.vm;
     const inviteAllowed = canInvite;
+    const inlineMatch = demoMode && email.trim() ? findStudent?.find(email) : undefined;
     const permissionMessage = team.status === 'rejected'
       ? '거절된 팀은 초대할 수 없습니다.'
       : team.permissions.invite_member ? '팀장만 초대를 보낼 수 있습니다.' : '현재 계정에는 초대 권한이 없습니다.';
@@ -477,7 +517,10 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
             <InviteHeader><PanelTitle id="invite-form-title">팀원 초대</PanelTitle><Button type="submit" form="team-invite-form" variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!inviteAllowed || busyAction === 'invite'}>{busyAction === 'invite' ? '보내는 중…' : '초대 보내기'}</Button></InviteHeader>
             <InviteForm id="team-invite-form" onSubmit={handleInvite}>
               <TextField label="학교 이메일" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.currentTarget.value); setFormError(''); }} placeholder="student@school.example" error={formError || undefined} disabled={!inviteAllowed || busyAction === 'invite'} />
-              <Hint>초대할 학생의 학교 이메일 전체를 입력하세요. 가입 여부는 공개되지 않으며 학교 도메인은 서버가 확인합니다.</Hint>
+              {demoMode ? <>
+                <Hint>초대할 학생의 학교 이메일을 정확히 입력하세요. GSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.</Hint>
+                {inlineMatch && <Hint>{inlineMatch.name} · {inlineMatch.classLabel} — 일반 팀원으로 초대됩니다.</Hint>}
+              </> : <Hint>초대할 학생의 학교 이메일 전체를 입력하세요. 가입 여부는 공개되지 않으며 학교 도메인은 서버가 확인합니다.</Hint>}
               {!inviteAllowed && <Hint>{permissionMessage}</Hint>}
               {inviteError && <InlineError role="alert">{inviteError}</InlineError>}
             </InviteForm>
@@ -548,6 +591,24 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <DemoTeamDisbandRequest team={team} onDismiss={() => setShowDisband(false)}
             onSave={() => { setShowDisband(false); refresh(); }} />
         </Suspense>}
+        {demoMode && inviteDialog && (inviteDialog.account
+          ? <AccountDialog title="팀원 초대" icon="people"
+            description={`· ${inviteDialog.account.name} · ${inviteDialog.account.classLabel}\n· 일반 팀원으로 초대됩니다. 링크는 7일 동안 1번만 쓸 수 있습니다.`}
+            onDismiss={() => setInviteDialog(null)} actions={<>
+              <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => setInviteDialog(null)} disabled={busyAction === 'invite'}>취소</Button>
+              <Button icon={<Octicon name="plus" size={16} />} onClick={() => void confirmDemoInvite()} disabled={busyAction === 'invite'}>{busyAction === 'invite' ? '보내는 중…' : '초대 보내기'}</Button>
+            </>}>
+            <TextField label="학교 이메일" type="email" value={inviteDialog.email} onChange={event => { const value = event.currentTarget.value; setInviteDialog(current => current && { ...current, email: value }); setInviteDialogError(''); }} />
+            {inviteDialogError && <DialogCopy role="alert">{inviteDialogError}</DialogCopy>}
+          </AccountDialog>
+          : <AccountDialog title="초대할 계정을 찾지 못했습니다" icon="search"
+            description={'GSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.\n먼저 로그인해 달라고 알려주세요.'}
+            onDismiss={() => setInviteDialog(null)} actions={
+              <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={() => void confirmDemoInvite()}>초대 보내기</Button>
+            }>
+            <TextField label="학교 이메일" type="email" value={inviteDialog.email} onChange={event => { const value = event.currentTarget.value; setInviteDialog(current => current && { ...current, email: value }); setInviteDialogError(''); }} />
+            <DialogCopy role="alert">{inviteDialogError || (inviteDialog.email.trim() === inviteDialog.lookedUpEmail ? '일치하는 계정이 없습니다.' : '')}</DialogCopy>
+          </AccountDialog>)}
         {demoMode && showQuotaRequest && <TeamQuotaRequestDialog
           onDismiss={() => setShowQuotaRequest(false)} onSubmit={submitQuotaRequest} />}
         {demoMode && showLeave && <Suspense fallback={null}>

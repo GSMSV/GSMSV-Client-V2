@@ -1,6 +1,5 @@
-import { type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
-import { Navigate } from 'react-router';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Navigate, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { isDemoMode } from '../../../shared/demo';
 import type { StudentNavigationKey } from '../../../widgets/student-shell';
@@ -9,6 +8,9 @@ import { mobileNavigationMedia, useResponsiveNavigation } from '../../../shared/
 import { Octicon } from '../../../shared/ui/icons';
 import { getSessionUser } from '../../../entities/session';
 import { listDemoTeams } from '../../../entities/team/demo';
+import { listNotifications } from '../../../entities/notification';
+import { Button } from '../../../shared/ui/controls';
+import { NotificationPanel } from '../../../widgets/notification-panel';
 
 const AdminLayout = styled.div`
   display: flex;
@@ -133,11 +135,6 @@ const AdminSearch = styled.div`
   color: ${({ theme }) => theme.colors.muted};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
   @media ${mobileNavigationMedia} { grid-area: search; width: 100%; min-width: 0; }
-`;
-const AdminIdentity = styled.span`
-  color: ${({ theme }) => theme.colors.text};
-  font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
-  @media ${mobileNavigationMedia} { grid-area: identity; }
 `;
 const AdminMenuToggle = styled.button`
   display: none;
@@ -377,12 +374,28 @@ export const Stat = styled.div`
 export function WorkflowLayout({ children, admin = false, activeAdminItem = '승인', activeStudentItem = 'none', scopeLabel = '내 Resources', teamScopeId }: { children: ReactNode; admin?: boolean; activeAdminItem?: string; activeStudentItem?: StudentNavigationKey; scopeLabel?: string; teamScopeId?: string }) {
   const navigate = useNavigate();
   const navigation = useResponsiveNavigation();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const closeNotifications = useCallback(() => {
+    setNotificationsOpen(false);
+    window.requestAnimationFrame(() => document.getElementById('workflow-admin-notifications-trigger')?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!admin) return;
+    const controller = new AbortController();
+    void listNotifications(controller.signal)
+      .then(result => { if (!controller.signal.aborted) setUnreadCount(result.unread_count); })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [admin]);
 
   if (admin) {
+    // Figma 26~31의 관리자 사이드바와 같은 목적지: 승인은 팀 승인(27), 전체 VM은 목록(28)이다.
     const primary = [
       ['인프라 현황', 'pulse', '/admin/infra'],
-      ['승인', 'checklist', '/admin/database-approvals'],
-      ['전체 VM', 'server', '/admin/vms/demo-vm-1'],
+      ['승인', 'checklist', '/admin/team-approvals'],
+      ['전체 VM', 'server', '/admin/vms'],
       ['문의 답변', 'comment-discussion', '/admin/inquiries'],
       ['관리자 점검', 'shield', '/admin/accounts'],
     ] as const;
@@ -397,11 +410,11 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
           <Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand>
           <Workspace>관리자 워크스페이스</Workspace>
           <AdminNav>
-            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} aria-current={label === activeAdminItem ? 'page' : undefined} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
             <AdminDivider />
             {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
           </AdminNav>
-          <div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div>
+          <AdminNavButton type="button" $active={false} style={{ marginTop: 'auto' }} onClick={() => { navigation.close(); void navigate('/status'); }}><Octicon name="pulse" size={16} />서비스 상태</AdminNavButton>
         </AdminSidebar>
         {navigation.open && <AdminNavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
         <AdminMain inert={navigation.open}>
@@ -416,10 +429,19 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
             ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></AdminMenuToggle>
             <AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel>
             <AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch>
-            <AdminHeaderActions><AdminIdentity>♙ 관리자</AdminIdentity></AdminHeaderActions>
+            <AdminHeaderActions>
+              <Button id="workflow-admin-notifications-trigger" variant="ghost" icon={<Octicon name="bell" size={16} />} aria-expanded={notificationsOpen} aria-controls="notification-panel" onClick={() => setNotificationsOpen(value => !value)}>알림{unreadCount > 0 ? ` ${unreadCount}` : ''}</Button>
+              <Button variant="ghost" icon={<Octicon name="person" size={16} />} disabled>관리자</Button>
+            </AdminHeaderActions>
           </AdminHeader>
           <AdminContent>{children}</AdminContent>
         </AdminMain>
+        <NotificationPanel
+          open={notificationsOpen}
+          onClose={closeNotifications}
+          onUnreadCountChange={setUnreadCount}
+          onOpenResource={path => navigate(path)}
+        />
       </AdminLayout>
     );
   }

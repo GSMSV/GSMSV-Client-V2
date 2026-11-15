@@ -23,6 +23,31 @@ export interface DemoTeamQuotaRequest {
 
 export interface DemoTeamDetail extends TeamDetail {
   demoDisbandPending?: boolean;
+  /** 관리자가 승인·거절한 뒤 팀장이 아직 결과 안내를 확인하지 않았다. */
+  demoDecisionNotice?: 'approved' | 'rejected';
+}
+
+export interface DemoStudentAccount {
+  name: string;
+  email: string;
+  classLabel: string;
+}
+
+/** GSM SV에 한 번 이상 로그인한 학생 목록(초대 계정 조회용 목데이터). */
+const demoStudentDirectory: DemoStudentAccount[] = [
+  { name: '오세린', email: 'serin@example.com', classLabel: '1학년 2반 5번' },
+  { name: '박민준', email: 'minjun@example.com', classLabel: '2학년 1반 12번' },
+  { name: '이서아', email: 'student@example.com', classLabel: '2학년 3반 8번' },
+  { name: '김지민', email: 'jimin@example.com', classLabel: '2학년 1반 7번' },
+  { name: '한도윤', email: 'doyoon@example.com', classLabel: '2학년 1반 12번' },
+  { name: '윤채원', email: 'chaewon@example.com', classLabel: '2학년 1반 15번' },
+];
+
+/** 초대할 학생 계정을 학교 이메일로 찾는다. 없으면 undefined. */
+export function findDemoStudentAccount(email: string): DemoStudentAccount | undefined {
+  if (!isDemoMode()) return undefined;
+  const normalized = email.trim().toLowerCase();
+  return demoStudentDirectory.find(account => account.email === normalized);
 }
 
 interface DemoTeamState {
@@ -146,7 +171,7 @@ export function createDemoTeam(name: string): TeamSummary {
     status: 'pending',
     rejection_reason: null,
     my_role: 'leader',
-    members: [{ member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader', profile_image_url: null, joined_at: new Date().toISOString() }],
+    members: [{ member_id: 'demo-student', name: '김지민', email: 'jimin@example.com', role: 'leader', profile_image_url: null, joined_at: new Date().toISOString() }],
     quota: { vm: { vcpu: { used: 0, limit: 4 }, ram_gb: { used: 0, limit: 8 }, ssd_gb: { used: 0, limit: 60 } } },
     permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: true },
   };
@@ -167,6 +192,7 @@ export function setDemoTeamApproval(teamId: string, status: 'approved' | 'reject
   const nextTeam: DemoTeamDetail = {
     ...team,
     status,
+    demoDecisionNotice: status,
     rejection_reason: status === 'rejected' ? options.rejectionReason?.trim() || null : null,
     quota: status === 'approved' && team.quota ? {
       vm: {
@@ -181,6 +207,32 @@ export function setDemoTeamApproval(teamId: string, status: 'approved' | 'reject
     teams: state.teams.map(item => item.id === id ? nextTeam : item),
     invitations: status === 'rejected' ? state.invitations.filter(item => item.teamId !== id) : state.invitations,
   });
+}
+
+/** 팀장이 승인·거절 안내를 확인했다. */
+export function dismissDemoTeamDecisionNotice(teamId: string): boolean {
+  const state = getState();
+  const id = resolveDemoTeamId(teamId);
+  if (!isDemoMode() || !state.teams.some(team => team.id === id && team.demoDecisionNotice)) return false;
+  return saveState({ ...state, teams: state.teams.map(team => team.id === id ? { ...team, demoDecisionNotice: undefined } : team) });
+}
+
+export interface DemoTeamInvitationPreview {
+  teamName: string;
+  memberCount: number;
+  inviterName: string;
+  expiresAt: string;
+}
+
+/** 초대 링크로 들어온 사람에게 보여 줄 초대 내용. 링크가 없거나 만료됐으면 undefined. */
+export function getDemoTeamInvitationPreview(token: string): DemoTeamInvitationPreview | undefined {
+  if (!isDemoMode() || !token) return undefined;
+  const state = getState();
+  const invitation = state.invitations.find(item => item.id === token || item.token === token);
+  const team = invitation ? state.teams.find(item => item.id === invitation.teamId) : undefined;
+  if (!invitation || !team) return undefined;
+  const leader = team.members.find(member => member.role === 'leader');
+  return { teamName: team.name, memberCount: team.members.length, inviterName: leader?.name ?? '팀장', expiresAt: invitation.expires_at };
 }
 
 export function listDemoTeamInvitations(teamId: string): DemoTeamInvitation[] {
@@ -221,7 +273,7 @@ export function acceptDemoTeamInvitation(token: string) {
     ...team,
     members: [...team.members, {
       member_id: `demo-member-${crypto.randomUUID()}`,
-      name: '데모 학생',
+      name: findDemoStudentAccount(invitation.email)?.name ?? '데모 학생',
       email: invitation.email,
       role: 'member' as const,
       profile_image_url: null,

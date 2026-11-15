@@ -54,8 +54,8 @@ Counts cover Product frames, States panels and Flows nodes together. "Gap" means
 | Serverless | 8/8 | 12/26 | 28/57 | 48 | 43 (6) |
 | Database (incl. 49) | 7/8 | 10/21 | 32/53 | 49 | 33 (0) |
 | Apps | 13/13 | 27/27 | 63/75 | 103 | 12 (0) |
-| Teams | 4/5 | 8/13 | 22/32 | 34 | 16 (OK† DEV only) |
-| Admin | 6/6 | 7/9 | 27/40 | 40 | 15 (0) |
+| Teams | 5/5 | 13/13 | 32/32 | 50 | 0 |
+| Admin | 6/6 | 9/9 | 40/40 | 55 | 0 |
 | Docs/Support/Status/CLI | 5/5 | 15/15 | 27/27 | 47 | 0 |
 | Account/Settings | 1/1 | 23/23 | 23/25 | 47 | 2 |
 | Shell/navigation | — | 11/11 | — (flows filed under Auth/Home 03-xx) | 11 | 0 |
@@ -677,88 +677,88 @@ Product: 13 total (OK 13 / non-OK 0); States panels: 27 total (OK 27 / non-OK 0)
 
 ### Teams
 
-Legend: `OK†` = works in a DEV build with `?demo=1` on develop. Every team page gates its mock branch on `import.meta.env.DEV && isDemoMode()`, so in a **production** build with `?demo=1` these pages call the real API instead. PR #143 removes that gate for TeamsHomePage (32/25). PR #144 removes it for TeamCreatePage (24), TeamSettingsPage (33), TeamInvitationAcceptPage (35) and StudentShell. Treat prod-mock as PENDING-PR #143/#144 for every OK† row. `PARTIAL` = the state exists but in a different form (for example an inline banner where Figma has a modal).
+Re-verified on develop @ 6793850 (after #143/#144): team pages gate mock data on `isDemoMode()` only, so the former `OK†` rows work in a production `?demo=1` build too.
 Seed (`entities/team/demo.ts:36-55`): team `demo-team` "GSM Connect" is **pending** with members 김지민 (leader, me), 한도윤 (DevOps) and 윤채원 (member). Approved states need admin approval: pick admin at `/__demo/role-selection`, open `/admin/team-approvals`, approve, then switch back to student.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
-| 24 | 팀 만들기 | 101:4639 | 1440x1170 | /teams/new | pages/teams/TeamCreatePage.tsx | OK† | Form (이름/사용 목적) + info cards + banner. Submit → createDemoTeamRequest → /teams/:newId |
-| 25 | 팀 승인 대기 | 101:4828 | 1440x1080 | /teams/:teamId (pending team), /teams | pages/teams/TeamsHomePage.tsx (status=pending branch) | OK† | Not a separate page: TeamsHome shows the "팀 승인 대기 중입니다" banner (:543) and a 팀원 초대 button (:781) |
-| 32 | 팀 홈 | 101:5285 | 1440x1556 | /teams, /teams/:teamId | pages/teams/TeamsHomePage.tsx | OK† | Quota panel, team VM table, service cards, members. Approved view needs admin approval first |
-| 33 | 팀 설정 | 102:4635 | 1440x1662 | /teams/:teamId/settings | pages/teams/TeamSettingsPage.tsx | OK† | Members table with DevOps/제외/팀장 넘기기, inline invite form, pending invites, quota, roles, danger zone |
-| 35 | 팀 초대 수락 | 102:5230 | 1440x1080 | /teams/invitations/accept?token= | pages/teams/TeamInvitationAcceptPage.tsx | PARTIAL | Even in demo, 팀 and 초대한 사람 show "초대 내용을 미리 보여 주는 API가 없어 확인할 수 없습니다" (:456,:463) and 만료 is generic. Title is "팀 초대가 도착했습니다", not "GSM Connect 팀에 초대됐습니다". No in-app entry; reached only by URL `?token=demo-invite-token` |
+| 24 | 팀 만들기 | 101:4639 | 1440x1170 | /teams/new | pages/teams/TeamCreatePage.tsx | OK | src/pages/teams/TeamCreatePage.tsx. 목데이터 모드 DEV 가드 제거됨(#144). 로딩·오류는 useDemoPageLoad(`team-create`) |
+| 25 | 팀 승인 대기 | 101:4828 | 1440x1080 | /teams/:teamId (pending team), /teams | pages/teams/TeamsHomePage.tsx (status=pending branch) | OK | TeamsHomePage pending branch, prod `?demo=1`에서도 동작(#143) |
+| 32 | 팀 홈 | 101:5285 | 1440x1556 | /teams, /teams/:teamId | pages/teams/TeamsHomePage.tsx | OK | 할당량 늘리기 요청은 팀 홈 위에 TeamQuotaRequestDialog를 연다 |
+| 33 | 팀 설정 | 102:4635 | 1440x1662 | /teams/:teamId/settings | pages/teams/TeamSettingsPage.tsx | OK | 초대 보내기 → 계정 조회 후 33-01/33-02 대화상자 |
+| 35 | 팀 초대 수락 | 102:5230 | 1440x1080 | /teams/invitations/accept?token= | pages/teams/TeamInvitationAcceptPage.tsx | OK | src/pages/teams/TeamInvitationAcceptPage.tsx: 목데이터에서 getDemoTeamInvitationPreview로 팀·초대한 사람·만료일을 보여 주고 제목 "GSM Connect 팀에 초대됐습니다". 진입은 Figma대로 초대 메일 링크(`?token=demo-invite-token`) |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| 37 · 팀 승인·문의 확인 상태 (103:1841) | GSM Connect 팀이 승인됐어요 | 103:1845 | — | — | MISSING | Approving only flips status. No dialog or banner on the team page, only a static demo notification "GSM Connect 팀이 승인됐습니다" (entities/notification/api/notifications.ts:35) |
-| 37 (103:1841) | 팀 승인 거절 | 103:1863 | TeamsHomePage getStatusMessage banner (:545); TeamSettingsPage banner (:445) | Admin /admin/team-approvals → enter reason → 거절, then student /teams/demo-team | PARTIAL | Danger banner with the reason, not a modal. Missing the "팀원과 보낸 초대가 해제됐고, 팀은 7일 뒤 삭제됩니다" line |
-| 37 (103:1841) | 해체 요청 취소 | 103:1878 | DemoTeamDisbandRequest pending branch (features/settings/demo-account/ui/DemoTeamWithdrawalActions.tsx:40-43) | /teams/demo-team/settings → 해체 요청 (type name) → button becomes 요청 취소 → click | OK† | Copy matches |
-| 38 · 조회·빈 상태·삭제 안내 (103:1983) | 아직 속한 팀이 없어요 | 103:1987 | TeamsHomePage `empty` branch (:709-725) | Seed always has a team. Reach it via settings → 팀장 넘기기 → 팀 탈퇴 → /teams, or after an admin approves disband | OK† | Copy and both CTAs (팀 사용법, 팀 만들기) match. Only reachable after several steps |
-| 38 (103:1983) | 초대 링크를 사용할 수 없어요 | 103:2010 | TeamInvitationAcceptPage inline ErrorMessage (:496) | /teams/invitations/accept?token=bogus → 초대 수락 (or reuse a consumed token) | PARTIAL | Inline alert "이 초대는 만료되었거나 이미 사용 또는 취소되었습니다." instead of a modal; copy differs |
-| 40 · 팀 관리 확인 (103:2091) | 팀원 초대 | 103:2095 | — (inline form TeamSettingsPage:477-484) | — | MISSING | No invite dialog and no account lookup (오세린 · 1학년 2반 5번). Clicking 초대 보내기 sends at once |
-| 40 (103:2091) | 계정 못 찾음 | 103:2122 | — | — | MISSING | inviteDemoTeamMember accepts any valid email. Only the format error "학교 이메일을 입력해 주세요." exists |
-| 40 (103:2091) | 팀장 넘기기 | 103:2142 | TransferDemoTeamLeader (DemoTeamWithdrawalActions.tsx:8-28) | settings → 한도윤 row → 팀장 넘기기 (:467) | OK† | Copy matches |
-| 40 (103:2091) | 팀원 제외 | 103:2166 | DemoTeamMemberAction action=remove (:110) | settings → 윤채원 row → 팀에서 제외 (:462) | OK† | Says "이 팀원이 만든 VM", where Figma has "윤채원이 만든 VM" (minor) |
-| 40 (103:2091) | 마지막 팀원 탈퇴 불가 | 103:2187 | LeaveDemoTeam onlyMember branch (:74-83) | settings → remove both members → 팀 탈퇴 (enabled only for a sole leader, :539) | OK† | Includes the 해체 요청 shortcut |
-| 40 (103:2091) | 팀 해체 요청 (typed confirm) | 103:2220 | DemoTeamDisbandRequest (:30-64) | settings → 해체 요청 (:540) | OK† | Lists VMs + DB/함수/앱 counts. Confirm is enabled only after typing the team name |
-| 40 (103:2091) | DevOps 역할 부여 | 103:2252 | DemoTeamMemberAction action=grant (:107) | settings → 윤채원 row → DevOps 부여 | OK† | Copy matches |
-| 41 · 할당량·권한 상태 (104:1772) | 할당량 늘리기 요청 | 104:1851 | features/team/request-quota/ui/TeamQuotaRequestDialog.tsx | Approved team → /teams/demo-team/settings → 할당량 늘리기 요청 (:519) | OK† | 요청 등급 SelectField + 사유. Only on settings, never over team home (see 32-03) |
+| 37 · 팀 승인·문의 확인 상태 (103:1841) | GSM Connect 팀이 승인됐어요 | 103:1845 | — | — | OK | 관리자가 승인하면 setDemoTeamApproval이 demoDecisionNotice를 남기고, 팀장이 팀 홈을 열면 AccountDialog "GSM Connect 팀이 승인됐습니다"(할당량 등급 + 팀 VM 만들기)를 한 번 띄운다. src/pages/teams/TeamsHomePage.tsx |
+| 37 (103:1841) | 팀 승인 거절 | 103:1863 | TeamsHomePage getStatusMessage banner (:545); TeamSettingsPage banner (:445) | Admin /admin/team-approvals → enter reason → 거절, then student /teams/demo-team | OK | 거절 후 팀 홈에서 "팀 승인이 거절됐습니다" 대화상자(사유 + 7일 삭제 안내 + 새 팀 만들기). 배너도 유지 |
+| 37 (103:1841) | 해체 요청 취소 | 103:1878 | DemoTeamDisbandRequest pending branch (features/settings/demo-account/ui/DemoTeamWithdrawalActions.tsx:40-43) | /teams/demo-team/settings → 해체 요청 (type name) → button becomes 요청 취소 → click | OK | Copy matches |
+| 38 · 조회·빈 상태·삭제 안내 (103:1983) | 아직 속한 팀이 없어요 | 103:1987 | TeamsHomePage `empty` branch (:709-725) | Seed always has a team. Reach it via settings → 팀장 넘기기 → 팀 탈퇴 → /teams, or after an admin approves disband | OK | Copy and both CTAs (팀 사용법, 팀 만들기) match. Only reachable after several steps |
+| 38 (103:1983) | 초대 링크를 사용할 수 없어요 | 103:2010 | TeamInvitationAcceptPage inline ErrorMessage (:496) | /teams/invitations/accept?token=bogus → 초대 수락 (or reuse a consumed token) | OK | 쓸 수 없는 토큰으로 초대 수락/거절 → 대화상자 "초대 링크를 사용할 수 없습니다" + 내 Resources |
+| 40 · 팀 관리 확인 (103:2091) | 팀원 초대 | 103:2095 | — (inline form TeamSettingsPage:477-484) | — | OK | settings → 학교 이메일 serin@example.com → 초대 보내기 → "팀원 초대" 대화상자(오세린 · 1학년 2반 5번). findDemoStudentAccount(entities/team/demo.ts) |
+| 40 (103:2091) | 계정 못 찾음 | 103:2122 | — | — | OK | 디렉터리에 없는 이메일(예: newstudent@example.com) → "초대할 계정을 찾지 못했습니다" + "일치하는 계정이 없습니다." |
+| 40 (103:2091) | 팀장 넘기기 | 103:2142 | TransferDemoTeamLeader (DemoTeamWithdrawalActions.tsx:8-28) | settings → 한도윤 row → 팀장 넘기기 (:467) | OK | Copy matches |
+| 40 (103:2091) | 팀원 제외 | 103:2166 | DemoTeamMemberAction action=remove (:110) | settings → 윤채원 row → 팀에서 제외 (:462) | OK | Says "이 팀원이 만든 VM", where Figma has "윤채원이 만든 VM" (minor) |
+| 40 (103:2091) | 마지막 팀원 탈퇴 불가 | 103:2187 | LeaveDemoTeam onlyMember branch (:74-83) | settings → remove both members → 팀 탈퇴 (enabled only for a sole leader, :539) | OK | Includes the 해체 요청 shortcut |
+| 40 (103:2091) | 팀 해체 요청 (typed confirm) | 103:2220 | DemoTeamDisbandRequest (:30-64) | settings → 해체 요청 (:540) | OK | Lists VMs + DB/함수/앱 counts. Confirm is enabled only after typing the team name |
+| 40 (103:2091) | DevOps 역할 부여 | 103:2252 | DemoTeamMemberAction action=grant (:107) | settings → 윤채원 row → DevOps 부여 | OK | Copy matches |
+| 41 · 할당량·권한 상태 (104:1772) | 할당량 늘리기 요청 | 104:1851 | features/team/request-quota/ui/TeamQuotaRequestDialog.tsx | Approved team → /teams/demo-team/settings → 할당량 늘리기 요청 (:519) | OK | 요청 등급 SelectField + 사유. Only on settings, never over team home (see 32-03) |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
-| 24 · 팀 만들기 | 203:59392 | entry: sidebar 팀 만들기 / empty-state 팀 만들기 → 24 | StudentSidebar 팀 만들기 → onCreateTeam → /teams/new. The empty-state CTA and Apps pages also link there | OK† |
-| 24-01 · 팀 만들기 · 로딩 | 741:56631 | page loading skeleton | TeamCreatePage has no loading render. Suspense fallback={null} (router.tsx:141) | MISSING |
-| 24-02 · 팀 만들기 · 오류 | 747:63527 | page load error state | No page-level error state. A failed team-list load is swallowed into [] (:241). The demo create never fails | MISSING |
-| 24-03 · 팀 만들기 · 호버 · 팀 만들기 | 241:28865 | click 팀 만들기 → 25 승인 대기 | submit → createDemoTeamRequest → navigate /teams/demo-team-N (pending banner) (:274) | OK† |
-| 25 · 팀 승인 대기 | 203:59572 | entry: after creating (24-03) or 팀 → pending team | /teams/:id renders the pending state (seed demo-team is pending) | OK† |
-| 25-01 · 팀 승인 대기 · GSM Connect 팀이 승인됐어요 | 203:59780 | approved dialog over 25 | Nothing is shown on approval | MISSING |
-| 25-02 · 팀 승인 대기 · 팀 승인이 거절됐어요 | 203:60009 | rejection dialog over 25 | Admin reject → danger banner with reason on home/settings; no modal | PARTIAL |
-| 25-03 · 팀 승인 대기 · 로딩 | 741:56812 | loading skeleton | TeamsHome SkeletonStack (:729-743). Shows only briefly while the demo dynamic import resolves; no demo delay | OK† |
-| 25-04 · 팀 승인 대기 · 오류 | 747:63729 | load error | /teams/<unknown-id> → getDemoTeam undefined → ErrorCard + 팀 목록 (:744-752) | OK† |
-| 25-05 · 팀 승인 대기 · 호버 · 팀원 초대 | 241:29051 | click 팀원 초대 → invite (33 / 33-01) | navigate /teams/:id/settings (:782), which has the inline invite form; no dialog | OK† |
-| 32 · 팀 홈 | 203:60233 | entry: sidebar 팀 / scope menu → 32 | StudentShell team → teamPath ?? /teams. Scope options navigate /teams/:id. TeamsHome passes activeItem="home", so 팀 is not highlighted | OK† |
-| 32-01 · 팀 홈 · 범위 선택 펼침 | 204:23599 | scope selector open | StudentTopbar ScopeMenu listbox (widgets/student-shell/ui/StudentTopbar.tsx:428-449) | OK† |
-| 32-02 · 팀 홈 · 아직 속한 팀이 없어요 | 203:60467 | empty state | `empty` branch. Reachable only after transferring leadership and leaving (or a disband approval) | OK† |
-| 32-03 · 팀 홈 · 할당량 늘리기 요청 | 203:60746 | quota-request dialog over 32 | Home button navigates to /teams/:id/settings?tab=quota (:800). `tab` is ignored and no dialog opens; user must click again on 33 | WRONG-DESTINATION |
-| 32-04 · 팀 홈 · 요청 등급 선택 펼침 | 204:25695 | 요청 등급 dropdown open in quota dialog | SelectField listbox inside TeamQuotaRequestDialog works, but the dialog lives on 33, not over 32 | OK† |
-| 32-05 · 팀 홈 · 로딩 | 741:58380 | loading skeleton | SkeletonStack (:729-743), brief only | OK† |
-| 32-06 · 팀 홈 · 오류 | 747:65563 | load error | /teams/<unknown-id> → ErrorCard | OK† |
-| 32-07 · 팀 홈 · 호버 · 할당량 늘리기 요청 | 241:30729 | click 할당량 늘리기 요청 → 32-03 dialog | navigates to settings?tab=quota, no dialog. Button shown only for approved + leader (settings also allows DevOps) | WRONG-DESTINATION |
-| 33 · 팀 설정 | 203:61011 | entry: 팀 홈 팀 설정 / sidebar 설정 | TeamsHome 팀 설정 → /teams/:id/settings (:780). StudentShell settings → teamPath/settings | OK† |
-| 33-01 · 팀 설정 · 팀원 초대 | 203:61283 | invite dialog with student lookup | Inline form only; sends immediately | MISSING |
-| 33-02 · 팀 설정 · 초대할 계정을 찾지 못했어요 | 203:61580 | account-not-found dialog/error | No not-found case in demo | MISSING |
-| 33-03 · 팀 설정 · DevOps 역할을 줄까요? | 203:61872 | DevOps 부여 → confirm dialog | DemoTeamMemberAction grant | OK† |
-| 33-04 · 팀 설정 · 한도윤에게 팀장을 넘길까요? | 203:62164 | 팀장 넘기기 → confirm | TransferDemoTeamLeader | OK† |
-| 33-05 · 팀 설정 · 윤채원을 팀에서 제외할까요? | 203:62458 | 팀에서 제외 → confirm | DemoTeamMemberAction remove | OK† |
-| 33-06 · 팀 설정 · 마지막 팀원은 탈퇴할 수 없어요 | 203:62750 | sole member 팀 탈퇴 → blocked dialog | LeaveDemoTeam onlyMember (after removing the others) | OK† |
-| 33-07 · 팀 설정 · 팀 해체를 요청할까요? | 203:63052 | 해체 요청 → typed-confirm dialog | DemoTeamDisbandRequest | OK† |
-| 33-08 · 팀 설정 · 해체 요청을 취소할까요? | 203:63351 | 요청 취소 → confirm | DemoTeamDisbandRequest pending branch | OK† |
-| 33-09 · 팀 설정 · 로딩 | 741:58650 | loading skeleton | LoadingCard ×3 (:426-427), brief only | OK† |
-| 33-10 · 팀 설정 · 오류 | 747:65875 | load error | /teams/<unknown-id>/settings → ErrorCard + 팀 목록 (:429) | OK† |
-| 33-11 · 팀 설정 · 호버 · 초대 보내기 | 241:30969 | click 초대 보내기 → 33-01 invite dialog (or 33-02) | Submits inline and appends to 대기 중인 초대 without a dialog (:477, handleInvite) | WRONG-DESTINATION |
-| 35 · 팀 초대 수락 | 407:31557 | entry: invitation email link → 35 | No in-app or mock entry; only a manual URL `/teams/invitations/accept?token=demo-invite-token` works | OK† |
-| 35-01 · 팀 초대 수락 · 호버 · 초대 수락 | 407:31587 | click 초대 수락 → "초대 링크를 사용할 수 없어요" dialog | Valid token: accepts and goes to /teams/demo-team. Invalid/used token: inline alert (:496), not a modal | PARTIAL |
+| 24 · 팀 만들기 | 203:59392 | entry: sidebar 팀 만들기 / empty-state 팀 만들기 → 24 | StudentSidebar 팀 만들기 → onCreateTeam → /teams/new. The empty-state CTA and Apps pages also link there | OK |
+| 24-01 · 팀 만들기 · 로딩 | 741:56631 | page loading skeleton | src/pages/teams/TeamCreatePage.tsx useDemoPageLoad(`team-create`) → DemoPagePlaceholder (src/pages/demo-workflows/ui/DemoPageState.tsx) 로딩 카드 | OK |
+| 24-02 · 팀 만들기 · 오류 | 747:63527 | page load error state | `?demoError=team-create` → 오류 카드 3개, 다시 시도하면 폼 표시 | OK |
+| 24-03 · 팀 만들기 · 호버 · 팀 만들기 | 241:28865 | click 팀 만들기 → 25 승인 대기 | submit → createDemoTeamRequest → navigate /teams/demo-team-N (pending banner) (:274) | OK |
+| 25 · 팀 승인 대기 | 203:59572 | entry: after creating (24-03) or 팀 → pending team | /teams/:id renders the pending state (seed demo-team is pending) | OK |
+| 25-01 · 팀 승인 대기 · GSM Connect 팀이 승인됐어요 | 203:59780 | approved dialog over 25 | 관리자 승인 → 팀장이 팀 홈을 열면 "GSM Connect 팀이 승인됐습니다" 대화상자 1회 (src/pages/teams/TeamsHomePage.tsx, demoDecisionNotice) | OK |
+| 25-02 · 팀 승인 대기 · 팀 승인이 거절됐어요 | 203:60009 | rejection dialog over 25 | 관리자 거절 → "팀 승인이 거절됐습니다" 대화상자(사유, 7일 삭제 안내, 새 팀 만들기) + 배너 유지 | OK |
+| 25-03 · 팀 승인 대기 · 로딩 | 741:56812 | loading skeleton | TeamsHome SkeletonStack (:729-743). Shows only briefly while the demo dynamic import resolves; no demo delay | OK |
+| 25-04 · 팀 승인 대기 · 오류 | 747:63729 | load error | /teams/<unknown-id> → getDemoTeam undefined → ErrorCard + 팀 목록 (:744-752) | OK |
+| 25-05 · 팀 승인 대기 · 호버 · 팀원 초대 | 241:29051 | click 팀원 초대 → invite (33 / 33-01) | navigate /teams/:id/settings (:782), which has the inline invite form; no dialog | OK |
+| 32 · 팀 홈 | 203:60233 | entry: sidebar 팀 / scope menu → 32 | StudentShell team → teamPath ?? /teams. Scope options navigate /teams/:id. TeamsHome passes activeItem="home", so 팀 is not highlighted | OK |
+| 32-01 · 팀 홈 · 범위 선택 펼침 | 204:23599 | scope selector open | StudentTopbar ScopeMenu listbox (widgets/student-shell/ui/StudentTopbar.tsx:428-449) | OK |
+| 32-02 · 팀 홈 · 아직 속한 팀이 없어요 | 203:60467 | empty state | `empty` branch. Reachable only after transferring leadership and leaving (or a disband approval) | OK |
+| 32-03 · 팀 홈 · 할당량 늘리기 요청 | 203:60746 | quota-request dialog over 32 | 팀 홈 버튼이 TeamQuotaRequestDialog를 팀 홈 위에 연다 (src/pages/teams/TeamsHomePage.tsx) | OK |
+| 32-04 · 팀 홈 · 요청 등급 선택 펼침 | 204:25695 | 요청 등급 dropdown open in quota dialog | SelectField listbox inside TeamQuotaRequestDialog works, but the dialog lives on 33, not over 32 | OK |
+| 32-05 · 팀 홈 · 로딩 | 741:58380 | loading skeleton | SkeletonStack (:729-743), brief only | OK |
+| 32-06 · 팀 홈 · 오류 | 747:65563 | load error | /teams/<unknown-id> → ErrorCard | OK |
+| 32-07 · 팀 홈 · 호버 · 할당량 늘리기 요청 | 241:30729 | click 할당량 늘리기 요청 → 32-03 dialog | 클릭 → 32-03 대화상자. 요청 후 "요청 검토 중" | OK |
+| 33 · 팀 설정 | 203:61011 | entry: 팀 홈 팀 설정 / sidebar 설정 | TeamsHome 팀 설정 → /teams/:id/settings (:780). StudentShell settings → teamPath/settings | OK |
+| 33-01 · 팀 설정 · 팀원 초대 | 203:61283 | invite dialog with student lookup | 초대 보내기 → findDemoStudentAccount 조회 → "팀원 초대" 대화상자 → 초대 보내기 (src/pages/teams/TeamSettingsPage.tsx) | OK |
+| 33-02 · 팀 설정 · 초대할 계정을 찾지 못했어요 | 203:61580 | account-not-found dialog/error | 디렉터리에 없는 이메일 → "초대할 계정을 찾지 못했습니다" + "일치하는 계정이 없습니다." | OK |
+| 33-03 · 팀 설정 · DevOps 역할을 줄까요? | 203:61872 | DevOps 부여 → confirm dialog | DemoTeamMemberAction grant | OK |
+| 33-04 · 팀 설정 · 한도윤에게 팀장을 넘길까요? | 203:62164 | 팀장 넘기기 → confirm | TransferDemoTeamLeader | OK |
+| 33-05 · 팀 설정 · 윤채원을 팀에서 제외할까요? | 203:62458 | 팀에서 제외 → confirm | DemoTeamMemberAction remove | OK |
+| 33-06 · 팀 설정 · 마지막 팀원은 탈퇴할 수 없어요 | 203:62750 | sole member 팀 탈퇴 → blocked dialog | LeaveDemoTeam onlyMember (after removing the others) | OK |
+| 33-07 · 팀 설정 · 팀 해체를 요청할까요? | 203:63052 | 해체 요청 → typed-confirm dialog | DemoTeamDisbandRequest | OK |
+| 33-08 · 팀 설정 · 해체 요청을 취소할까요? | 203:63351 | 요청 취소 → confirm | DemoTeamDisbandRequest pending branch | OK |
+| 33-09 · 팀 설정 · 로딩 | 741:58650 | loading skeleton | LoadingCard ×3 (:426-427), brief only | OK |
+| 33-10 · 팀 설정 · 오류 | 747:65875 | load error | /teams/<unknown-id>/settings → ErrorCard + 팀 목록 (:429) | OK |
+| 33-11 · 팀 설정 · 호버 · 초대 보내기 | 241:30969 | click 초대 보내기 → 33-01 invite dialog (or 33-02) | 클릭 → 33-01(찾음) 또는 33-02(못 찾음) 대화상자 | OK |
+| 35 · 팀 초대 수락 | 407:31557 | entry: invitation email link → 35 | No in-app or mock entry; only a manual URL `/teams/invitations/accept?token=demo-invite-token` works | OK |
+| 35-01 · 팀 초대 수락 · 호버 · 초대 수락 | 407:31587 | click 초대 수락 → "초대 링크를 사용할 수 없어요" dialog | 쓸 수 없는 토큰 → "초대 링크를 사용할 수 없습니다" 대화상자 + 내 Resources (src/pages/teams/TeamInvitationAcceptPage.tsx) | OK |
 
 #### Counts
-Product: 5 total (OK 4 / non-OK 1: PARTIAL 1). States panels: 13 total (OK 8 / non-OK 5: MISSING 3, PARTIAL 2). Flows: 32 total (OK 22 / non-OK 10: MISSING 5, WRONG-DESTINATION 3, PARTIAL 2). All OK rows are OK† (DEV build only on develop; prod mock needs PR #143/#144).
+Product: 5 total (OK 5). States panels: 13 total (OK 13). Flows: 32 total (OK 32). Updated in codex/figma-teams-admin; prod `?demo=1` works since #143/#144.
 
 ### Admin
 
 Entry: `/__demo/role-selection?demo=1` → "관리자" → `selectDemoRole('admin')` returns `/admin/infra` (src/features/auth/select-demo-role/model/selectDemoRole.ts). Student shell profile menu also offers 관리자 전환 → `/admin/infra` (src/widgets/student-shell/ui/StudentProfile.tsx:220) when role=admin.
-There are TWO admin shells: 26/28 use AdminInfrastructurePage's own sidebar (승인→/admin/team-approvals, 전체 VM→/admin/vms); 27/29/30/31 use `WorkflowLayout admin` (src/pages/demo-workflows/ui/WorkflowLayout.tsx:383-389) whose 승인→`/admin/database-approvals` (screen 49) and 전체 VM→`/admin/vms/demo-vm-1` (screen 31 detail, not the 28 list).
+There are TWO admin shells: 26/28 use AdminInfrastructurePage's own sidebar (승인→/admin/team-approvals, 전체 VM→/admin/vms); 27/29/30/31 use `WorkflowLayout admin` (src/pages/demo-workflows/ui/WorkflowLayout.tsx), which now has the same targets (승인→`/admin/team-approvals`, 전체 VM→`/admin/vms`) plus the 알림/관리자 header buttons; the infra shell's Docs/문의/설정 are enabled in mock mode.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
 | 26 | 관리자 인프라 현황 | 53:4985 | 1440x1361 | /admin/infra (also /admin → redirect) | src/pages/admin/AdminInfrastructurePage.tsx | OK | demo snapshot from entities/infra-node/demo.ts; node-01 has 14 VMs, node-03 offline banner |
-| 27 | 관리자 승인 · 팀 | 101:5034 | 1440x1790 | /admin/team-approvals (demo-only) | src/pages/admin/AdminTeamApprovalsDemoPage.tsx | OK | 해체 요청 card only appears when a team has demoDisbandPending |
+| 27 | 관리자 승인 · 팀 | 101:5034 | 1440x1790 | /admin/team-approvals (demo-only) | src/pages/admin/AdminTeamApprovalsDemoPage.tsx | OK | src/pages/admin/AdminTeamApprovalsDemoPage.tsx. 로딩·오류: `admin-team-approvals` |
 | 28 | 관리자 전체 VM | 54:2772 | 1440x1531 | /admin/vms | AdminInfrastructurePage.tsx (isAllVmsView) + AdminAllVmsContent.tsx | OK | tabs 전체/만료 임박/Node별, filters, detail card, 종료/재시작 |
-| 29 | 관리자 문의 답변 | 54:3082 | 1440x1535 | /admin/inquiries (demo-only) | src/pages/admin/AdminInquiriesDemoPage.tsx | OK | default selection inquiry-1 (답변 완료) |
-| 30 | 관리자 계정 점검 | 54:3328 | 1440x1482 | /admin/accounts (demo-only) | src/pages/admin/DemoAdminAccountsPage.tsx | OK | 졸업일 등록 rendered as inline card (see S panel) |
-| 31 | 관리자 · VM 상세 | 54:3543 | 1440x1381 | /admin/vms/:vmId (demo-only; name, GRN or demo-vm-1) | src/pages/admin/DemoAdminVmDetailPage.tsx | OK | |
+| 29 | 관리자 문의 답변 | 54:3082 | 1440x1535 | /admin/inquiries (demo-only) | src/pages/admin/AdminInquiriesDemoPage.tsx | OK | src/pages/admin/AdminInquiriesDemoPage.tsx. 로딩·오류: `admin-inquiries` |
+| 30 | 관리자 계정 점검 | 54:3328 | 1440x1482 | /admin/accounts (demo-only) | src/pages/admin/DemoAdminAccountsPage.tsx | OK | 졸업일 등록은 "회수 절차 검토" → 대화상자(30-05). 로딩·오류: `admin-accounts` |
+| 31 | 관리자 · VM 상세 | 54:3543 | 1440x1381 | /admin/vms/:vmId (demo-only; name, GRN or demo-vm-1) | src/pages/admin/DemoAdminVmDetailPage.tsx | OK | 로딩·오류: `admin-vm`. 명령어 복사 조사 "를" 수정 |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
@@ -769,56 +769,56 @@ There are TWO admin shells: 26/28 use AdminInfrastructurePage's own sidebar (승
 | 104:2098 | 관리자로 지정 | 104:2201 | DemoAdminAccountsPage `grantOpen` AccountDialog (SelectField 사용자 + 사유) | /admin/accounts → "관리자 지정" | OK | only candidate 문가은 (교사) |
 | 104:2098 | 관리자 권한 회수 | 104:2233 | DemoAdminAccountsPage `revokeTarget` AccountDialog | select an admin row → "권한 회수" (or 보호 규칙 card "권한 회수") | OK | seed has only self-admin 정서연 → revoke errors 'self'; a successful revoke needs granting 문가은 first. Design names 이도윤 (not in data) |
 | 104:2098 | 비상 접근 설정 | 104:2258 | DemoAdminAccountsPage `emergencyDialog==='setup'` | /admin/accounts → "비상 접근 설정"; OTP 482 913 | OK | no QR image; extra demo OTP hint |
-| 104:2098 | 졸업일 등록 | 104:2286 | inline Card + DateField in DemoAdminAccountsPage (graduationCardRef) | /admin/accounts → scroll to 졸업일 등록 card | PARTIAL | design is a modal dialog over scrim; code is an always-visible inline card, no dialog |
-| 104:2098 | 졸업 전에 자료를 옮겨주세요 | 104:2308 | — | — | MISSING | `getDemoGraduationDate` is only read by DemoAdminAccountsPage; no student-facing D-30/D-7 notice, banner, dialog or notification anywhere (develop, PR #143, PR #144) |
+| 104:2098 | 졸업일 등록 | 104:2286 | DemoAdminAccountsPage `graduationOpen` AccountDialog | /admin/accounts → 졸업 후 계정 점검 "회수 절차 검토" | OK | DemoAdminAccountsPage `graduationOpen` AccountDialog + DateField(저장 키는 그대로) |
+| 104:2098 | 졸업 전에 자료를 옮겨주세요 | 104:2308 | 학생 홈 졸업 안내 대화상자 (`src/pages/home/PersonalResourcesPage.tsx`, Auth/Home 03-11) | 관리자 졸업일 등록 대화상자에서 30일 이내 날짜 저장 → 학생 홈 | OK | 관리자 저장 키(`saveDemoGraduationDate`)를 그대로 읽는다 |
 | 690:3299 | 김지민의 GitHub 연결을 해제할까요? | 690:4292 | DemoAdminAccountsPage `confirm` AccountDialog (provider github) | /admin/accounts (김지민 selected by default) → GitHub "연결 강제 해제" | OK | |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
 | 26 · 관리자 인프라 현황 | 203:65853 | entry: role selection (admin) / sidebar 인프라 현황 → 26 | selectDemoRole → /admin/infra; both shells link 인프라 현황 → /admin/infra | OK |
-| 26-01 · 로딩 | 741:57025 | 26 initial loading skeleton | LoadingCard renders only while the demo module is lazily imported (one frame); no demo delay or toggle (AdminInfrastructurePage.tsx:596-613,701) | UNREACHABLE |
-| 26-02 · 오류 | 747:63970 | 26 page load error | ErrorCard only when the real API throws; demo branch never fails (:637-643,711) | UNREACHABLE |
+| 26-01 · 로딩 | 741:57025 | 26 initial loading skeleton | demo load awaits simulateDemoRequest(`admin-infra`) → DemoPagePlaceholder (src/pages/demo-workflows/ui/DemoPageState.tsx) (src/pages/admin/AdminInfrastructurePage.tsx) | OK |
+| 26-02 · 오류 | 747:63970 | 26 page load error | `?demoError=admin-infra` → 카드별 오류, 다시 시도로 복구 | OK |
 | 26-03 · 호버 · VM 14개 보기 | 241:29265 | click node-01 "VM 14개 보기" → node VM list | toggleNodeVms expands the node's VM list inline (14 rows) (:910,924-931); doesn't open 28 with a Node filter | OK |
-| 27 · 관리자 승인 · 팀 | 203:66099 | entry: sidebar 승인 → 27 | infra shell 승인 → /admin/team-approvals OK; WorkflowLayout 승인 → /admin/database-approvals (49), so you need the "팀" tab to reach 27 | OK |
+| 27 · 관리자 승인 · 팀 | 203:66099 | entry: sidebar 승인 → 27 | infra shell 승인 → /admin/team-approvals OK; WorkflowLayout 승인 → /admin/team-approvals | OK |
 | 27-01 · 할당량 등급 선택 펼침 | 204:25243 | open 할당량 등급 select menu | native `<select>` (WorkflowLayout Select) with 소형/중형/대형; opens the OS menu, not the design-system select menu | OK |
 | 27-02 · GSM Connect 팀 해체를 승인할까요? | 203:66335 | 해체 승인 → confirm dialog | AccountDialog with team counts, 해체 승인 runs approveDemoTeamDisband; needs a disband request from the student side first | OK |
-| 27-03 · 로딩 | 741:57253 | 27 loading state | page reads localStorage synchronously; Suspense fallback=null; no loading UI | MISSING |
-| 27-04 · 오류 | 747:64261 | 27 load error | no load-error rendering (only save-failure notices) | MISSING |
+| 27-03 · 로딩 | 741:57253 | 27 loading state | useDemoPageLoad(`admin-team-approvals`) → DemoPagePlaceholder (src/pages/demo-workflows/ui/DemoPageState.tsx) (src/pages/admin/AdminTeamApprovalsDemoPage.tsx) | OK |
+| 27-04 · 오류 | 747:64261 | 27 load error | `?demoError=admin-team-approvals` → 오류 카드, 다시 시도/새로고침으로 복구 | OK |
 | 27-05 · 호버 · 급식한입 | 241:29517 | click row 급식한입 → select it, approval form shows 급식한입 | row onClick sets selectedId; "급식한입 승인" card + 거절 card update | OK |
-| 28 · 관리자 전체 VM | 203:66593 | entry: sidebar 전체 VM / 26 "전체 VM 보기" → 28 | infra shell → /admin/vms OK; 26 recent-failures "전체 VM 보기" → /admin/vms OK; WorkflowLayout 전체 VM → /admin/vms/demo-vm-1 (31), not 28 | OK |
+| 28 · 관리자 전체 VM | 203:66593 | entry: sidebar 전체 VM / 26 "전체 VM 보기" → 28 | infra shell → /admin/vms OK; 26 recent-failures "전체 VM 보기" → /admin/vms OK; WorkflowLayout 전체 VM → /admin/vms | OK |
 | 28-01 · Node 필터 펼침 | 204:24617 | open Node SelectField menu | SelectField listbox: 모든 Node/node-01..03 (AdminAllVmsContent.tsx:431) | OK |
 | 28-02 · 상태 필터 펼침 | 204:24929 | open 상태 SelectField menu | SelectField listbox built from row statuses (:434) | OK |
-| 28-03 · 로딩 | 741:57483 | 28 loading | same lazy-import flash as 26-01; refresh banner only shows when a snapshot already exists | UNREACHABLE |
-| 28-04 · 오류 | 747:64533 | 28 load error | error banner/ErrorCard only on real-API failure | UNREACHABLE |
+| 28-03 · 로딩 | 741:57483 | 28 loading | /admin/vms에서도 같은 `admin-infra` 지연 → 로딩 카드 | OK |
+| 28-04 · 오류 | 747:64533 | 28 load error | `?demoError=admin-infra` on /admin/vms → 오류 카드 | OK |
 | 28-05 · 호버 · meal-web | 241:29756 | click meal-web row → selected/details (next: 31) | RowSelect click only selects the row (detail card updates); "상세 열기"/"상세 관리" navigates to /admin/vms/<grn> → 31 | OK |
 | 29 · 관리자 문의 답변 | 203:66861 | entry: sidebar 문의 답변 → 29 | both shells → /admin/inquiries | OK |
 | 29-01 · 첫 답변 · 대기 중 문의 선택 | 364:37379 | click a pending inquiry → detail + empty 답변 작성 | row onClick select(); card title "답변 작성" for 대기 중 | OK |
 | 29-02 · 첫 답변 · 답변 작성 중 | 365:30884 | type in the reply textarea | Textarea bound to `reply` | OK |
 | 29-03 · 첫 답변 · 답변을 등록했어요 | 365:31097 | "답변 등록" → success state | saves, status → 답변 완료, success Alert "답변을 등록했습니다…"; notifies if isMine | OK |
 | 29-04 · 기존 답변을 덮어쓸까요? | 203:67074 | answered inquiry → "새 답변으로 등록" → overwrite dialog | showOverwrite ModalSurface; "답변 덮어쓰기" keeps the old answer in replyHistory | OK |
-| 29-05 · 로딩 | 741:57717 | 29 loading | synchronous localStorage read; no loading UI | MISSING |
-| 29-06 · 오류 | 747:64795 | 29 load error | no load-error rendering | MISSING |
+| 29-05 · 로딩 | 741:57717 | 29 loading | useDemoPageLoad(`admin-inquiries`) (src/pages/admin/AdminInquiriesDemoPage.tsx) | OK |
+| 29-06 · 오류 | 747:64795 | 29 load error | `?demoError=admin-inquiries` → 오류 카드 | OK |
 | 29-07 · 호버 · Domain 등록 후 HTTPS | 241:30027 | click inquiry "Domain 등록 후 HTTPS 접속이 안 됩니다" → 29-01 | row onClick selects inquiry-3 (대기 중) → 답변 작성 | OK |
 | 30 · 관리자 계정 점검 | 688:50319 | entry: sidebar 관리자 점검 → 30 | both shells → /admin/accounts | OK |
 | 30-01 · 관리자로 지정 | 203:67505 | "관리자 지정" → grant dialog | grantOpen AccountDialog | OK |
 | 30-02 · 사용자 검색 펼침 | 204:26092 | open the 사용자 select in the grant dialog | SelectField listbox (one candidate); a plain select, no search | OK |
 | 30-03 · 관리자 권한을 회수할까요? | 203:67728 | "권한 회수" → revoke dialog | revokeTarget AccountDialog; a successful revoke needs a second admin (grant first) | OK |
 | 30-04 · 비상 접근 설정 | 203:67941 | "비상 접근 설정" → OTP dialog | emergencyDialog 'setup' | OK |
-| 30-05 · 졸업일 등록 | 203:68155 | open 졸업일 등록 dialog | no dialog; inline card always visible ("회수 절차 검토" only scrolls to it) | MISSING |
-| 30-06 · 졸업일 달력 펼침 | 204:25868 | date picker open inside the 졸업일 dialog | DateField calendar popover opens in the inline card (not in a dialog) | OK |
+| 30-05 · 졸업일 등록 | 203:68155 | open 졸업일 등록 dialog | "회수 절차 검토" → 졸업일 등록 대화상자 (src/pages/admin/DemoAdminAccountsPage.tsx) | OK |
+| 30-06 · 졸업일 달력 펼침 | 204:25868 | date picker open inside the 졸업일 dialog | DateField calendar popover opens inside the 졸업일 등록 dialog | OK |
 | 30-07 · 김지민의 GitHub 연결을 해제할까요? | 692:43852 | "연결 강제 해제" (GitHub) → confirm dialog | confirm AccountDialog; on confirm marks 연결 안 됨 + adds notification | OK |
-| 30-08 · 로딩 | 741:57927 | 30 loading | no loading UI | MISSING |
-| 30-09 · 오류 | 747:65026 | 30 load error | no load-error rendering | MISSING |
+| 30-08 · 로딩 | 741:57927 | 30 loading | useDemoPageLoad(`admin-accounts`) (src/pages/admin/DemoAdminAccountsPage.tsx) | OK |
+| 30-09 · 오류 | 747:65026 | 30 load error | `?demoError=admin-accounts` → 오류 카드 | OK |
 | 30-10 · 호버 · 연결 강제 해제 | 692:44009 | click GitHub "연결 강제 해제" → 30-07 | showDisconnect('github') opens dialog | OK |
 | 31 · 관리자 · VM 상세 | 203:68367 | entry: 28 row "상세 열기" → 31 | navigate(`/admin/vms/${grn}`) (AdminInfrastructurePage.tsx:828); detail resolves by GRN | OK |
 | 31-01 · portfolio-api를 영구 삭제할까요? | 203:68654 | "관리자 삭제" → reason + typed-name dialog | AdminDeleteDialog; copy, both fields and the disabled hint match | OK |
-| 31-02 · 로딩 | 741:58162 | 31 loading | synchronous; no loading UI | MISSING |
-| 31-03 · 오류 | 747:65296 | 31 load error | only a "삭제되었거나 찾을 수 없습니다" not-found card (shown after a delete or for a bad id); no load-error state | MISSING |
+| 31-02 · 로딩 | 741:58162 | 31 loading | useDemoPageLoad(`admin-vm`) (src/pages/admin/DemoAdminVmDetailPage.tsx) | OK |
+| 31-03 · 오류 | 747:65296 | 31 load error | `?demoError=admin-vm` → 오류 카드(헤더·조치 버튼 유지) | OK |
 | 31-04 · 호버 · 명령어 복사 | 241:30435 | "명령어 복사" → copy + feedback | clipboard write + success Alert "SSH 명령어을 복사했습니다." (Korean particle bug: 을 vs 를) | OK |
 
 #### Counts
-Product: 6 total (OK 6 / non-OK 0); States panels: 9 total (OK 7 / non-OK 2: 1 PARTIAL, 1 MISSING); Flows: 40 total (OK 27 / non-OK 13: MISSING 9, UNREACHABLE 4)
+Product: 6 total (OK 6); States panels: 9 total (OK 9); Flows: 40 total (OK 40). Updated in codex/figma-teams-admin; the student-side graduation notice shipped with Auth/Home 03-11 (#147).
 
 ### Docs/Support/Status/CLI
 
@@ -1092,27 +1092,13 @@ All 12 gaps fixed in `codex/figma-apps-account` (status OK above). Loading frame
 
 ### Teams
 
-- ALL team rows — PENDING-PR #143/#144 for production mock: develop gates every team mock branch on `import.meta.env.DEV`, so prod `?demo=1` hits the real API. Files: `src/pages/teams/*.tsx`, `src/widgets/student-shell/ui/StudentShell.tsx`
-- `102:5230` 35 팀 초대 수락 — PARTIAL: placeholder "API가 없어 확인할 수 없습니다" for team/inviter even in demo; title copy differs; no mock entry point. Files: `src/pages/teams/TeamInvitationAcceptPage.tsx`
-- `103:1845` / `203:59780` 팀 승인됐어요 — MISSING: no approved dialog/banner. Files: `src/pages/teams/TeamsHomePage.tsx`
-- `103:1863` / `203:60009` 팀 승인 거절 — PARTIAL: banner, not a modal; missing the 7일 삭제 line. Files: `src/pages/teams/TeamsHomePage.tsx:545`
-- `103:2010` / `407:31587` 초대 링크를 사용할 수 없어요 — PARTIAL: inline alert, not a modal; copy differs. Files: `src/pages/teams/TeamInvitationAcceptPage.tsx:496`
-- `103:2095` / `203:61283` 팀원 초대 dialog — MISSING: inline form with no lookup or confirm. Files: `src/pages/teams/TeamSettingsPage.tsx:477`
-- `103:2122` / `203:61580` 계정 못 찾음 — MISSING: demo invite never fails lookup. Files: `src/entities/team/demo.ts:192`
-- `203:60746` 32-03, `241:30729` 32-07 할당량 늘리기 요청 — WRONG-DESTINATION: home button goes to `/settings?tab=quota` (tab ignored) instead of opening TeamQuotaRequestDialog over home. Files: `src/pages/teams/TeamsHomePage.tsx:800`
-- `241:30969` 33-11 초대 보내기 — WRONG-DESTINATION: sends immediately, no 33-01 dialog. Files: `src/pages/teams/TeamSettingsPage.tsx`
-- `741:56631` 24-01 로딩, `747:63527` 24-02 오류 — MISSING: TeamCreatePage has no loading or load-error render. Files: `src/pages/teams/TeamCreatePage.tsx`
+모두 해결(codex/figma-teams-admin). 목데이터 모드 DEV 가드는 #143/#144에서 이미 제거됐다. 로딩·오류 범위: `team-create`, `team`, `team-settings`.
 
 ### Admin
 
-- `104:2308` 졸업 전에 자료를 옮겨주세요: MISSING. The admin-set graduation date (`admin.graduationDate`) is never shown to students; no notice, banner or notification. Files: `src/entities/demo-workflows/model/demoData.ts:204`, `src/pages/admin/DemoAdminAccountsPage.tsx`
-- `104:2286` / `203:68155` 졸업일 등록: PARTIAL / MISSING. Design is a modal dialog; code is an inline card with no dialog trigger. Files: `src/pages/admin/DemoAdminAccountsPage.tsx`
-- `741:57025`, `741:57483` 26/28 로딩: UNREACHABLE. The demo branch finishes right after the lazy import; no demo delay or toggle. Files: `src/pages/admin/AdminInfrastructurePage.tsx:596-613`
-- `747:63970`, `747:64533` 26/28 오류: UNREACHABLE. ErrorCard/banner only on real-API error. Files: `src/pages/admin/AdminInfrastructurePage.tsx:637-711`
-- `741:57253`, `741:57717`, `741:57927`, `741:58162` 27/29/30/31 로딩: MISSING. Demo pages read localStorage synchronously; Suspense fallback=null. Files: `src/pages/admin/*DemoPage.tsx`, `src/pages/admin/DemoAdminVmDetailPage.tsx`, `src/pages/demo-workflows/routes.tsx:15`
-- `747:64261`, `747:64795`, `747:65026`, `747:65296` 27/29/30/31 오류: MISSING. No load-error rendering (31 has only a not-found card). Same files.
-- (cross-cutting, affects entry to 27/28 from 29/30/31) WorkflowLayout admin sidebar: 승인 → `/admin/database-approvals` (49) instead of 27, and 전체 VM → `/admin/vms/demo-vm-1` (31 detail) instead of the 28 list. These pages also use a different shell (header, no notifications) from 26/28. Files: `src/pages/demo-workflows/ui/WorkflowLayout.tsx:383-389`
-- (data, not blocking) 27-02 needs a student-side disband request first, because no seeded `demoDisbandPending`. 30-03 seed has only the self admin, so revoke shows the 'self' error unless you grant 문가은 first. Files: `src/entities/team/demo.ts:299`, `src/entities/demo-workflows/model/demoData.ts:122-131`
+- `104:2308` 졸업 전에 자료를 옮겨주세요: Auth/Home 03-11(#147)에서 해결. 관리자 쪽 저장 키(`saveDemoGraduationDate`)는 바꾸지 않았다.
+- 나머지는 해결(codex/figma-teams-admin): WorkflowLayout 사이드바 승인 → `/admin/team-approvals`, 전체 VM → `/admin/vms`, 알림·관리자 버튼 추가. 로딩·오류 범위: `admin-infra`(26/28), `admin-team-approvals`, `admin-inquiries`, `admin-accounts`, `admin-vm`.
+- (data, not blocking) 27-02 needs a student-side disband request first; 30-03 needs granting 문가은 before a successful revoke.
 
 ### Docs/Support/Status/CLI
 
