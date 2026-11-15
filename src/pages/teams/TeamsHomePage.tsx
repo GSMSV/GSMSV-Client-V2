@@ -808,7 +808,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
               ? demoTeamVms.map(vm => <VmDataRow key={vm.id}>
                 <VmCell data-label="VM"><VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton></VmCell>
                 <VmCell data-label="상태">{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '대기 중'}</VmCell>
-                <VmCell data-label="Resources">{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</VmCell>
+                <VmCell data-label="리소스">{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</VmCell>
                 <VmCell data-label="만든 사람">{vm.creator}</VmCell>
                 <VmCell data-label="만료">{vm.expiresAt.split(' ')[0]}</VmCell>
                 <VmCell data-label="관리"><Button variant="ghost" aria-label={`${vm.name} 관리`} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}><Octicon name="chevron-right" size={16} /></Button></VmCell>
