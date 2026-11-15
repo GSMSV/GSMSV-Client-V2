@@ -5,6 +5,7 @@ import { Pagination } from '../../shared/ui/data-display/Pagination';
 import { Banner } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
+import { ServerlessStateCard, StateCopy } from './ServerlessStateCard';
 
 export type ServerlessLogsTab = 'code' | 'versions' | 'triggers' | 'environment' | 'test' | 'logs';
 export type ServerlessRunResult = 'success' | 'failure' | 'timeout';
@@ -32,6 +33,8 @@ export interface ServerlessLogsPageProps {
   onPageChange?: (page: number) => void;
   onRefresh?: () => void;
   onDeleteAll?: () => void;
+  /** 빈 상태의 "테스트 실행" */
+  onTest?: () => void;
 }
 
 const tabs: Array<{ id: ServerlessLogsTab; label: string }> = [
@@ -302,6 +305,15 @@ const Footnote = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+const EmptyStateRow = styled.div`
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  padding: 56px 0;
+
+  @media (max-width: 600px) { padding: 24px 0; }
+`;
+
 const DeleteDialogContent = styled.div`
   box-sizing: border-box;
   display: flex;
@@ -340,13 +352,14 @@ export function ServerlessLogsPage({
   page = 1,
   pageSize = 100,
   selectedRunId,
-  emptyMessage = '실행 기록을 불러올 수 없습니다.',
+  emptyMessage = '실행 Log가 없습니다.',
   enabledTabs = ['logs'],
   onSelectTab,
   onSelectRun,
   onPageChange,
   onRefresh,
   onDeleteAll,
+  onTest,
 }: ServerlessLogsPageProps) {
   const [localSelection, setLocalSelection] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -397,6 +410,25 @@ export function ServerlessLogsPage({
         icon={<Octicon name="info" size={20} />}
       />
 
+      {totalCount === 0 ? (
+        <EmptyStateRow>
+          <ServerlessStateCard
+            titleId="serverless-logs-empty-title"
+            icon="history"
+            title="실행 Log가 없습니다"
+            caption="삭제할 실행 Log가 없습니다."
+            actions={<>
+              <Button variant="secondary" icon={<Octicon name="sync" size={16} />} disabled={!onRefresh} onClick={onRefresh}>새로고침</Button>
+              <Button variant="secondary" icon={<Octicon name="trashcan" size={16} />} disabled>전체 삭제</Button>
+              <Button variant="primary" icon={<Octicon name="play" size={16} />} disabled={!onTest} onClick={onTest}>테스트 실행</Button>
+            </>}
+          >
+            <StateCopy>아직 실행 기록이 없거나 모든 Log를 삭제했습니다. 테스트하거나 Trigger가 실행되면 새 Log가 표시됩니다.</StateCopy>
+            <StateCopy>· 수동 테스트 · HTTP · Cron 실행 결과를 확인할 수 있습니다.</StateCopy>
+            <StateCopy>· 목록에는 최근 {pageSize}건이 표시됩니다.</StateCopy>
+          </ServerlessStateCard>
+        </EmptyStateRow>
+      ) : <>
       <Surface>
         <SurfaceTitle>최근 실행</SurfaceTitle>
         <Table role="table" aria-label="최근 함수 실행">
@@ -459,6 +491,7 @@ export function ServerlessLogsPage({
         )}
         <Footnote>출력은 1건당 8 KB까지 남고, 넘는 부분은 잘립니다. 비밀 변수 값은 가려서 보입니다.</Footnote>
       </Surface>
+      </>}
       {deleteDialogOpen && <ModalSurface labelledBy="serverless-delete-runs-title" onDismiss={() => setDeleteDialogOpen(false)}>
         <DeleteDialogContent>
           <DeleteDialogTitle id="serverless-delete-runs-title">실행 Log를 모두 삭제하시겠습니까?</DeleteDialogTitle>

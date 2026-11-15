@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getMyQuota, type MyQuota } from '../../entities/quota';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
-import { LoadingCard } from '../../shared/ui/feedback';
+import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { ServerlessShell } from '../../widgets/serverless-shell';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { ServerlessFunctionLimitDialog } from './ServerlessFunctionLimitDialog';
+import { ServerlessStateCard, StateCopy } from './ServerlessStateCard';
 
 const Page = styled.div`
   box-sizing: border-box;
@@ -227,14 +229,31 @@ const GuideDescription = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
-const InlineRetry = styled.button`
-  margin-left: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.primary};
-  font: inherit;
-  cursor: pointer;
+const FunctionLoading = styled(LoadingCard)`
+  width: calc((100% - 32px) / 3);
+  min-width: 300px;
+
+  @media (max-width: 600px) {
+    width: 100%;
+    min-width: 0;
+  }
+`;
+
+const FunctionError = styled(ErrorCard)`
+  width: calc((100% - 32px) / 3);
+  min-width: 300px;
+  height: 252px;
+
+  @media (max-width: 600px) {
+    width: 100%;
+    min-width: 0;
+  }
+`;
+
+const EmptyStateRow = styled.div`
+  display: flex;
+  width: 100%;
+  justify-content: center;
 `;
 
 interface FunctionCardContent {
@@ -259,11 +278,17 @@ export default function ServerlessListPage() {
   const [functions, setFunctions] = useState<FunctionCardContent[]>([]);
   const [quota, setQuota] = useState<{ value: MyQuota['fn'] | null; loading: boolean; error: boolean }>({ value: null, loading: true, error: false });
   const [retryKey, setRetryKey] = useState(0);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+  const loadedOnce = useRef(false);
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
-    setQuota(current => ({ ...current, loading: true, error: false }));
+    // 첫 로딩과 다시 시도만 로딩 화면을 보이고, 다른 탭에서 바뀐 상태를 받아올 때는 그대로 둔다.
+    const background = loadedOnce.current;
+    if (!background) setQuota(current => ({ ...current, loading: true, error: false }));
     if (demoMode) {
       try {
+        if (!background) await simulateDemoRequest('serverless', signal);
+        if (signal.aborted) return;
         const demo = await import('../../entities/serverless');
         await demo.loadDemoServerlessState();
         if (signal.aborted) return;
@@ -278,8 +303,9 @@ export default function ServerlessListPage() {
           icon: fn.runtime === 'python' ? 'pulse' : 'file-code',
         })));
         setQuota({ value: demo.getDemoServerlessQuota(), loading: false, error: false });
+        loadedOnce.current = true;
       } catch {
-        if (!signal.aborted) setQuota({ value: null, loading: false, error: true });
+        if (!signal.aborted && !background) setQuota({ value: null, loading: false, error: true });
       }
       return;
     }
@@ -307,10 +333,25 @@ export default function ServerlessListPage() {
     return () => window.removeEventListener('gsmsv:demo-serverless-state-change', refresh);
   }, [demoMode]);
 
+  const retry = () => {
+    loadedOnce.current = false;
+    setRetryKey(value => value + 1);
+  };
   const count = quota.value?.count;
   const executions = quota.value?.daily_executions;
   const countPercent = count && count.limit > 0 ? Math.min(100, count.used / count.limit * 100) : 0;
   const executionPercent = executions && executions.limit > 0 ? Math.min(100, executions.used / executions.limit * 100) : 0;
+  const atFunctionLimit = Boolean(demoMode && count && count.used >= count.limit);
+  const executionLimitReached = Boolean(executions && executions.limit > 0 && executions.used >= executions.limit);
+  const executionWarning = Boolean(executions && executions.limit > 0 && !executionLimitReached && executions.used >= executions.limit * 0.8);
+  const showEmptyState = demoMode && !quota.loading && !quota.error && functions.length === 0;
+  const openCreate = () => {
+    if (atFunctionLimit) {
+      setLimitDialogOpen(true);
+      return;
+    }
+    void navigate('/serverless/new');
+  };
 
   return (
     <ServerlessShell>
@@ -326,13 +367,28 @@ export default function ServerlessListPage() {
             icon={<Octicon name="plus" size={16} />}
             disabled={!demoMode}
             title={!demoMode ? 'Serverless 함수 생성 API가 아직 없습니다' : undefined}
-            onClick={() => void navigate('/serverless/new')}
+            onClick={openCreate}
           >새 함수</Button>
         </Heading>
+
+        {executionWarning && executions && <Banner
+          tone="warning"
+          icon={<Octicon name="alert" size={20} />}
+          title="오늘 실행을 80% 넘게 썼습니다"
+          description={`오늘 실행 ${formatNumber(executions.used)} / ${formatNumber(executions.limit)}회. 한도에 닿으면 다음 날까지 호출과 예약 실행을 거절합니다.`}
+        />}
+        {executionLimitReached && executions && <Banner
+          tone="danger"
+          icon={<Octicon name="alert" size={20} />}
+          title="오늘 실행 한도에 닿았습니다"
+          description={`${formatNumber(executions.limit)}회를 모두 썼습니다. 다음 날까지 호출과 예약 실행을 거절합니다.`}
+        />}
 
         <SummaryRow aria-label="Serverless 사용량">
           {quota.loading ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
+          ) : quota.error ? (
+            <><ErrorCard onRetry={retry} /><ErrorCard onRetry={retry} /><ErrorCard onRetry={retry} /></>
           ) : (
             <>
               <SummaryCard
@@ -340,14 +396,14 @@ export default function ServerlessListPage() {
                 icon={<Octicon name="file-code" size={16} />}
                 value={count ? `${formatNumber(count.used)} / ${formatNumber(count.limit)}` : '— / —'}
                 meter={count ? { value: countPercent, tone: count.used > count.limit ? 'danger' : 'primary', label: '함수 개수 사용량' } : undefined}
-                caption={count ? `함수 ${formatNumber(Math.max(0, count.limit - count.used))}개를 더 만들 수 있습니다` : quota.error ? <>사용량을 불러오지 못했습니다<InlineRetry type="button" onClick={() => setRetryKey(value => value + 1)}>다시 시도</InlineRetry></> : '사용량 정보 없음'}
+                caption={count ? `함수 ${formatNumber(Math.max(0, count.limit - count.used))}개를 더 만들 수 있습니다` : '사용량 정보 없음'}
               />
               <SummaryCard
                 label="오늘 실행"
                 icon={<Octicon name="pulse" size={16} />}
                 value={executions ? `${formatNumber(executions.used)} / ${formatNumber(executions.limit)}회` : '— / —회'}
-                meter={executions ? { value: executionPercent, tone: executions.used > executions.limit ? 'danger' : 'primary', label: '오늘 함수 실행 사용량' } : undefined}
-                caption={executions ? '내 함수 전체 실행량을 합해 세요' : quota.error ? <>사용량을 불러오지 못했습니다<InlineRetry type="button" onClick={() => setRetryKey(value => value + 1)}>다시 시도</InlineRetry></> : '사용량 정보 없음'}
+                meter={executions ? { value: executionPercent, tone: executionLimitReached ? 'danger' : 'primary', label: '오늘 함수 실행 사용량' } : undefined}
+                caption={executions ? '내 함수 전체 실행량을 합해 세요' : '사용량 정보 없음'}
               />
               <SummaryCard
                 label="기본 실행 제한"
@@ -361,40 +417,61 @@ export default function ServerlessListPage() {
 
         <Section>
           <SectionTitle>내 함수</SectionTitle>
-          <Cards>
-            {functions.map((fn, index) => (
-              <FunctionCard key={`${fn.id}-${index}`}>
-                <CardActions>
-                  <FunctionIcon aria-hidden="true"><Octicon name={fn.icon} size={20} /></FunctionIcon>
-                  <Button
-                    variant="secondary"
-                    icon={<Octicon name="arrow-right" size={16} />}
-                    disabled={!demoMode}
-                    title={!demoMode ? 'Serverless 함수 상세 API가 아직 없습니다' : undefined}
-                    onClick={() => void navigate(`/serverless/${encodeURIComponent(fn.id)}`)}
-                  >함수 열기</Button>
-                </CardActions>
-                <FunctionName>{fn.name}</FunctionName>
-                <CardDescription>{fn.description}</CardDescription>
-                <Metadata>{fn.method}</Metadata>
-                <CardFooter>
-                  <Expiry>만료 {fn.expires}</Expiry>
-                  <RuntimeState $active={fn.active}>{fn.active ? '활성' : '비활성'} · {fn.runtime}</RuntimeState>
-                </CardFooter>
-              </FunctionCard>
-            ))}
-            {functions.length === 0 && <EmptyNotice>{demoMode ? '아직 함수가 없습니다. 새 함수를 만들어 보세요.' : 'Serverless 함수 목록 API 계약이 공개되면 실제 함수를 표시합니다.'}</EmptyNotice>}
-          </Cards>
+          {showEmptyState ? (
+            <EmptyStateRow>
+              <ServerlessStateCard
+                titleId="serverless-empty-title"
+                icon="file-code"
+                title="첫 번째 함수를 만들어보세요"
+                actions={<>
+                  <Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => void navigate('/help')}>사용 Docs</Button>
+                  <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={openCreate}>첫 함수 만들기</Button>
+                </>}
+              >
+                <StateCopy>서버를 따로 관리하지 않고 필요한 코드를 실행할 수 있습니다. 함수를 만든 뒤 HTTP 또는 예약 Trigger를 연결하세요.</StateCopy>
+                <StateCopy>· 내 함수 · {formatNumber(count?.used ?? 0)} / {formatNumber(count?.limit ?? 0)}</StateCopy>
+                <StateCopy>· 기본 실행 환경 · 30초 / 128MB</StateCopy>
+              </ServerlessStateCard>
+            </EmptyStateRow>
+          ) : (
+            <Cards>
+              {quota.loading ? <><FunctionLoading height={252} /><FunctionLoading height={252} /></>
+                : quota.error ? <><FunctionError onRetry={retry} /><FunctionError onRetry={retry} /></>
+                : functions.map((fn, index) => (
+                  <FunctionCard key={`${fn.id}-${index}`}>
+                    <CardActions>
+                      <FunctionIcon aria-hidden="true"><Octicon name={fn.icon} size={20} /></FunctionIcon>
+                      <Button
+                        variant="secondary"
+                        icon={<Octicon name="arrow-right" size={16} />}
+                        disabled={!demoMode}
+                        title={!demoMode ? 'Serverless 함수 상세 API가 아직 없습니다' : undefined}
+                        onClick={() => void navigate(`/serverless/${encodeURIComponent(fn.id)}`)}
+                      >함수 열기</Button>
+                    </CardActions>
+                    <FunctionName>{fn.name}</FunctionName>
+                    <CardDescription>{fn.description}</CardDescription>
+                    <Metadata>{fn.method}</Metadata>
+                    <CardFooter>
+                      <Expiry>만료 {fn.expires}</Expiry>
+                      <RuntimeState $active={fn.active}>{fn.active ? '활성' : '비활성'} · {fn.runtime}</RuntimeState>
+                    </CardFooter>
+                  </FunctionCard>
+                ))}
+              {!demoMode && !quota.loading && !quota.error && <EmptyNotice>Serverless 함수 목록 API 계약이 공개되면 실제 함수를 표시합니다.</EmptyNotice>}
+            </Cards>
+          )}
         </Section>
 
-        <Guide>
+        {!quota.loading && !quota.error && <Guide>
           <GuideText>
             <GuideTitle>작게 만들고, 바로 테스트하세요</GuideTitle>
             <GuideDescription>요청 하나당 예약 한 번을 처리하고 끝나는 코드에 맞습니다. 계속 떠 있어야 하는 웹 앱은 Apps에서 배포하세요.</GuideDescription>
           </GuideText>
           <Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => void navigate('/help')}>사용 Docs</Button>
-        </Guide>
+        </Guide>}
       </Page>
+      {limitDialogOpen && count && <ServerlessFunctionLimitDialog used={count.used} limit={count.limit} onClose={() => setLimitDialogOpen(false)} />}
     </ServerlessShell>
   );
 }

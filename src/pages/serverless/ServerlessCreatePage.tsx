@@ -1,7 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Button, SegmentedControl, TextField } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { ServerlessStateCard, StateCopy, StateField, StateFieldError, StateFieldLabel, StateFieldValue } from './ServerlessStateCard';
 
 export type ServerlessRuntime = 'javascript' | 'typescript' | 'python';
 
@@ -18,6 +20,8 @@ export interface ServerlessCreatePageProps {
   onCancel: () => void;
   onCreate: (draft: ServerlessFunctionDraft) => void | Promise<void>;
   existingNames?: string[];
+  /** 생성 전에 코드 형식 오류를 찾는다. 없으면 null. */
+  findCodeError?: (code: string, runtime: ServerlessRuntime) => { fileName: string; line: number; message: string } | null;
 }
 
 const starterCode: Record<ServerlessRuntime, string> = {
@@ -294,7 +298,7 @@ const CodeInput = styled.textarea`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 4px; }
 `;
 
-export default function ServerlessCreatePage({ onCancel, onCreate, existingNames = [] }: ServerlessCreatePageProps) {
+export default function ServerlessCreatePage({ onCancel, onCreate, existingNames = [], findCodeError }: ServerlessCreatePageProps) {
   const [name, setName] = useState('welcome-api');
   const [runtime, setRuntime] = useState<ServerlessRuntime>('javascript');
   const [timeoutSeconds, setTimeoutSeconds] = useState<'30' | '60'>('30');
@@ -305,6 +309,8 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
   const [createError, setCreateError] = useState('');
   const lineCount = useMemo(() => code.split('\n').length, [code]);
   const duplicateName = existingNames.some(existingName => existingName.trim().toLowerCase() === name.trim().toLowerCase());
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const codeError = useMemo(() => findCodeError?.(code, runtime) ?? null, [code, findCodeError, runtime]);
 
   const handleRuntimeChange = (value: string) => {
     const selectedRuntime = value as ServerlessRuntime;
@@ -314,7 +320,16 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isCreating || duplicateName || !name.trim()) return;
+    if (isCreating || !name.trim()) return;
+    if (duplicateName || codeError) {
+      setReviewOpen(true);
+      return;
+    }
+    await create();
+  };
+
+  const create = async () => {
+    setReviewOpen(false);
     setIsCreating(true);
     setCreateError('');
     try {
@@ -347,7 +362,7 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
             </TitleGroup>
             <Actions>
               <Button variant="secondary" icon={<Octicon name="x" size={16} />} disabled={isCreating} onClick={onCancel}>취소</Button>
-              <Button variant="primary" icon={<Octicon name={isCreating ? 'sync' : 'plus'} size={16} />} type="submit" disabled={isCreating || duplicateName || !name.trim()}>{isCreating ? '생성 중…' : '함수 생성'}</Button>
+              <Button variant="primary" icon={<Octicon name={isCreating ? 'sync' : 'plus'} size={16} />} type="submit" disabled={isCreating || !name.trim()}>{isCreating ? '생성 중…' : '함수 생성'}</Button>
             </Actions>
           </Heading>
           {duplicateName && <FormError role="alert">이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.</FormError>}
@@ -431,6 +446,38 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
           </EditorCard>
         </FormContent>
       </form>
+      {reviewOpen && <ModalSurface labelledBy="serverless-create-review-title" onDismiss={() => setReviewOpen(false)}>
+        <ServerlessStateCard
+          floating
+          titleId="serverless-create-review-title"
+          icon="alert"
+          tone="danger"
+          title="함수 정보를 확인해주세요"
+          caption={duplicateName && codeError ? '중복 이름과 컴파일 오류를 먼저 수정해주세요.' : duplicateName ? '중복 이름을 먼저 수정해주세요.' : codeError ? '컴파일 오류를 먼저 수정해주세요.' : undefined}
+          actions={<>
+            <Button type="button" variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={isCreating || duplicateName || Boolean(codeError) || !name.trim()} onClick={() => void create()}>함수 생성</Button>
+            <Button type="button" variant="primary" icon={<Octicon name="pencil" size={16} />} onClick={() => setReviewOpen(false)}>계속 작성</Button>
+          </>}
+        >
+          <StateCopy>{duplicateName && codeError
+            ? '입력한 이름이 이미 사용 중이며 코드에 컴파일 오류가 있습니다. 표시된 항목을 수정하면 생성할 수 있습니다.'
+            : duplicateName ? '입력한 이름이 이미 사용 중입니다. 표시된 항목을 수정하면 생성할 수 있습니다.'
+            : codeError ? '코드에 컴파일 오류가 있습니다. 표시된 항목을 수정하면 생성할 수 있습니다.'
+            : '표시된 항목을 모두 고쳤습니다. 함수를 생성할 수 있습니다.'}</StateCopy>
+          <TextField
+            id="serverless-review-name"
+            label="함수 이름"
+            value={name}
+            onChange={(event) => { setName(event.currentTarget.value); setCreateError(''); }}
+            error={duplicateName ? '이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.' : undefined}
+          />
+          {codeError && <StateField>
+            <StateFieldLabel>코드 오류</StateFieldLabel>
+            <StateFieldValue $error>{codeError.fileName} · {codeError.line}번째 줄: {codeError.message.replace(/\.$/, '')}.</StateFieldValue>
+            <StateFieldError>컴파일 오류를 수정해주세요.</StateFieldError>
+          </StateField>}
+        </ServerlessStateCard>
+      </ModalSurface>}
     </Page>
   );
 }

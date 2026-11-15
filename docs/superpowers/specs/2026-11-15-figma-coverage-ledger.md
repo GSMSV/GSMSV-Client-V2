@@ -51,7 +51,7 @@ Counts cover Product frames, States panels and Flows nodes together. "Gap" means
 |---|---|---|---|---|---|
 | Auth/Home | 4/4 | 4/4 | 28/28 (+2 orphan text, N/A) | 36 | 0 |
 | VM (A+B) | 10/12 | 19/49 | 39/97 | 68 | 90 (38) |
-| Serverless | 8/8 | 12/26 | 28/57 | 48 | 43 (6) |
+| Serverless | 8/8 | 26/26 | 57/57 | 91 | 0 (0) |
 | Database (incl. 49) | 7/8 | 10/21 | 32/53 | 49 | 33 (0) |
 | Apps | 13/13 | 27/27 | 63/75 | 103 | 12 (0) |
 | Teams | 4/5 | 8/13 | 22/32 | 34 | 16 (OK† DEV only) |
@@ -325,18 +325,20 @@ Product: 3 total (OK 1 / non-OK 2: PARTIAL 2). States panels: 25 total (OK 14 / 
 
 ### Serverless
 
-Context notes (apply to all rows):
-- `/serverless` is in main routes (router.tsx:124). `/serverless/new`, `/serverless/:functionId`, `/:functionId/triggers`, `/:functionId/:tab` come from `src/pages/serverless/routes.tsx`. Those are registered only when `DEV || isDemoMode()`, and each route redirects to `/serverless` when demo mode is off.
-- ServerlessListPage loads demo data only when `import.meta.env.DEV && demoMode` (ServerlessListPage.tsx:265). In a production build with `?demo=1` the list calls the real `getMyQuota` and shows no function cards. ServerlessShell teams scope has the same DEV gate. PR #144 removes the `DEV` gate in both files → PENDING-PR #144 for non-DEV demo builds.
-- The demo routes render lazy pages (CreatePage/FunctionPage/…) with no `<Suspense>` boundary (routes.tsx), so no skeleton shows during chunk load. Functions are read synchronously from demo state, and there is no loading or error branch on develop. PR #144 adds `ServerlessLoadState` (LoadingCard while `loadDemoServerlessState` runs on IndexedDB, ErrorCard+retry on failure) to the function, triggers and tab routes. The create route is not covered.
-- Seed (entities/serverless/model/demoServerless.ts): personal welcome-api (active, HTTP POST + Cron 0 9 * * *, 3 versions, 248 runs) and health-check (inactive, Python). connect-api is a team function and is filtered out of the personal list. Count limit is **3** (design panel 53:4529 says 5). Daily executions are 1,284 / 10,000.
+Context notes (apply to all rows). Re-verified on `codex/figma-serverless` (develop @ 6793850 + this branch):
+- `/serverless` is in main routes (router.tsx:124). `/serverless/new`, `/serverless/:functionId`, `/:functionId/triggers`, `/:functionId/:tab` come from `src/pages/serverless/routes.tsx`, registered when `DEV || isDemoMode()`; each route redirects to `/serverless` when demo mode is off.
+- The `import.meta.env.DEV` gate in ServerlessListPage and ServerlessShell is gone (PR #144); the production `?demo=1` build shows demo data.
+- Loading/error: the list (`?demoError=serverless`), create (`?demoError=serverless-new`) and every function tab (`?demoError=serverless-fn`) first wait `simulateDemoRequest` (600ms) and show the Figma loading frame (header + tabs + Loading/card), or ErrorCards with retry on the simulated failure. `src/pages/serverless/ServerlessPagePlaceholder.tsx`.
+- Seed: personal welcome-api (active) and health-check (inactive, Python) → 2/3; connect-api is a GSM Connect team function. The count limit is **3** (`demoServerlessFunctionLimit`), matching flow 13-02 (698:3860 "개인 3 / 3"). Daily executions 1,284 / 10,000.
+- `?demoServerless=<scenario>` (comma list, applied once per page load and persisted in the demo store) creates states that otherwise need long usage: `usage-warning` (8,240 / 10,000), `usage-limit` (10,000 / 10,000), `suspended` (welcome-api expired, extend clears it), `throttled` (welcome-api 12 rejected 429 requests). `src/entities/serverless/model/demoServerless.ts`.
+- Team functions are routable for members of their team (`getDemoServerlessAccessibleFunction`) and listed in global search. A team role of `member` (e.g. after 팀장 위임 in team settings) makes the function read-only.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
-| 13 | Serverless 목록 | 52:2983 | 1440x1080 | `/serverless` | `src/pages/serverless/ServerlessListPage.tsx` in ServerlessShell | OK | 3 usage cards + function cards + guide. Non-DEV demo build shows no cards (PENDING-PR #144) |
+| 13 | Serverless 목록 | 52:2983 | 1440x1080 | `/serverless` | `src/pages/serverless/ServerlessListPage.tsx` in ServerlessShell | OK | 3 usage cards + function cards + guide |
 | 14 | 함수 만들기 | 52:3211 | 1440x1353 | `/serverless/new` | `ServerlessCreatePage.tsx` via `ServerlessCreateRoute` | OK | Form fields, runtime segmented control, starter code |
-| 15 | 함수 코드 | 52:3378 | 1440x1625 | `/serverless/:functionId` | `ServerlessFunctionPage.tsx` via `ServerlessFunctionRoute` | OK | Tabs, expiry banner, status panel, editor, execution settings |
+| 15 | 함수 코드 | 52:3378 | 1440x1625 | `/serverless/:functionId` | `ServerlessFunctionPage.tsx` via `ServerlessFunctionRoute` | OK | Tabs, expiry banner, status panel, editor (`index.ts` for TypeScript), execution settings |
 | 16 | 함수 Trigger | 52:3611 | 1440x1335 | `/serverless/:functionId/triggers` | `ServerlessTriggersPage.tsx` via `ServerlessTriggersRoute` | OK | Address, limits, trigger table, custom domain |
 | 17 | 함수 환경변수 | 53:1670 | 1440x1479 | `/serverless/:functionId/environment` | `ServerlessEnvironmentPage.tsx` via `ServerlessTabRoute` | OK | Variables, new variable form, DB connection |
 | 18 | 함수 테스트 | 53:1927 | 1440x1080 | `/serverless/:functionId/test` | `ServerlessTestPage.tsx` via `ServerlessTabRoute` | OK | Payload/response, summary cards, output log |
@@ -347,95 +349,94 @@ Context notes (apply to all rows):
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
 | 35 · Serverless 작업 모달 (53:4251) | Cron Trigger 추가 | 53:4293 | `features/serverless/manage-triggers/ui/TriggerDialog.tsx` type=Cron | On `/serverless/welcome-api/triggers` click "Trigger 추가" (next type = Cron because HTTP exists) | OK | Default `*/5 * * * *`. Shows next run time, notes and timezone |
-| 35 (53:4251) | welcome-api를 삭제할까요? | 698:3479 | `DeleteConfirmDialog` in ServerlessFunctionPage.tsx:507 | On `/serverless/welcome-api` click "함수 삭제" | OK | Name must be typed. Confirm deletes and navigates to `/serverless` |
-| 35 (53:4251) | 실행 Log를 모두 삭제할까요? | 53:4359 | ServerlessLogsPage.tsx:462 ModalSurface | On `/serverless/welcome-api/logs` click "전체 삭제" | OK | Copy matches |
-| 35 (53:4251) | 함수 실행 중 오류가 발생했어요 | 53:4382 | — | — | MISSING | `executeDemoServerlessTest` always succeeds. No failure result or dialog |
-| 36 · 실행·프로필 입력 상태 (53:4422) | 실행 시간이 초과됐어요 | 53:4426 | — | — | MISSING | No timeout execution path or dialog (timeout exists only as a seeded log row) |
-| 36 (53:4422) | 함수를 5개 모두 사용하고 있어요 | 53:4529 | — | — | MISSING | No quota guard on "새 함수" or on create. Limit in code is 3, not 5 |
-| 36 (53:4422) | 함수 정보를 확인해주세요 | 53:4551 | ServerlessCreatePage inline `FormError` + TextField error | `/serverless/new` (default name `welcome-api` already collides) | PARTIAL | Duplicate-name error is inline only. No compile-error check and no dialog |
-| 39 · 함수 실행·검증 상태 (60:1033) | 비활성 함수는 실행할 수 없어요 | 60:1037 | ServerlessTestPage.tsx:459 executionError='inactive' | On `/serverless/health-check/test` click "실행" | OK | Has a "함수 활성화" action |
-| 39 (60:1033) | JSON 형식을 확인해주세요 | 60:1085 | ServerlessTestPage.tsx:484 jsonErrorOpen | On the test tab, type invalid JSON (e.g. trailing comma) → "실행" | OK | Line hint shows for trailing commas |
+| 35 (53:4251) | welcome-api를 삭제할까요? | 698:3479 | `DeleteConfirmDialog` in ServerlessFunctionPage.tsx | On `/serverless/welcome-api` click "함수 삭제" | OK | Name must be typed. Confirm deletes and navigates to `/serverless` |
+| 35 (53:4251) | 실행 Log를 모두 삭제할까요? | 53:4359 | ServerlessLogsPage.tsx ModalSurface | On `/serverless/welcome-api/logs` click "전체 삭제" | OK | Copy matches |
+| 35 (53:4251) | 함수 실행 중 오류가 발생했어요 | 53:4382 | ServerlessTestPage.tsx `executionError.kind==='runtime-error'` (ServerlessStateCard) | Add `throw new Error("customer is not defined")` (or Python `raise`) to the code, save, then "실행" on the test tab | OK | Shows message + `index.js · N번째 줄`, "Log 확인"/"코드 수정". A failure row is added to Logs |
+| 36 · 실행·프로필 입력 상태 (53:4422) | 실행 시간이 초과됐어요 | 53:4426 | ServerlessTestPage.tsx `executionError.kind==='timeout'` | Code with `while (true)` / `for (;;)` / `while True:` → save → "실행" | OK | Uses the function's timeout/memory. "코드 확인"/"다시 테스트". Timeout row added to Logs |
+| 36 (53:4422) | 함수를 5개 모두 사용하고 있어요 | 53:4529 | Superseded by 698:3860 (`ServerlessFunctionLimitDialog.tsx`) | — | OK | Older panel with a 5-function limit. The flow frame 13-02 and panel 698:3860 use 3 / 3, so the limit is 3 and this condition shows 698:3860 |
+| 36 (53:4422) | 함수 정보를 확인해주세요 | 53:4551 | ServerlessCreatePage.tsx review dialog | `/serverless/new` (default name `welcome-api` collides) → "함수 생성"; or break a bracket in the starter code | OK | Name field editable in the dialog, code error `index.js · N번째 줄: 닫는 중괄호가 필요합니다.`; copy adapts when only one problem exists |
+| 39 · 함수 실행·검증 상태 (60:1033) | 비활성 함수는 실행할 수 없어요 | 60:1037 | ServerlessTestPage.tsx executionError 'inactive' | On `/serverless/health-check/test` click "실행" | OK | Has a "함수 활성화" action |
+| 39 (60:1033) | JSON 형식을 확인해주세요 | 60:1085 | ServerlessTestPage.tsx jsonErrorOpen | On the test tab, type invalid JSON (e.g. trailing comma) → "실행" | OK | Line hint shows for trailing commas |
 | 39 (60:1033) | Cron 표현식을 확인해주세요 | 60:1116 | TriggerDialog hasCronError (reason≠frequency) | In the Cron dialog, type `*/x * * * *` | OK | Add button disabled, "돌아가기" |
 | 39 (60:1033) | 5분보다 짧은 간격은 쓸 수 없어요 | 698:3506 | TriggerDialog isTooFrequent | In the Cron dialog, type `*/2 * * * *` | OK | "2분마다 실행 · 5분 이상으로 입력해 주세요." |
-| 39 (60:1033) | 실행 Log가 없어요 | 60:1155 | ServerlessLogsPage EmptyRow (`emptyMessage` default) | Delete all logs, or open a function with no runs | PARTIAL | Shows default "실행 기록을 불러올 수 없습니다." (reads as an error). routes.tsx passes no `emptyMessage`. No empty-state guidance copy |
-| 42 · Network·Serverless 보완 (104:1927) | HTTP Trigger 추가 | 104:2053 | TriggerDialog type=HTTP | Only when the function has no HTTP trigger: delete welcome-api HTTP row (trash icon) or open a new function → "Trigger 추가" | OK | Not directly reachable on seeded welcome-api (button opens Cron) |
-| 46 · 계정 연결·함수 호출 상태 (128:2316) | 호출 주소를 재발급할까요? | 698:3562 | ServerlessTriggersPage.tsx:573 confirm | Triggers tab → "호출 주소 재발급" | OK | Confirm regenerates the URL |
-| 46 (128:2316) | 동시 실행 한도를 넘은 요청이 있어요 | 698:3599 | — | — | MISSING | Only static helper text "429로 거절". No 429 event banner |
-| 46 (128:2316) | Domain을 확인하지 못했어요 | 698:3621 | ServerlessTriggersPage.tsx:560 verification-error | "도메인 연결" → enter a domain → "TXT 확인" (always fails first) | OK | "다시 확인" connects |
-| 46 (128:2316) | 오늘 실행을 80% 넘게 썼어요 | 698:3685 | — | — | MISSING | List shows only a usage meter, no warning banner. 1,284/10,000 with no way to raise it |
-| 46 (128:2316) | 오늘 실행 한도에 닿았어요 | 698:3703 | — | — | MISSING | No limit banner on the list |
-| 46 (128:2316) | 한도에 닿아서 실행하지 않았어요 | 698:3725 | ServerlessTestPage.tsx:468 executionError='quota' | Needs executionsToday ≥ 10,000 (≈8,716 manual runs) | UNREACHABLE | No demo toggle. Design shows it inline, code uses a modal |
-| 46 (128:2316) | API_KEY 값을 바꿀까요? | 698:3770 | ServerlessEnvironmentPage.tsx:543 UpdateDialog | Environment tab → "값 바꾸기" on API_KEY | OK | |
-| 46 (128:2316) | 버전 5로 되돌릴까요? | 698:3815 | ServerlessVersionsPage.tsx:272 | Versions tab → "되돌리기" on 버전 5 | OK | "새 버전 8" is computed |
-| 46 (128:2316) | 함수를 더 만들 수 없어요 | 698:3860 | — | — | MISSING | At 3/3 "새 함수" stays enabled and creation succeeds (4/3) |
-| 46 (128:2316) | 정지됐어요 · 3일 뒤 삭제돼요 | 698:3917 | — | — | MISSING | Only a hardcoded "만료까지 7일 남았습니다" banner. No suspended state |
-| 46 (128:2316) | 일반 팀원으로 보고 있어요 | 698:3939 | — | — | MISSING | Team functions (connect-api) are excluded by `getDemoServerlessFunction`. No read-only member view |
-| 46 (128:2316) | TypeScript 오류로 저장하지 않았어요 | 698:3961 | — | — | MISSING | `onSaveCode` saves without type checking |
-| 38 · 조회·빈 상태·삭제 안내 (103:1983) | 첫 번째 함수를 만들어보세요 | 103:2049 | ServerlessListPage.tsx:386 EmptyNotice | Delete welcome-api and health-check | PARTIAL | Copy is "아직 함수가 없습니다. 새 함수를 만들어 보세요.". No 0/5 or 30초/128MB details, no CTA in the card |
+| 39 (60:1033) | 실행 Log가 없어요 | 60:1155 | ServerlessLogsPage.tsx empty ServerlessStateCard | Delete all logs, or open health-check logs | OK | 새로고침 / 전체 삭제(disabled) / 테스트 실행 |
+| 42 · Network·Serverless 보완 (104:1927) | HTTP Trigger 추가 | 104:2053 | TriggerDialog type=HTTP | Only when the function has no HTTP trigger: delete welcome-api HTTP row or open a new function → "Trigger 추가" | OK | |
+| 46 · 계정 연결·함수 호출 상태 (128:2316) | 호출 주소를 재발급할까요? | 698:3562 | ServerlessTriggersPage.tsx confirm | Triggers tab → "호출 주소 재발급" | OK | Confirm regenerates the URL |
+| 46 (128:2316) | 동시 실행 한도를 넘은 요청이 있어요 | 698:3599 | ServerlessTriggersPage.tsx `rejectedRequestsToday` Banner | `/serverless/welcome-api/triggers?demoServerless=throttled` | OK | No user action produces concurrent HTTP overload in the demo, so the scenario sets the 12 rejected requests |
+| 46 (128:2316) | 오늘 실행을 80% 넘게 썼어요 | 698:3685 | ServerlessListPage.tsx warning Banner (≥80%, <100%) | `/serverless?demoServerless=usage-warning` | OK | Numbers follow the store; manual runs keep counting up |
+| 46 (128:2316) | 오늘 실행 한도에 닿았어요 | 698:3703 | ServerlessListPage.tsx danger Banner (≥100%) | `/serverless?demoServerless=usage-limit` | OK | |
+| 46 (128:2316) | 한도에 닿아서 실행하지 않았어요 | 698:3725 | ServerlessTestPage.tsx inline danger Banner (`executionError.kind==='quota'`) | After `usage-limit`, test tab → "실행" | OK | Now inline under the tabs as in 700:53198 (was a modal) |
+| 46 (128:2316) | API_KEY 값을 바꿀까요? | 698:3770 | ServerlessEnvironmentPage.tsx UpdateDialog | Environment tab → "값 바꾸기" on API_KEY | OK | |
+| 46 (128:2316) | 버전 5로 되돌릴까요? | 698:3815 | ServerlessVersionsPage.tsx | Versions tab → "되돌리기" on 버전 5 | OK | "새 버전 8" is computed |
+| 46 (128:2316) | 함수를 더 만들 수 없어요 | 698:3860 | `src/pages/serverless/ServerlessFunctionLimitDialog.tsx` | Create a 3rd function, then "새 함수" on the list (or open `/serverless/new` at 3/3) | OK | `createDemoServerlessFunction` also rejects past the limit |
+| 46 (128:2316) | 정지됐어요 · 3일 뒤 삭제돼요 | 698:3917 | ServerlessFunctionPage.tsx `suspended` Banner | `/serverless/welcome-api?demoServerless=suspended` | OK | Replaces the expiry banner; "사용 기간 연장" clears suspension. The demo clock is fixed, so expiry can't happen on its own |
+| 46 (128:2316) | 일반 팀원으로 보고 있어요 | 698:3939 | ServerlessFunctionPage.tsx `readOnly` notice; mutating handlers omitted on every tab | Team settings → 팀장 위임 (you become a member of GSM Connect) → search `connect-api` → open | OK | Code/Logs viewable and extend allowed; save, settings, delete, run, trigger/env edits and rollback disabled |
+| 46 (128:2316) | TypeScript 오류로 저장하지 않았어요 | 698:3961 | ServerlessFunctionPage.tsx `saveError` Banner | Remove a closing `}` in the editor → "코드 저장" | OK | `index.ts N번째 줄의 형식 오류를 고쳐 주세요. 지금 버전 7은 그대로입니다.` Code is not saved; Python shows "Python 오류로…" |
+| 38 · 조회·빈 상태·삭제 안내 (103:1983) | 첫 번째 함수를 만들어보세요 | 103:2049 | ServerlessListPage.tsx empty ServerlessStateCard | Delete welcome-api and health-check | OK | Shows `내 함수 · 0 / 3` (actual limit; the panel's 0 / 5 predates the 3-function limit) |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
 | 13 · Serverless 목록 | 203:50606 | entry: sidebar "Serverless" → 13 | StudentShell paths.serverless='/serverless' → ServerlessListPage | OK |
-| 13-01 · 첫 번째 함수를 만들어보세요 | 203:50819 | 13 with 0 functions → empty state | EmptyNotice with different copy and no details | PARTIAL |
-| 13-02 · 함수를 더 만들 수 없어요 | 203:51053 | 13 at 3/3, "새 함수" → limit dialog | Navigates to /serverless/new. Creation is allowed past the limit | MISSING |
-| 13-03 · 오늘 실행을 80% 넘게 썼어요 | 699:53778 | 13 with ≥80% daily usage → warning banner | No banner, no way to raise usage | MISSING |
-| 13-04 · 오늘 실행 한도에 닿았어요 | 699:53946 | 13 at daily limit → limit banner | No banner | MISSING |
-| 13-05 · 로딩 | 741:54575 | 13 loading skeleton | 3 SummaryLoading cards while IndexedDB loads. Cards area shows the empty notice meanwhile | PARTIAL |
-| 13-06 · 오류 | 747:61233 | 13 load error | Inline "사용량을 불러오지 못했습니다 · 다시 시도" only if demo storage throws. No demo toggle | UNREACHABLE |
-| 13-07 · 호버 · 함수 열기 | 226:27521 | "함수 열기" → 15 | navigate(`/serverless/:id`) → FunctionPage (DEV demo). Non-DEV demo: no cards (PENDING-PR #144) | OK |
-| 14 · 함수 만들기 | 203:51289 | entry: 13 "새 함수" → 14 | navigate('/serverless/new') (disabled outside demo) | OK |
-| 14-01 · 함수 정보를 확인해주세요 | 203:51439 | 14 submit with duplicate name + compile error → dialog | Inline duplicate error, submit disabled. No compile check or dialog | PARTIAL |
-| 14-02 · 로딩 | 741:54780 | 14 loading skeleton | Lazy CreatePage with no Suspense fallback. Nothing rendered | MISSING |
-| 14-03 · 오류 | 747:61473 | 14 load error | No error rendering on the create route (not covered by PR #144) | MISSING |
-| 14-04 · 호버 · TypeScript | 241:26949 | Runtime "TypeScript" → selects TS + TS starter code | handleRuntimeChange sets runtime and starterCode.typescript | OK |
+| 13-01 · 첫 번째 함수를 만들어보세요 | 203:50819 | 13 with 0 functions → empty state | Empty state card with 사용 Docs / 첫 함수 만들기 | OK |
+| 13-02 · 함수를 더 만들 수 없어요 | 203:51053 | 13 at 3/3, "새 함수" → limit dialog | Limit dialog; "함수 목록" closes | OK |
+| 13-03 · 오늘 실행을 80% 넘게 썼어요 | 699:53778 | 13 with ≥80% daily usage → warning banner | Banner between heading and usage cards (`?demoServerless=usage-warning`) | OK |
+| 13-04 · 오늘 실행 한도에 닿았어요 | 699:53946 | 13 at daily limit → limit banner | Danger banner (`?demoServerless=usage-limit`) | OK |
+| 13-05 · 로딩 | 741:54575 | 13 loading skeleton | 3 summary + 2 function Loading cards, guide hidden | OK |
+| 13-06 · 오류 | 747:61233 | 13 load error | ErrorCards in summary and function rows (`?demoError=serverless`), retry succeeds | OK |
+| 13-07 · 호버 · 함수 열기 | 226:27521 | "함수 열기" → 15 | navigate(`/serverless/:id`) | OK |
+| 14 · 함수 만들기 | 203:51289 | entry: 13 "새 함수" → 14 | navigate('/serverless/new') | OK |
+| 14-01 · 함수 정보를 확인해주세요 | 203:51439 | 14 submit with duplicate name + compile error → dialog | Review dialog | OK |
+| 14-02 · 로딩 | 741:54780 | 14 loading skeleton | `ServerlessCreatePlaceholder` (header + 536/392 Loading cards) | OK |
+| 14-03 · 오류 | 747:61473 | 14 load error | ErrorCards (`?demoError=serverless-new`) | OK |
+| 14-04 · 호버 · TypeScript | 241:26949 | Runtime "TypeScript" → selects TS + TS starter code | handleRuntimeChange | OK |
 | 15 · 함수 코드 | 203:51620 | entry: 14 "함수 생성" or 13 "함수 열기" → 15 | Create → navigate(`/serverless/<uuid>`). Open → `/serverless/:id` | OK |
 | 15-01 · welcome-api를 삭제할까요? | 203:52074 | "함수 삭제" → delete confirm | DeleteConfirmDialog. Confirm → delete → /serverless | OK |
-| 15-02 · TypeScript 오류로 저장하지 않았어요 | 699:54597 | "코드 저장" with TS error → inline error | Saves unconditionally | MISSING |
-| 15-03 · 정지됐어요 · 3일 뒤 삭제돼요 | 699:54821 | Suspended function → banner/locked editor | No suspended state. Static 7-day expiry banner | MISSING |
-| 15-04 · 일반 팀원으로 보고 있어요 | 699:55025 | Team function viewed as member → read-only notice | Team functions are not routable (redirect to /serverless) | MISSING |
-| 15-05 · 로딩 | 741:54937 | 15 loading skeleton | develop: no Suspense or loading branch. PR #144 adds a LoadingCard while state loads | PENDING-PR #144 |
-| 15-06 · 오류 | 747:61644 | 15 load error | develop: none. PR #144 ErrorCard appears only on demo storage failure (no toggle) | UNREACHABLE |
-| 15-07 · 호버 · 코드 저장 | 241:27102 | "코드 저장" → saved, new version | saveDemoServerlessCode → new version, label updates (no toast) | OK |
+| 15-02 · TypeScript 오류로 저장하지 않았어요 | 699:54597 | "코드 저장" with TS error → inline error | Danger banner, not saved | OK |
+| 15-03 · 정지됐어요 · 3일 뒤 삭제돼요 | 699:54821 | Suspended function → banner | Suspended banner + 연장 | OK |
+| 15-04 · 일반 팀원으로 보고 있어요 | 699:55025 | Team function viewed as member → read-only notice | Notice + read-only controls | OK |
+| 15-05 · 로딩 | 741:54937 | 15 loading skeleton | `ServerlessFunctionPlaceholder` tab=code (424/416/270) | OK |
+| 15-06 · 오류 | 747:61644 | 15 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
+| 15-07 · 호버 · 코드 저장 | 241:27102 | "코드 저장" → saved, new version | saveDemoServerlessCode → new version | OK |
 | 16 · 함수 Trigger | 203:52316 | entry: 15 tab "Trigger" / "Trigger 관리" → 16 | tabPath → `/serverless/:id/triggers` | OK |
-| 16-01 · HTTP Trigger 추가 | 203:52552 | "Trigger 추가" → HTTP dialog | Opens HTTP only if no HTTP trigger exists. Seeded welcome-api opens Cron | OK |
-| 16-02 · Cron Trigger 추가 | 203:53615 | "Trigger 추가" → Cron dialog | TriggerDialog type=Cron on welcome-api | OK |
-| 16-03 · Cron 표현식을 확인해주세요 | 203:53887 | invalid expression → error state | TriggerDialog error title/help, add disabled | OK |
+| 16-01 · HTTP Trigger 추가 | 203:52552 | "Trigger 추가" → HTTP dialog | Opens HTTP when no HTTP trigger exists | OK |
+| 16-02 · Cron Trigger 추가 | 203:53615 | "Trigger 추가" → Cron dialog | TriggerDialog type=Cron | OK |
+| 16-03 · Cron 표현식을 확인해주세요 | 203:53887 | invalid expression → error state | TriggerDialog error | OK |
 | 16-04 · 5분보다 짧은 간격은 쓸 수 없어요 | 699:55815 | `*/2` → frequency error | TriggerDialog isTooFrequent | OK |
 | 16-05 · 호출 주소를 재발급할까요? | 699:56074 | "호출 주소 재발급" → confirm | Confirm dialog → regenerate | OK |
-| 16-06 · 동시 실행 한도를 넘은 요청이 있어요 | 699:56339 | 429 events → inline banner on 16 | No such banner | MISSING |
-| 16-07 · Domain을 확인하지 못했어요 | 699:56553 | "도메인 연결" → TXT check fails → dialog | input → "TXT 확인" → verification-error dialog | OK |
-| 16-08 · 로딩 | 741:55135 | 16 loading skeleton | develop: none. PR #144 LoadingCard | PENDING-PR #144 |
-| 16-09 · 오류 | 747:61863 | 16 load error | PR #144 ErrorCard on storage failure only | UNREACHABLE |
-| 16-10 · 호버 · 주소 복사 | 241:27327 | "주소 복사" → copy URL | navigator.clipboard.writeText (no feedback toast) | OK |
+| 16-06 · 동시 실행 한도를 넘은 요청이 있어요 | 699:56339 | 429 events → inline banner on 16 | Warning banner above the public-address banner (`?demoServerless=throttled`) | OK |
+| 16-07 · Domain을 확인하지 못했어요 | 699:56553 | "도메인 연결" → TXT check fails → dialog | verification-error dialog | OK |
+| 16-08 · 로딩 | 741:55135 | 16 loading skeleton | Placeholder tab=triggers (292/282/172) | OK |
+| 16-09 · 오류 | 747:61863 | 16 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
+| 16-10 · 호버 · 주소 복사 | 241:27327 | "주소 복사" → copy URL | navigator.clipboard.writeText | OK |
 | 17 · 함수 환경변수 | 203:54154 | entry: tab "환경변수" → 17 | `/serverless/:id/environment` | OK |
-| 17-01 · API_KEY 값을 바꿀까요? | 700:52414 | "값 바꾸기" on secret → dialog | UpdateDialog → updateDemoServerlessVariable | OK |
-| 17-02 · 로딩 | 741:55349 | 17 loading skeleton | develop: none. PR #144 LoadingCard | PENDING-PR #144 |
-| 17-03 · 오류 | 747:62098 | 17 load error | PR #144 ErrorCard on storage failure only | UNREACHABLE |
-| 17-04 · 호버 · 변수 추가 | 241:27570 | "변수 추가" → new variable row | Focuses the "새 환경변수" form name field | OK |
+| 17-01 · API_KEY 값을 바꿀까요? | 700:52414 | "값 바꾸기" on secret → dialog | UpdateDialog | OK |
+| 17-02 · 로딩 | 741:55349 | 17 loading skeleton | Placeholder tab=environment (210/314/200/216) | OK |
+| 17-03 · 오류 | 747:62098 | 17 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
+| 17-04 · 호버 · 변수 추가 | 241:27570 | "변수 추가" → new variable row | Focuses the "새 환경변수" form | OK |
 | 18 · 함수 테스트 | 203:54353 | entry: tab "테스트" / "테스트하기" → 18 | `/serverless/:id/test` | OK |
-| 18-01 · 비활성 함수는 실행할 수 없어요 | 203:54551 | "실행" on inactive function → dialog | health-check → inactive dialog + "함수 활성화" | OK |
-| 18-02 · JSON 형식을 확인해주세요 | 203:54791 | invalid payload "실행" → dialog | jsonErrorOpen dialog with line hint | OK |
-| 18-03 · 함수 실행 중 오류가 발생했어요 | 203:55019 | Runtime error → error dialog | Execution always succeeds | MISSING |
-| 18-04 · 실행 시간이 초과됐어요 | 203:55250 | Timeout → dialog | No timeout path | MISSING |
-| 18-05 · 한도에 닿아서 실행하지 않았어요 | 700:53198 | "실행" at daily limit → inline notice | Modal exists (executionError='quota') but the limit can't be reached in demo | UNREACHABLE |
-| 18-06 · 로딩 | 741:55534 | 18 loading skeleton | develop: none. PR #144 LoadingCard | PENDING-PR #144 |
-| 18-07 · 오류 | 747:62311 | 18 load error | PR #144 ErrorCard on storage failure only | UNREACHABLE |
+| 18-01 · 비활성 함수는 실행할 수 없어요 | 203:54551 | "실행" on inactive function → dialog | health-check → inactive dialog | OK |
+| 18-02 · JSON 형식을 확인해주세요 | 203:54791 | invalid payload "실행" → dialog | jsonErrorOpen dialog | OK |
+| 18-03 · 함수 실행 중 오류가 발생했어요 | 203:55019 | Runtime error → error dialog | `throw` in code → runtime-error dialog | OK |
+| 18-04 · 실행 시간이 초과됐어요 | 203:55250 | Timeout → dialog | Endless loop in code → timeout dialog | OK |
+| 18-05 · 한도에 닿아서 실행하지 않았어요 | 700:53198 | "실행" at daily limit → inline notice | Inline danger banner | OK |
+| 18-06 · 로딩 | 741:55534 | 18 loading skeleton | Placeholder tab=test (2 + 3 + 1 cards) | OK |
+| 18-07 · 오류 | 747:62311 | 18 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
 | 18-08 · 호버 · 실행 | 241:27775 | "실행" → run, show result | executeDemoServerlessTest → result, summary, log update | OK |
 | 19 · 함수 실행 Log | 203:55478 | entry: tab "Logs" / "실행 Log 보기" → 19 | `/serverless/:id/logs` | OK |
-| 19-01 · 실행 Log가 없어요 | 203:55926 | no runs → empty state | EmptyRow "실행 기록을 불러올 수 없습니다." (wrong, error-like copy) | PARTIAL |
+| 19-01 · 실행 Log가 없어요 | 203:55926 | no runs → empty state | Empty state card | OK |
 | 19-02 · 실행 Log를 모두 삭제할까요? | 203:56177 | "전체 삭제" → confirm | ModalSurface confirm → deleteDemoServerlessRuns | OK |
-| 19-03 · 로딩 | 741:55720 | 19 loading skeleton | develop: none. PR #144 LoadingCard | PENDING-PR #144 |
-| 19-04 · 오류 | 747:62539 | 19 load error | PR #144 ErrorCard on storage failure only | UNREACHABLE |
-| 19-05 · 호버 · 성공 | 241:27983 | Click success row → output log | selectRun shows outputLines (most seeded rows have none) | OK |
+| 19-03 · 로딩 | 741:55720 | 19 loading skeleton | Placeholder tab=logs (394/216) | OK |
+| 19-04 · 오류 | 747:62539 | 19 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
+| 19-05 · 호버 · 성공 | 241:27983 | Click success row → output log | selectRun shows outputLines | OK |
 | 50 · 함수 버전 | 700:53844 | entry: tab "버전" → 50 | `/serverless/:id/versions` | OK |
-| 50-01 · 버전 5로 되돌릴까요? | 700:53918 | "되돌리기" → confirm | Rollback dialog → new version → navigates to code tab | OK |
-| 50-02 · 로딩 | 741:61067 | 50 loading skeleton | develop: none. PR #144 LoadingCard | PENDING-PR #144 |
-| 50-03 · 오류 | 747:68572 | 50 load error | PR #144 ErrorCard on storage failure only | UNREACHABLE |
+| 50-01 · 버전 5로 되돌릴까요? | 700:53918 | "되돌리기" → confirm | Rollback dialog → new version → code tab | OK |
+| 50-02 · 로딩 | 741:61067 | 50 loading skeleton | Placeholder tab=versions (329) | OK |
+| 50-03 · 오류 | 747:68572 | 50 load error | ErrorCards (`?demoError=serverless-fn`) | OK |
 | 50-04 · 호버 · 되돌리기 | 700:54138 | "되돌리기" → 50-01 | Opens rollback dialog | OK |
 
 #### Counts
-Product: 8 total (OK 8 / non-OK 0); States panels: 26 total (OK 12 / non-OK 14: MISSING 10, PARTIAL 3, UNREACHABLE 1); Flows: 57 total (OK 28 / non-OK 29: MISSING 11, PARTIAL 4, UNREACHABLE 8, PENDING-PR #144 6)
+Product: 8 total (OK 8 / non-OK 0); States panels: 26 total (OK 26 / non-OK 0); Flows: 57 total (OK 57 / non-OK 0)
 
 ### Database
 
@@ -1043,25 +1044,10 @@ All gaps fixed in `codex/figma-auth-shell-docs` (re-verified after #143/#144):
 
 ### Serverless
 
-- `698:3860` / `203:51053` 함수를 더 만들 수 없어요 — MISSING: no count-limit guard. At 3/3 "새 함수" is enabled and creating a 4th succeeds. Files: `src/pages/serverless/ServerlessListPage.tsx`, `src/pages/serverless/routes.tsx` (ServerlessCreateRoute), `src/entities/serverless/model/demoServerless.ts` (createDemoServerlessFunction)
-- `53:4529` 함수를 5개 모두 사용하고 있어요 — MISSING: same missing guard. The design's limit (5) also conflicts with code (3) and with 698:3860 (3/3). Files: `src/entities/serverless/model/demoServerless.ts:136`
-- `53:4382` / `203:55019` 함수 실행 중 오류 — MISSING: demo execution never fails. Files: `src/entities/serverless/model/demoServerless.ts` (executeDemoServerlessTest), `src/pages/serverless/ServerlessTestPage.tsx`
-- `53:4426` / `203:55250` 실행 시간이 초과됐어요 — MISSING: no timeout path. Same files
-- `698:3599` / `699:56339` 동시 실행 한도를 넘은 요청 — MISSING: no 429 banner. Files: `src/pages/serverless/ServerlessTriggersPage.tsx`
-- `698:3685` / `699:53778`, `698:3703` / `699:53946` 오늘 실행 80%·한도 — MISSING: no list banners, and demo usage can't be raised. Files: `src/pages/serverless/ServerlessListPage.tsx`
-- `698:3725` / `700:53198` 한도에 닿아서 실행하지 않았어요 — UNREACHABLE: modal exists, but executionsToday 1,284/10,000 has no demo toggle. Design is inline, code is a modal. Files: `src/pages/serverless/ServerlessTestPage.tsx:468`
-- `698:3917` / `699:54821` 정지됐어요 · 3일 뒤 삭제돼요 — MISSING: no suspended state. Expiry banner is hardcoded "만료까지 7일". Files: `src/pages/serverless/ServerlessFunctionPage.tsx:413`
-- `698:3939` / `699:55025` 일반 팀원으로 보고 있어요 — MISSING: team functions aren't routable (`getDemoServerlessFunction` filters teamId). Files: `src/entities/serverless/model/demoServerless.ts:133-135`, `routes.tsx`
-- `698:3961` / `699:54597` TypeScript 오류로 저장하지 않았어요 — MISSING: code save has no validation. Files: `src/pages/serverless/ServerlessFunctionPage.tsx:484`, `routes.tsx` onSaveCode
-- `53:4551` / `203:51439` 함수 정보를 확인해주세요 — PARTIAL: duplicate name is inline only, with no compile-error check or dialog. Files: `src/pages/serverless/ServerlessCreatePage.tsx`
-- `103:2049` / `203:50819` 첫 번째 함수를 만들어보세요 — PARTIAL: generic empty notice copy, missing quota and runtime details. Files: `src/pages/serverless/ServerlessListPage.tsx:386`
-- `60:1155` / `203:55926` 실행 Log가 없어요 — PARTIAL: routes.tsx passes no `emptyMessage`, so the default "실행 기록을 불러올 수 없습니다." (error-like) shows. Files: `src/pages/serverless/ServerlessLogsPage.tsx:343`, `routes.tsx` logs branch
-- `741:54575` 13-05 로딩 — PARTIAL: summary skeletons exist, but the cards area shows the "아직 함수가 없습니다" empty notice while loading. Files: `ServerlessListPage.tsx:386`
-- `747:61233` 13-06 오류 — UNREACHABLE: error caption appears only on a demo storage exception. Files: `ServerlessListPage.tsx:281`
-- `741:54780` 14-02 로딩, `747:61473` 14-03 오류 — MISSING: lazy CreatePage has no Suspense or error UI. PR #144 doesn't cover the create route. Files: `routes.tsx`
-- `741:54937`/`741:55135`/`741:55349`/`741:55534`/`741:55720`/`741:61067` 15–19·50 로딩 — PENDING-PR #144: develop has no Suspense or loading branch (lazy pages render with no boundary). PR #144 adds a LoadingCard via `ServerlessLoadState`. Files: `routes.tsx`
-- `747:61644`/`747:61863`/`747:62098`/`747:62311`/`747:62539`/`747:68572` 15–19·50 오류 — UNREACHABLE: none on develop. PR #144's ErrorCard shows only when IndexedDB demo storage fails, with no demo failure toggle. Files: `routes.tsx`
-- General — PENDING-PR #144: in a non-DEV build with `?demo=1`, the list page and the ServerlessShell team scope skip demo data (`import.meta.env.DEV &&` gate). PR #144 removes the gate. Files: `ServerlessListPage.tsx:265`, `widgets/serverless-shell/ui/ServerlessShell.tsx:14`
+All Serverless gaps were closed on `codex/figma-serverless`; see the Serverless rows above for the trigger of each state. Remaining caveats:
+- `53:4529` (5-function limit) is superseded by `698:3860` (3 / 3), which the flow frame uses.
+- 698:3599 / 698:3685 / 698:3703 / 698:3917 need `?demoServerless=throttled|usage-warning|usage-limit|suspended`, because concurrent HTTP traffic, thousands of runs and a moving clock don't happen in the demo.
+- The loading frames for Trigger (16-08) and 버전 (50-02) also show a static note between cards; the placeholder renders only the cards.
 
 ### Database
 

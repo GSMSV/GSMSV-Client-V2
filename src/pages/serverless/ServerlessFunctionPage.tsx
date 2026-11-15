@@ -14,6 +14,11 @@ export interface ServerlessFunctionSettings {
   memoryMb: 128 | 256;
 }
 
+export interface ServerlessCodeSaveError {
+  title: string;
+  description: string;
+}
+
 export interface ServerlessFunctionPageProps {
   name?: string;
   description?: string;
@@ -31,7 +36,12 @@ export interface ServerlessFunctionPageProps {
   onNavigateTab?: (tab: ServerlessFunctionTab) => void;
   onDelete?: () => void;
   onSaveSettings?: (settings: ServerlessFunctionSettings) => void;
-  onSaveCode?: (code: string) => void;
+  /** 저장하지 못하면 화면 위 오류 안내에 쓸 문구를 돌려준다. */
+  onSaveCode?: (code: string, runtime: ServerlessRuntime) => ServerlessCodeSaveError | void;
+  /** 사용 기간이 끝나 정지된 함수 (Figma 15-03). */
+  suspended?: { expiredAtLabel: string; deleteAtLabel: string };
+  /** 팀 함수를 일반 팀원으로 볼 때 (Figma 15-04). */
+  readOnly?: boolean;
   onTest?: () => void;
   onManageTriggers?: () => void;
   onExtend?: () => void;
@@ -357,7 +367,10 @@ export function ServerlessFunctionPage({
   onManageTriggers,
   onExtend,
   onToggleActive,
+  suspended,
+  readOnly = false,
 }: ServerlessFunctionPageProps) {
+  const [saveError, setSaveError] = useState<ServerlessCodeSaveError | null>(null);
   const [runtime, setRuntime] = useState<ServerlessRuntime>(initialRuntime);
   const [timeoutSeconds, setTimeoutSeconds] = useState<'30' | '60'>(String(initialTimeout) as '30' | '60');
   const [memoryMb, setMemoryMb] = useState<'128' | '256'>(String(initialMemory) as '128' | '256');
@@ -410,13 +423,33 @@ export function ServerlessFunctionPage({
         </Actions>
       </TabsRow>
 
-      <Banner
+      {saveError && <Banner
+        tone="danger"
+        title={saveError.title}
+        description={saveError.description}
+        icon={<Octicon name="alert" size={20} />}
+      />}
+
+      {readOnly && <Banner
+        tone="neutral"
+        title="일반 팀원으로 보고 있습니다"
+        description="코드와 Log를 보고 사용 기간을 연장할 수 있습니다. 수정·실행·삭제는 팀장과 DevOps만 할 수 있습니다."
+        icon={<Octicon name="shield" size={20} />}
+      />}
+
+      {suspended ? <Banner
+        tone="danger"
+        title="정지됐습니다 · 3일 뒤 삭제됩니다"
+        description={`${suspended.expiredAtLabel}에 만료돼 호출과 예약 실행이 멈췄습니다. ${suspended.deleteAtLabel}에 삭제됩니다.`}
+        icon={<Octicon name="clock" size={20} />}
+        action={<Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={!onExtend} onClick={onExtend}>사용 기간 연장</Button>}
+      /> : <Banner
         tone="primary"
         title={`만료까지 7일 남았습니다`}
         description={`${expiresAtLabel}에 정지됩니다. ${extensionMessage}`}
         icon={<Octicon name="clock" size={20} />}
         action={<Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={!onExtend} onClick={onExtend}>사용 기간 연장</Button>}
-      />
+      />}
 
       <Panel aria-labelledby="function-settings-title">
         <PanelTitle id="function-settings-title">함수 상태</PanelTitle>
@@ -473,15 +506,15 @@ export function ServerlessFunctionPage({
       <Panel aria-labelledby="code-editor-title">
         <EditorHeader>
           <Octicon name="code" size={16} aria-hidden="true" />
-          <EditorTitle id="code-editor-title">{runtime === 'python' ? 'main.py' : 'index.js'}</EditorTitle>
+          <EditorTitle id="code-editor-title">{runtime === 'python' ? 'main.py' : runtime === 'typescript' ? 'index.ts' : 'index.js'}</EditorTitle>
         </EditorHeader>
         <CodeEditor>
           <LineNumbers aria-hidden="true">{Array.from({ length: lineCount }, (_, index) => index + 1).join('\n')}</LineNumbers>
-          <CodeInput aria-label="함수 코드" spellCheck={false} value={code} onChange={event => setCode(event.currentTarget.value)} />
+          <CodeInput aria-label="함수 코드" spellCheck={false} readOnly={readOnly} value={code} onChange={event => setCode(event.currentTarget.value)} />
         </CodeEditor>
         <EditorActions>
           <VersionCaption>{savedVersionLabel}</VersionCaption>
-          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveCode} onClick={() => onSaveCode?.(code)}>코드 저장</Button>
+          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveCode} onClick={() => setSaveError(onSaveCode?.(code, runtime) ?? null)}>코드 저장</Button>
         </EditorActions>
       </Panel>
 

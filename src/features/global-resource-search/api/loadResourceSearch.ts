@@ -98,15 +98,17 @@ export async function loadResourceSearch(signal: AbortSignal): Promise<ResourceS
     try {
       const state = await serverlessDemo.loadDemoServerlessState();
       if (signal.aborted) return { resources: [], hadError: false };
-      for (const fn of state.functions.filter(item => !item.teamId)) {
+      for (const fn of state.functions) {
+        const team = fn.teamId ? teamById.get(fn.teamId) : undefined;
+        if (fn.teamId && !team) continue;
         resources.push({
           id: `function:${fn.id}`,
           grn: fn.id,
           name: fn.name,
           kind: 'function',
           status: fn.active ? '사용 중' : '정지',
-          scopeId: 'personal',
-          scopeLabel: '내 Resources',
+          scopeId: team?.id ?? 'personal',
+          scopeLabel: team ? `${team.name} · 팀` : '내 Resources',
           path: `/serverless/${encodeURIComponent(fn.id)}`,
         });
       }

@@ -21,6 +21,8 @@ export interface ServerlessTriggersPageProps {
   publicUrl?: string;
   httpMethod?: string;
   concurrentLimit?: number;
+  /** 오늘 동시 실행 한도를 넘어 429로 거절한 요청 수. 1건 이상이면 경고를 보인다. */
+  rejectedRequestsToday?: number;
   dailyExecutions?: { used: number; limit: number };
   triggers?: ServerlessConnectedTrigger[];
   nextCronExecution?: string;
@@ -367,6 +369,7 @@ export function ServerlessTriggersPage({
   publicUrl,
   httpMethod,
   concurrentLimit,
+  rejectedRequestsToday = 0,
   dailyExecutions,
   triggers = [],
   nextCronExecution,
@@ -438,6 +441,13 @@ export function ServerlessTriggersPage({
           onClick={() => setDialogType(nextTriggerType ?? null)}
         >Trigger 추가</Button>
       </TabsRow>
+
+      {rejectedRequestsToday > 0 && <Banner
+        title="동시 실행 한도를 넘은 요청이 있습니다"
+        description={`${functionName}는 동시에 ${concurrentLimit == null ? '—' : formatNumber(concurrentLimit)}개까지 실행합니다. 오늘 넘은 요청 ${formatNumber(rejectedRequestsToday)}건은 429로 거절했습니다.`}
+        tone="warning"
+        icon={<Octicon name="alert" size={20} />}
+      />}
 
       <Banner
         title="호출 주소는 공개돼 있습니다"
