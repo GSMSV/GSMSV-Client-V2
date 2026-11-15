@@ -15,12 +15,16 @@ const Steps = styled.nav`
   display: flex;
   align-items: center;
   gap: 16px;
+
+  @media (max-width: 600px) { flex-wrap: wrap; gap: 8px; }
 `;
 
 const StepArea = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
+
+  @media (max-width: 600px) { gap: 8px; }
 `;
 
 const StepHead = styled.div`
@@ -29,12 +33,19 @@ const StepHead = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 760px) {
+    align-items: stretch;
+    flex-direction: column;
+  }
 `;
 
 const TopActions = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; justify-content: flex-start; }
 `;
 
 const TextButton = styled.button`
@@ -97,6 +108,8 @@ const RequestMeta = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px 32px;
+
+  @media (max-width: 600px) { grid-template-columns: 1fr; }
 `;
 
 const QuotaTrack = styled.div`

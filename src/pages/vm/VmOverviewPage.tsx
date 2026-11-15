@@ -15,6 +15,12 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
 `;
 
 const Title = styled.h1`
@@ -35,10 +41,8 @@ const PowerActions = styled.div`
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-`;
 
-const TwoColumn = styled(Grid2)`
-  grid-template-columns: 1fr 1fr;
+  @media (max-width: 760px) { justify-content: flex-start; }
 `;
 
 const KVPairs = styled.div`
@@ -282,7 +286,7 @@ export function VmOverviewPage() {
         <MetricCard><MetricLabel>메모리</MetricLabel><MetricValue>{vm.memory} GB</MetricValue><Hint>할당 메모리</Hint></MetricCard>
         <MetricCard><MetricLabel><Octicon name="database" size={16} />　디스크</MetricLabel><MetricValue>{vm.disk} GB</MetricValue><Hint>{vm.os}</Hint></MetricCard>
       </Facts>
-      <TwoColumn>
+      <Grid2>
         <Surface><SurfaceTitle>운영 정보</SurfaceTitle><KVPairs>
           <Fact><FactLabel>사용 목적</FactLabel><FactValue>{vm.purpose}</FactValue></Fact>
           <Fact><FactLabel>자동 Snapshot</FactLabel><FactValue>{vm.autoSnapshots ? '켜짐 · 최신 1개 보관' : '꺼짐 · 다음 자정부터 저장하지 않음'}</FactValue></Fact>
@@ -293,7 +297,7 @@ export function VmOverviewPage() {
           <Fact><FactLabel>만료일</FactLabel><FactValue>{vm.expiresAt}</FactValue></Fact>
           <Fact><FactLabel>가동 시간</FactLabel><FactValue>{vm.status === 'running' ? '2일 19시간' : '정지 상태'}</FactValue></Fact>
         </KVPairs></Surface>
-      </TwoColumn>
+      </Grid2>
       <Surface>
         <SurfaceTitle>SSH 접속 정보</SurfaceTitle>
         <KVPairs>

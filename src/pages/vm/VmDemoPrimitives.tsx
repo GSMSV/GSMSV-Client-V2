@@ -14,6 +14,15 @@ export const DemoPage = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 760px) {
+    gap: 20px;
+    padding: 24px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 16px;
+  }
 `;
 
 export const Breadcrumb = styled.p`
@@ -28,6 +37,12 @@ export const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
 `;
 
 export const Title = styled.h1`
@@ -47,6 +62,14 @@ export const Tabs = styled.nav`
   flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 600px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
 `;
 
 export const Tab = styled(Link)<{ $active?: boolean }>`
@@ -59,6 +82,8 @@ export const Tab = styled(Link)<{ $active?: boolean }>`
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   text-decoration: none;
+
+  @media (max-width: 600px) { flex: 0 0 auto; }
 `;
 
 export const Surface = styled.section`
@@ -69,6 +94,8 @@ export const Surface = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 export const SurfaceTitle = styled.h2`
@@ -88,6 +115,11 @@ export const Row = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 `;
 
 export const Actions = styled.div`
@@ -165,6 +197,7 @@ export const Facts = styled.div<{ $columns?: number }>`
   gap: 16px;
   width: 100%;
   @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 600px) { grid-template-columns: 1fr; }
 `;
 
 export const MetricCard = styled.article`
@@ -175,6 +208,8 @@ export const MetricCard = styled.article`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 export const MetricLabel = styled.span`
