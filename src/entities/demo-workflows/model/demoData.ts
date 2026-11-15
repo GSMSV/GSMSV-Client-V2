@@ -59,6 +59,8 @@ export interface DemoAccount {
   team: string;
   github: string;
   discord: string;
+  roleChangeReason?: string;
+  roleChangedAt?: string;
 }
 
 export interface DemoAdminVm {
@@ -123,6 +125,10 @@ const demoAccounts: DemoAccount[] = [
   { id: 'account-4', name: '정서연', studentId: '3104', email: 'seoyeon@example.com', role: '관리자', team: '—', github: '연결 안 됨', discord: '@seoyeon' },
 ];
 
+const demoAdminGrantCandidates: DemoAccount[] = [
+  { id: 'account-teacher-1', name: '문가은', studentId: '교사', email: 'gaeun@example.com', role: '일반 사용자', team: '—', github: '연결 안 됨', discord: '연결 안 됨' },
+];
+
 const demoAdminVms: DemoAdminVm[] = [{
   id: 'demo-vm-1', name: 'portfolio-api', owner: '김지민', status: '실행 중', vcpu: 2, ram: 4, disk: 20,
   purpose: '포트폴리오 프로젝트의 API 서버 운영', createdAt: '2026.09.26 14:00', expiresAt: '2026.10.03 14:00', sshCommand: 'ssh ubuntu@ssh.gsmsv.site -p 32104',
@@ -161,6 +167,47 @@ export function getDemoAccounts(): DemoAccount[] {
 }
 export function getDemoAccountRecords(): DemoAccount[] { return localState('admin.accounts', demoAccounts); }
 export function saveDemoAccounts(items: DemoAccount[]): boolean { return saveState('admin.accounts', items); }
+export function getDemoAdminGrantCandidates(): DemoAccount[] {
+  const accounts = getDemoAccountRecords();
+  const candidates = [...accounts, ...demoAdminGrantCandidates.filter(candidate => !accounts.some(account => account.id === candidate.id))];
+  return candidates.filter(account => account.role !== '관리자');
+}
+export function grantDemoAdminRole(accountId: string, reason: string): boolean {
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return false;
+  const accounts = getDemoAccountRecords();
+  const existing = accounts.find(account => account.id === accountId);
+  const candidate = existing ?? demoAdminGrantCandidates.find(account => account.id === accountId);
+  if (!candidate || candidate.role === '관리자') return false;
+  const updated = { ...candidate, role: '관리자', roleChangeReason: trimmedReason, roleChangedAt: new Date().toISOString() };
+  return saveDemoAccounts(existing
+    ? accounts.map(account => account.id === accountId ? updated : account)
+    : [...accounts, updated]);
+}
+export type DemoAdminRevokeResult = 'ok' | 'missing' | 'not-admin' | 'self' | 'last-admin' | 'save-failed';
+export function revokeDemoAdminRole(accountId: string, actorAccountId: string, reason: string): DemoAdminRevokeResult {
+  const trimmedReason = reason.trim();
+  const accounts = getDemoAccountRecords();
+  const target = accounts.find(account => account.id === accountId);
+  if (!target) return 'missing';
+  if (target.role !== '관리자') return 'not-admin';
+  if (accounts.filter(account => account.role === '관리자').length <= 1) return 'last-admin';
+  if (accountId === actorAccountId) return 'self';
+  const updated = accounts.map(account => account.id === accountId
+    ? { ...account, role: '일반 사용자', ...(trimmedReason ? { roleChangeReason: trimmedReason, roleChangedAt: new Date().toISOString() } : {}) }
+    : account);
+  return saveDemoAccounts(updated) ? 'ok' : 'save-failed';
+}
+export function getDemoAdminEmergencyAccess(): boolean { return localState('admin.emergencyAccessEnabled', false); }
+export function saveDemoAdminEmergencyAccess(enabled: boolean): boolean { return saveState('admin.emergencyAccessEnabled', enabled); }
+export function getDemoGraduationDate(): string { return localState('admin.graduationDate', '2027.01.08'); }
+export function saveDemoGraduationDate(value: string): boolean {
+  if (!/^\d{4}\.\d{2}\.\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('.').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return false;
+  return saveState('admin.graduationDate', value);
+}
 export function getDemoAdminVms(): DemoAdminVm[] { return localState('admin.vms', demoAdminVms); }
 export function saveDemoAdminVms(items: DemoAdminVm[]): boolean { return saveState('admin.vms', items); }
 export function getDemoCliRequest(): CliLoginRequest {
