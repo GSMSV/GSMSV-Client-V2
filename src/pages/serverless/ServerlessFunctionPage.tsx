@@ -59,6 +59,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -104,6 +108,8 @@ const TabsRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
 `;
 
 const Tabs = styled.nav`
@@ -111,6 +117,13 @@ const Tabs = styled.nav`
   min-width: 0;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 `;
 
 const TabButton = styled(NavigationItem)<{ $selected?: boolean }>`
@@ -123,6 +136,8 @@ const Actions = styled.div`
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
+
+  @media (max-width: 760px) { margin-left: auto; }
 `;
 
 const Panel = styled.section`
@@ -133,6 +148,8 @@ const Panel = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const PanelTitle = styled.h2`
@@ -223,6 +240,8 @@ const CodeEditor = styled.div`
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.sidebar};
   font: ${({ theme }) => theme.typography.code.weight} ${({ theme }) => theme.typography.code.size}px/${({ theme }) => theme.typography.code.lineHeight}px ${({ theme }) => theme.typography.code.family}, monospace;
+
+  > textarea { min-width: 0; }
 `;
 
 const LineNumbers = styled.div`
