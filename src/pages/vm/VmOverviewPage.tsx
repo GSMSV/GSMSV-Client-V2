@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmExpiryTime, getDemoVmState, saveDemoVmState } from '../../entities/vm';
 import { getDemoNetworkState, restoreDefaultPortForwards } from '../../entities/network';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
@@ -183,14 +183,6 @@ export function VmOverviewPage() {
     ? `${vmRecord.expiresAt} 만료 · 만료 7일 전부터 모든 팀원이 연장할 수 있습니다.`
     : `${vmRecord.expiresAt}에 만료됩니다. 지금 연장하면 14일 더 사용할 수 있습니다.`;
 
-  function persist(update: (current: typeof state) => typeof state) {
-    setState(current => {
-      const next = update(current);
-      saveDemoVmState(next);
-      return next;
-    });
-  }
-
   function finishPowerOperation(action: Exclude<PowerOperation, null>) {
     const current = getDemoVmState();
     const currentVm = current.vms.find(item => item.id === vmRecord.id);
@@ -238,38 +230,53 @@ export function VmOverviewPage() {
     }
   }
 
-  function applyExtension(purpose = vmRecord.purpose) {
-    if (vmRecord.status === 'queued' || (vmRecord.owner === 'team' && !canExtendTeamVm)) return;
-    const match = vmRecord.expiresAt.match(/(\d{4})\.(\d{2})\.(\d{2})/);
-    let expiresAt = vmRecord.expiresAt;
-    if (match) {
-      const nextDate = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 14));
-      expiresAt = `${nextDate.getUTCFullYear()}.${String(nextDate.getUTCMonth() + 1).padStart(2, '0')}.${String(nextDate.getUTCDate()).padStart(2, '0')} 14:00 (KST)`;
+  function requestExtension(confirmation?: { purpose?: string }) {
+    const latest = getDemoVmState();
+    const latestVm = latest.vms.find(item => item.id === vmRecord.id);
+    if (!latestVm || latestVm.status === 'queued' || (latestVm.owner === 'team' && !canExtendDemoTeamVm(latestVm))) {
+      setState(latest);
+      setExtensionDialogOpen(false);
+      return;
     }
-    persist(current => ({ ...current, vms: current.vms.map(item => item.id === vmRecord.id ? {
-      ...item,
-      expiresAt,
-      purpose,
-      extensionCount: (item.extensionCount ?? 0) + 1,
-    } : item) }));
-    setExtensionDialogOpen(false);
-    setNotice('사용 기간을 14일 연장했습니다.');
-  }
 
-  function requestExtension() {
-    if (vmRecord.status === 'queued' || (vmRecord.owner === 'team' && !canExtendTeamVm)) return;
-    if (((vmRecord.extensionCount ?? 0) + 1) % 4 === 0) {
-      setExtensionPurpose(vmRecord.purpose);
+    const extensionCount = (latestVm.extensionCount ?? 0) + 1;
+    if (latestVm.owner === 'personal' && extensionCount % 4 === 0 && !confirmation) {
+      setState(latest);
+      setExtensionPurpose(latestVm.purpose);
       setExtensionDialogOpen(true);
       return;
     }
-    applyExtension();
+
+    const expiryTime = getDemoVmExpiryTime(latestVm.expiresAt);
+    if (expiryTime === undefined) {
+      setNotice('만료일을 확인할 수 없어 사용 기간을 연장하지 못했습니다.');
+      return;
+    }
+    const nextDate = new Date(expiryTime);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 14);
+    const expiresAt = `${nextDate.toISOString().slice(0, 10).replaceAll('-', '.')} 14:00 (KST)`;
+    const next = {
+      ...latest,
+      vms: latest.vms.map(item => item.id === latestVm.id ? {
+        ...item,
+        expiresAt,
+        purpose: confirmation?.purpose ?? item.purpose,
+        extensionCount,
+      } : item),
+    };
+    if (!saveDemoVmState(next)) {
+      setNotice('사용 기간을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setState(next);
+    setExtensionDialogOpen(false);
+    setNotice('사용 기간을 14일 연장했습니다.');
   }
 
   function confirmExtensionWithPurpose() {
     const nextPurpose = extensionPurpose.trim();
     if (!nextPurpose || nextPurpose.length > 100) return;
-    applyExtension(nextPurpose);
+    requestExtension({ purpose: nextPurpose });
   }
 
   function cancelCreateRequest() {
@@ -278,6 +285,11 @@ export function VmOverviewPage() {
     if (!latestVm) {
       setCancelDialog(null);
       navigate(vmRecord.owner === 'team' ? `/teams/${encodeURIComponent(vmRecord.teamId ?? 'demo-team')}/vms` : '/');
+      return;
+    }
+    if (latestVm.owner === 'team' && latestVm.role === 'member') {
+      setState(latest);
+      setCancelDialog(null);
       return;
     }
     if (latestVm.status !== 'queued') {
@@ -319,13 +331,13 @@ export function VmOverviewPage() {
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
-        {vm.status === 'queued' && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
-        {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" disabled={vm.status === 'queued'} icon={<Octicon name="calendar" />} onClick={requestExtension}>14일 연장</Button>}
+        {vm.status === 'queued' && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
+        {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" disabled={vm.status === 'queued'} icon={<Octicon name="calendar" />} onClick={() => requestExtension()}>14일 연장</Button>}
       </PowerActions></Heading>
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
 
       {memberReadOnly && <Banner><Octicon name="shield" size={20} /><BannerCopy><strong>일반 팀원으로 보고 있습니다</strong><span>조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있습니다. 전원 제어와 설정 변경은 팀장(김지민) 또는 DevOps(한도윤)가 할 수 있습니다.</span></BannerCopy></Banner>}
-      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : vmRecord.owner === 'team' && teamDaysRemaining !== undefined ? `만료까지 ${teamDaysRemaining}일 남았습니다` : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={requestExtension} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
+      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : vmRecord.owner === 'team' && teamDaysRemaining !== undefined ? `만료까지 ${teamDaysRemaining}일 남았습니다` : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={() => requestExtension()} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
       <Facts>
         <MetricCard><Row><MetricLabel><Octicon name="cpu" size={16} />　CPU</MetricLabel></Row><MetricValue>{vm.cpu} vCPU</MetricValue><Hint>{vm.nodeType}</Hint></MetricCard>
         <MetricCard><MetricLabel>메모리</MetricLabel><MetricValue>{vm.memory} GB</MetricValue><Hint>할당 메모리</Hint></MetricCard>
@@ -394,7 +406,7 @@ export function VmOverviewPage() {
         <StateDialogActions>
           <Button variant="secondary" onClick={() => setExtensionDialogOpen(false)}>취소</Button>
           <Button variant="secondary" disabled={!extensionPurpose.trim() || extensionPurpose.trim().length > 100} onClick={confirmExtensionWithPurpose}>목적 수정 후 연장</Button>
-          <Button variant="primary" onClick={() => applyExtension()}>그대로 연장</Button>
+          <Button variant="primary" onClick={() => requestExtension({})}>그대로 연장</Button>
         </StateDialogActions>
       </StateDialogPanel>
     </ModalSurface>}

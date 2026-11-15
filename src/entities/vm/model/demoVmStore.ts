@@ -390,7 +390,7 @@ export function saveDemoVmCreateRequest(owner: VmOwner, state: DemoVmState, vm: 
 export function cancelDemoVmCreateRequest(vmId: string): boolean {
   const current = getDemoVmState();
   const target = current.vms.find(vm => vm.id === vmId);
-  if (!target || target.status !== 'queued') return false;
+  if (!target || target.status !== 'queued' || (target.owner === 'team' && target.role === 'member')) return false;
 
   let personalCreateState: DemoVmState | null = null;
   if (target.owner === 'personal') {

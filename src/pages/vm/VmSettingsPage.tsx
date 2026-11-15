@@ -195,11 +195,15 @@ export function VmSettingsPage() {
   }
 
   function resizeDisk() {
-    if (memberReadOnly) return;
     const latest = getDemoVmState();
     const latestVm = latest.vms.find(item => item.id === vmRecord.id);
     if (!latestVm) {
       setResizeError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
+      return;
+    }
+    if (latestVm.owner === 'team' && latestVm.role === 'member') {
+      setState(latest);
+      setResizeOpen(false);
       return;
     }
     const latestQuota = latestVm.owner === 'team'
@@ -223,7 +227,7 @@ export function VmSettingsPage() {
       setResizeError('디스크 용량을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    setState(next);
+    setState(getDemoVmState());
     setResizeOpen(false);
     setNotice(`디스크를 ${nextDisk} GB로 늘렸습니다. 완료 후 VM 안에서 파일 시스템을 늘려 주세요.`);
   }
