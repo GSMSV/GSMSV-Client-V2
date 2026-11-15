@@ -418,6 +418,8 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     if (item === 'home' || item === 'team') navigate(selectedTeamId ? `/teams/${encodeURIComponent(selectedTeamId)}` : '/teams');
     else if (item === 'database') navigate(selectedTeamId ? `/databases?owner=${encodeURIComponent(selectedTeamId)}` : '/databases');
     else if (item === 'apps') navigate(selectedTeamId ? `/teams/${encodeURIComponent(selectedTeamId)}/apps` : '/apps');
+
+    return ['home', 'team', 'database', 'apps'].includes(item);
   };
 
   let content;

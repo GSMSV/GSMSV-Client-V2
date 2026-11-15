@@ -267,6 +267,8 @@ export default function AppsListPage() {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate('/apps');
     if (item === 'database') navigate('/databases');
+
+    return ['apps', 'database'].includes(item);
   };
 
   const scopeOptions = useMemo(() => [

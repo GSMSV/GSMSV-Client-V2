@@ -650,6 +650,8 @@ export default function PersonalResourcesPage() {
     else if (item === 'apps') navigate('/apps');
     else if (item === 'team') navigate('/teams');
     else if (item === 'settings') navigate('/settings');
+
+    return ['home', 'database', 'apps', 'team', 'settings'].includes(item);
   };
 
   const personalVmQuota = quota.value?.vm;

@@ -37,6 +37,8 @@ export function ServerlessShell({ children }: { children: ReactNode }) {
     if (item === 'apps') void navigate('/apps');
     if (item === 'team') void navigate('/teams');
     if (item === 'settings') void navigate('/settings');
+
+    return ['home', 'database', 'apps', 'team', 'settings'].includes(item);
   };
 
   return (

@@ -366,6 +366,8 @@ export function DemoAppOverviewPage() {
     if (item === "apps") navigate(listPath);
     if (item === "team") navigate(teamPath || "/teams");
     if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
+
+    return ['home', 'apps', 'team', 'database'].includes(item);
   };
   if (!isDemoMode() || !app)
     return (
@@ -587,6 +589,8 @@ export function DemoAppSettingsPage() {
     if (item === "apps") navigate(listPath);
     if (item === "team") navigate(teamPath || "/teams");
     if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
+
+    return ['home', 'apps', 'team', 'database'].includes(item);
   };
   if (!isDemoMode() || !app)
     return (
@@ -965,6 +969,8 @@ export function DemoAddServicePage() {
     if (item === "apps") navigate(listPath);
     if (item === "team") navigate(teamPath || "/teams");
     if (item === "database") navigate(teamPath ? `/databases?owner=${encodeURIComponent(app?.owner?.id ?? "")}` : "/databases");
+
+    return ['home', 'apps', 'team', 'database'].includes(item);
   };
   if (!isDemoMode() || !app || !canManageDemoApp(app) || isDemoAppExpired(app))
     return (

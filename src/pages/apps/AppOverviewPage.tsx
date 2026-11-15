@@ -357,6 +357,8 @@ export default function AppOverviewPage() {
     if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
     if (item === 'database') navigate(teamId ? `/databases?owner=${encodeURIComponent(teamId)}` : '/databases');
+
+    return ['home', 'team', 'apps', 'database'].includes(item);
   };
 
   const scopeOptions = useMemo(() => {

@@ -109,6 +109,7 @@ interface StudentSidebarProps {
   onCreateTeam: () => void;
   onOpenStatus: () => void;
   disabledItems?: readonly StudentNavigationKey[];
+  disabledReasons?: Partial<Record<StudentNavigationKey, string>>;
   actionsAtBottom?: boolean;
 }
 
@@ -127,7 +128,7 @@ const secondaryNavigation = [
   { key: 'settings', label: '설정', icon: 'gear' },
 ] as const;
 
-export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
+export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], disabledReasons = {}, actionsAtBottom = true }: StudentSidebarProps) {
   return (
     <Sidebar id="student-navigation" ref={sidebarRef} $open={open} onKeyDown={onKeyDown} aria-label="학생 메뉴">
       <Brand>
@@ -143,7 +144,7 @@ export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem
             icon={<Octicon name={icon} size={16} />}
             active={activeItem === key}
             disabled={disabledItems.includes(key)}
-            title={disabledItems.includes(key) ? '아직 제공되지 않는 기능입니다' : undefined}
+            title={disabledItems.includes(key) ? disabledReasons[key] ?? '아직 제공되지 않는 기능입니다' : undefined}
             onClick={() => onNavigate(key)}
           />
         ))}
@@ -155,7 +156,7 @@ export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem
             icon={<Octicon name={icon} size={16} />}
             active={activeItem === key}
             disabled={disabledItems.includes(key)}
-            title={disabledItems.includes(key) ? '아직 제공되지 않는 기능입니다' : undefined}
+            title={disabledItems.includes(key) ? disabledReasons[key] ?? '아직 제공되지 않는 기능입니다' : undefined}
             onClick={() => onNavigate(key)}
           />
         ))}

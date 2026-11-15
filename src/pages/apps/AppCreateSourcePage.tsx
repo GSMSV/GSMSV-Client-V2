@@ -277,6 +277,8 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
   };
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
+
+    return ['apps'].includes(item);
   };
 
   const scopeOptions = useMemo(() => {

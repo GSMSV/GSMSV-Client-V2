@@ -290,6 +290,8 @@ export default function AuthenticatedDocsPage() {
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     const path = navigationPaths[item];
     if (path) void navigate(path);
+
+    return Boolean(path);
   };
 
   return (

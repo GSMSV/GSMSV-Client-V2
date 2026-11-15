@@ -425,10 +425,21 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
   }
 
   const onNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const teamPath = teamScopeId ? `/teams/${encodeURIComponent(teamScopeId)}` : undefined;
     const paths: Record<Exclude<StudentNavigationKey, 'none'>, string> = {
-      home: '/', 'vm-create': '/vms/new', serverless: '/serverless', database: '/databases', apps: '/apps', team: '/teams', docs: '/help', support: '/support/inquiries', settings: '/settings',
+      home: teamPath ?? '/',
+      'vm-create': teamPath ? `${teamPath}/vms/new` : '/vms/new',
+      serverless: '/serverless',
+      database: teamScopeId ? `/databases?owner=${encodeURIComponent(teamScopeId)}` : '/databases',
+      apps: teamPath ? `${teamPath}/apps` : '/apps',
+      team: teamPath ?? '/teams',
+      docs: '/help',
+      support: '/support/inquiries',
+      settings: '/settings',
     };
     void navigate(paths[item]);
+
+    return true;
   };
   const scopeOptions = [
     { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => void navigate('/') },

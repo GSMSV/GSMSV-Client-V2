@@ -352,6 +352,8 @@ export default function DatabaseCreatePage() {
 
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'database') navigate(listPath);
+
+    return ['database'].includes(item);
   };
 
   const submit = useCallback(async () => {

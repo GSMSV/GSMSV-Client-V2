@@ -508,8 +508,8 @@ export default function VMNetworkPage() {
   const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
     if (item === 'home') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/');
     if (item === 'team') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}` : '/teams');
-    if (item === 'apps') navigate('/apps');
-    if (item === 'database') navigate('/databases');
+
+    return ['home', 'team'].includes(item);
   };
 
   const finishAction = () => {
@@ -663,6 +663,7 @@ export default function VMNetworkPage() {
     <StudentShell
       activeItem="home"
       scopeLabel={teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} · 일반 팀원` : '내 Resources'}
+      teamScopeId={teamId}
       userName={userName}
       scopeDisabled
       scopeDisabledReason={teamId ? '팀 VM Network 화면에서는 현재 팀 범위를 유지합니다.' : 'VM 소유 범위 정보가 제공되지 않아 범위를 변경할 수 없습니다.'}
