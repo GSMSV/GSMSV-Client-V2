@@ -6,10 +6,10 @@ import { listDatabases, type DatabaseSummary } from '../../entities/database';
 import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
-import type { DemoHomeState } from '../../entities/home';
+import type { DemoHomeState, DemoVmCreateFailure } from '../../entities/home';
 import type { DemoVm, DemoVmQuota } from '../../entities/vm';
 import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
-import { isDemoMode } from '../../shared/demo';
+import { consumeDemoFailure, isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
@@ -450,6 +450,76 @@ interface Loadable<T> {
 
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
+const CompactStateError = styled(ErrorCard)`
+  height: 140px;
+`;
+
+const TallStateError = styled(ErrorCard)`
+  height: 194px;
+`;
+
+const FirstVisitStateError = styled(ErrorCard)`
+  height: 330px;
+`;
+
+const DocsStateError = styled(ErrorCard)`
+  height: 256px;
+`;
+
+const FailureCard = styled(Card)`
+  min-height: 0;
+  gap: 12px;
+`;
+
+const FailureTitle = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+
+  svg { flex: none; color: ${({ theme }) => theme.colors.danger}; }
+`;
+
+const FailureActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
+const GraduationCount = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
+type DemoLoadState = 'loading' | 'error' | 'ready';
+
+interface GraduationNotice {
+  date: string;
+  vmCount: number;
+  functionCount: number;
+}
+
+function parseGraduationDate(value: string) {
+  const match = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(value);
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+}
+
+function formatGraduationDate(value: string) {
+  const date = parseGraduationDate(value);
+  return date ? `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일` : value;
+}
+
+/** 관리자가 등록한 졸업일 30일 전부터 졸업일까지 안내한다(관리자 화면의 D-30·D-7 안내 기준). */
+function isGraduationNoticeDue(value: string, now = new Date()) {
+  const date = parseGraduationDate(value);
+  if (!date) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  return days >= 0 && days <= 30;
+}
+
 function withPersonalVmQuota(current: MyQuota['vm'], quota: DemoVmQuota): MyQuota['vm'] {
   return {
     ...current,
@@ -516,6 +586,10 @@ export default function PersonalResourcesPage() {
   const [teamsError, setTeamsError] = useState(false);
   const [teamsRetryKey, setTeamsRetryKey] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
+  const [demoLoad, setDemoLoad] = useState<DemoLoadState>('loading');
+  const [firstVisitGuess, setFirstVisitGuess] = useState(false);
+  const [graduationNotice, setGraduationNotice] = useState<GraduationNotice | null>(null);
+  const [vmCreateFailureError, setVmCreateFailureError] = useState('');
   const vmExtension = useDemoVmExtension({
     onStateChange: state => setDemoVms(state.vms.filter(vm => vm.owner === 'personal')),
     onExtended: vm => setPersonalExtensionNotice(`${vm.name} 사용 기간을 14일 연장했습니다.`),
@@ -524,21 +598,38 @@ export default function PersonalResourcesPage() {
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (demoMode) {
-      const [demo, vmRepository, appRepository, serverlessRepository, databaseRepository] = await Promise.all([
+      setDemoLoad(current => current === 'ready' ? current : 'loading');
+      const [demo, vmRepository, appRepository, serverlessRepository, databaseRepository, workflows] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),
         import('../../entities/app/demo'),
         import('../../entities/serverless'),
         import('../../entities/database/demo'),
+        import('../../entities/demo-workflows'),
       ]);
       await serverlessRepository.loadDemoServerlessState();
       if (signal.aborted) return;
-      const homeState = demo.getDemoHomeState();
+      // ?demoError=vm-create: 자원 부족으로 실패한 VM 생성 요청을 홈 배너로 보여준다.
+      if (consumeDemoFailure('vm-create')) demo.recordDemoVmCreateFailure(demo.demoVmCreateFailureSeed);
       const vmState = vmRepository.getDemoVmState();
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
       const personalFunctions = serverlessRepository.getDemoServerlessFunctions();
-      setExpiringPersonalVmId(personalVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued')?.id ?? null);
       const firstVisit = personalVms.length === 0 && personalFunctions.length === 0;
+      setFirstVisitGuess(firstVisit);
+      try {
+        await simulateDemoRequest('home', signal);
+      } catch {
+        if (!signal.aborted) setDemoLoad('error');
+        return;
+      }
+      if (signal.aborted) return;
+      const homeState = demo.getDemoHomeState();
+      setExpiringPersonalVmId(personalVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued')?.id ?? null);
+      const graduationDate = workflows.getDemoGraduationDate();
+      const forceGraduationNotice = consumeDemoFailure('graduation');
+      setGraduationNotice(forceGraduationNotice || (isGraduationNoticeDue(graduationDate) && homeState?.graduationNoticeDismissedFor !== graduationDate)
+        ? { date: graduationDate, vmCount: personalVms.filter(vm => vm.status !== 'queued').length, functionCount: personalFunctions.length }
+        : null);
       setDemoHome(homeState ? {
         ...homeState,
         firstVisit,
@@ -565,6 +656,7 @@ export default function PersonalResourcesPage() {
         loading: false,
         error: false,
       });
+      setDemoLoad('ready');
       return;
     }
     const jobs = [
@@ -700,6 +792,52 @@ export default function PersonalResourcesPage() {
     setCancelDialog(target && (target.status !== 'queued' || repository.isDemoVmInitializing(target)) ? { phase: 'started' } : null);
   }
 
+  const vmCreateFailure = demoMode ? demoHome?.vmCreateFailure ?? null : null;
+
+  async function dismissVmCreateFailure() {
+    const repository = await import('../../entities/home');
+    repository.clearDemoVmCreateFailure();
+    setVmCreateFailureError('');
+    setDemoHome(current => current ? { ...current, vmCreateFailure: null } : current);
+  }
+
+  async function editFailedVmCreate(failure: DemoVmCreateFailure) {
+    const vmRepository = await import('../../entities/vm');
+    vmRepository.saveDemoVmDraft('personal', failure);
+    await dismissVmCreateFailure();
+    void navigate('/vms/new');
+  }
+
+  async function retryFailedVmCreate(failure: DemoVmCreateFailure) {
+    const vmRepository = await import('../../entities/vm');
+    const state = vmRepository.getDemoVmState();
+    const quota = state.personalQuota;
+    if (quota.cpu + failure.cpu > quota.cpuLimit || quota.memory + failure.memory > quota.memoryLimit || quota.disk + failure.disk > quota.diskLimit) {
+      setVmCreateFailureError('지금도 사용 가능한 자원이 부족합니다. 설정을 바꾸거나 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    const { state: next } = vmRepository.makeDemoVm(state, failure, 'personal');
+    if (!vmRepository.saveDemoVmState(next)) {
+      setVmCreateFailureError('생성 요청을 다시 보내지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    await dismissVmCreateFailure();
+    setRetryKey(value => value + 1);
+  }
+
+  async function closeGraduationNotice(openDocs: boolean) {
+    if (graduationNotice) {
+      const repository = await import('../../entities/home');
+      repository.dismissDemoGraduationNotice(graduationNotice.date);
+    }
+    setGraduationNotice(null);
+    if (openDocs) void navigate('/help');
+  }
+
+  const retry = () => setRetryKey(value => value + 1);
+  const demoLoading = demoMode && demoLoad !== 'ready';
+  const showFirstVisit = demoMode && (demoLoading ? firstVisitGuess : Boolean(demoHome?.firstVisit));
+
   return (
     <StudentShell
       activeItem="home"
@@ -716,10 +854,35 @@ export default function PersonalResourcesPage() {
       <Page>
         <Breadcrumb>워크스페이스 / 내 Resources</Breadcrumb>
         <Heading>
-          <Title>{demoMode && demoHome?.firstVisit ? '첫 프로젝트를 시작해 보시겠습니까?' : '내 Resources'}</Title>
-          {!(demoMode && demoHome?.firstVisit) && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={personalVmCreateDisabled} title={personalVmCreateReason ?? (!demoMode ? 'VM API 계약이 확인된 뒤 사용할 수 있습니다' : undefined)} onClick={() => navigate('/vms/new')}>VM 만들기</Button>}
+          <Title>{showFirstVisit ? '첫 프로젝트를 시작해 보시겠습니까?' : '내 Resources'}</Title>
+          {!showFirstVisit && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={personalVmCreateDisabled} title={personalVmCreateReason ?? (!demoMode ? 'VM API 계약이 확인된 뒤 사용할 수 있습니다' : undefined)} onClick={() => navigate('/vms/new')}>VM 만들기</Button>}
         </Heading>
 
+        {demoLoading ? (
+          demoLoad === 'error' ? (
+            showFirstVisit ? <>
+              <FirstVisitCards><FirstVisitStateError onRetry={retry} /><FirstVisitStateError onRetry={retry} /></FirstVisitCards>
+              <DocsStateError onRetry={retry} />
+            </> : <>
+              <CompactStateError size="compact" onRetry={retry} />
+              <TallStateError onRetry={retry} />
+              {['Serverless', 'Database', 'Apps'].map(label => <Section key={label}>
+                <SectionTitle>{label}</SectionTitle>
+                <Cards><TallStateError onRetry={retry} /><TallStateError onRetry={retry} /></Cards>
+              </Section>)}
+            </>
+          ) : showFirstVisit ? <>
+            <FirstVisitCards><LoadingCard height={330} /><LoadingCard height={330} /></FirstVisitCards>
+            <LoadingCard height={256} />
+          </> : <>
+            <LoadingCard height={140} />
+            <LoadingCard height={194} />
+            {['Serverless', 'Database', 'Apps'].map(label => <Section key={label}>
+              <SectionTitle>{label}</SectionTitle>
+              <Cards><LoadingCard height={194} /><LoadingCard height={194} /></Cards>
+            </Section>)}
+          </>
+        ) : <>
         {!demoMode && <Notice role="note">
           <Octicon name="info" size={16} aria-hidden="true" />
           <span>VM과 Serverless의 개인 자원 목록 API가 없어 실제 자원 카드는 표시되지 않습니다. 할당량은 계약된 API에서 불러오며 Database와 Apps 목록도 실제 데이터를 사용합니다.</span>
@@ -734,6 +897,19 @@ export default function PersonalResourcesPage() {
             action={<Button variant="secondary" disabled={teamsLoading} onClick={() => setTeamsRetryKey(value => value + 1)}>{teamsLoading ? '불러오는 중…' : '팀 다시 불러오기'}</Button>}
           />
         </div>}
+
+        {vmCreateFailure && <FailureCard role="alert" aria-labelledby="home-vm-create-failure-title">
+          <FailureTitle id="home-vm-create-failure-title"><Octicon name="alert" size={24} aria-hidden="true" />VM을 만들지 못했습니다</FailureTitle>
+          <CardDescription>사용 가능한 자원이 부족합니다. 잠시 후 다시 시도하거나 설정을 바꿔 주세요.</CardDescription>
+          <CardDescription>· {vmCreateFailure.name} · {vmCreateFailure.cpu} vCPU · RAM {vmCreateFailure.memory} GB · SSD {vmCreateFailure.disk} GB</CardDescription>
+          <CardDescription>· 이름과 사용 목적은 그대로 보관했습니다.</CardDescription>
+          {vmCreateFailureError && <CardDescription role="status">{vmCreateFailureError}</CardDescription>}
+          <FailureActions>
+            <Button variant="ghost" icon={<Octicon name="x" size={16} />} onClick={() => void dismissVmCreateFailure()}>닫기</Button>
+            <Button variant="secondary" icon={<Octicon name="pencil" size={16} />} onClick={() => void editFailedVmCreate(vmCreateFailure)}>설정 수정</Button>
+            <Button variant="primary" icon={<Octicon name="sync" size={16} />} onClick={() => void retryFailedVmCreate(vmCreateFailure)}>같은 설정으로 재시도</Button>
+          </FailureActions>
+        </FailureCard>}
 
         {demoMode && !demoHome?.firstVisit && expiringPersonalVm && <Banner
           title={personalExtensionNotice || `${expiringPersonalVm.name} · ${initialExpiry ? '만료까지 4일' : '사용 기간'}`}
@@ -905,6 +1081,7 @@ export default function PersonalResourcesPage() {
             )}
           </Section>
         </Sections>}
+        </>}
       </Page>
       {demoMode && vmExtension.confirmation && <DemoVmExtensionDialog
         key={JSON.stringify(vmExtension.confirmation)}
@@ -914,6 +1091,15 @@ export default function PersonalResourcesPage() {
         onConfirm={vmExtension.confirm}
         onDismiss={vmExtension.dismiss}
       />}
+      {demoMode && demoLoad === 'ready' && graduationNotice && !cancelDialog && !vmExtension.confirmation && <ModalSurface labelledBy="home-graduation-title" onDismiss={() => void closeGraduationNotice(false)}>
+        <WorkDialog>
+          <WorkDialogTitle id="home-graduation-title"><Octicon name="alert" size={24} aria-hidden="true" />졸업 전에 자료를 옮겨주세요</WorkDialogTitle>
+          <p>{formatGraduationDate(graduationNotice.date)} 졸업 후에는 GSM SV에 로그인할 수 없습니다.<br />필요한 코드와 데이터를 미리 옮기세요.</p>
+          <p>· 개인 VM <GraduationCount>{graduationNotice.vmCount}개</GraduationCount> · 함수 <GraduationCount>{graduationNotice.functionCount}개</GraduationCount></p>
+          <p>· 졸업 처리 3일 뒤 삭제됩니다.</p>
+          <WorkDialogActions><Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => void closeGraduationNotice(true)}>Docs 보기</Button></WorkDialogActions>
+        </WorkDialog>
+      </ModalSurface>}
       {demoMode && cancelDialog && <ModalSurface labelledBy="home-vm-cancel-title" onDismiss={() => setCancelDialog(null)}>
         <WorkDialog>
           <WorkDialogTitle id="home-vm-cancel-title">

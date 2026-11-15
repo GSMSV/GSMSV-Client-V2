@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, Outlet, useParams, type RouteObject } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
+import NotFoundPage, { RouteErrorBoundary } from '../pages/not-found/NotFoundPage';
 import { isDemoMode } from '../shared/demo';
+import { GlobalStateDialogs } from '../widgets/student-shell';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
 const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
@@ -336,9 +338,26 @@ const routes: RouteObject[] = [
       </Suspense>
     ),
   },
+  {
+    path: '*',
+    element: <NotFoundPage />,
+  },
 ];
 
-export const router = createBrowserRouter(demoSessionGate ? [{ Component: demoSessionGate, children: routes }] : routes);
+function AppRoot() {
+  return (
+    <>
+      <Outlet />
+      <GlobalStateDialogs />
+    </>
+  );
+}
+
+export const router = createBrowserRouter([{
+  Component: AppRoot,
+  errorElement: <RouteErrorBoundary />,
+  children: demoSessionGate ? [{ Component: demoSessionGate, children: routes }] : routes,
+}]);
 
 function AppSettingsRoute() {
   const { appGrn } = useParams<{ appGrn: string }>();

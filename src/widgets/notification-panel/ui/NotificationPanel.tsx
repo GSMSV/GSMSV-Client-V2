@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   deleteNotification,
+  getDemoNotificationPath,
   getNotificationResourcePath,
   listNotifications,
   markAllNotificationsRead,
@@ -77,6 +78,12 @@ const Description = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const UnreadFootnote = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
 const List = styled.ul`
@@ -389,7 +396,7 @@ export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnrea
         <CloseButton type="button" aria-label="알림 닫기" onClick={onClose}><Octicon name="x" size={16} /></CloseButton>
       </Heading>
       <Description>
-        {state.loading || !state.loaded ? '알림을 불러오는 중입니다.' : state.error ? loadErrorMessage : state.unreadCount > 0 ? `읽지 않은 알림이 ${state.unreadCount}개 있습니다. 알림을 선택하면 읽음 처리됩니다.` : '모든 알림을 읽었습니다.'}
+        {state.loading || !state.loaded ? '알림을 불러오는 중입니다.' : state.error ? loadErrorMessage : state.unreadCount > 0 ? `읽지 않은 알림이 ${state.unreadCount}개 있습니다. 알림을 누르면 관련 화면으로 이동합니다.` : '모든 알림을 읽었습니다.'}
       </Description>
 
       {state.loading || !state.loaded ? <LoadingCard height={132} /> : state.error ? (
@@ -412,7 +419,7 @@ export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnrea
                   disabled={busy}
                   onClick={() => void (async () => {
                     if (!(await markRead(item))) return;
-                    const path = item.resource ? getNotificationResourcePath(item.resource.grn) : null;
+                    const path = item.resource ? getNotificationResourcePath(item.resource.grn) : getDemoNotificationPath(item);
                     if (path && onOpenResource) {
                       onClose();
                       onOpenResource(path);
@@ -443,6 +450,9 @@ export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnrea
           ))}
         </List>
       )}
+      {state.loaded && !state.loading && !state.error && state.items.length > 0 && state.unreadCount === 0 && (
+        <Description>· 최근 알림 50개까지 보입니다. 15일이 지나면 자동으로 지워집니다.</Description>
+      )}
 
       {actionError && (
         <InlineError role="alert">
@@ -460,6 +470,9 @@ export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnrea
             모두 읽음
           </Button>
         </Actions>
+      )}
+      {state.loaded && !state.loading && !state.error && state.items.length > 0 && state.unreadCount === 0 && (
+        <UnreadFootnote role="status">읽지 않은 알림이 없습니다.</UnreadFootnote>
       )}
     </Panel>
   );

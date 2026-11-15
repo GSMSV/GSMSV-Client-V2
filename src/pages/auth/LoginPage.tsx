@@ -309,6 +309,11 @@ function getDemoReturnPath(value: string | null): string | null {
     if (/^\/vms\/[^/]+(?:\/(?:network|monitoring|snapshots|settings))?$/.test(target.pathname)) {
       return `${target.pathname}${target.search}${target.hash}`;
     }
+    // 세션 만료 뒤 다시 로그인하면 보던 화면으로 돌아간다(같은 출처의 앱 경로만, 로그인·역할 선택 제외).
+    if (target.pathname !== '/' && !target.pathname.startsWith('/login') && !target.pathname.startsWith('/__demo') && target.pathname !== '/admin' && !target.pathname.startsWith('/admin/')) {
+      target.searchParams.delete('demoError');
+      return `${target.pathname}${target.search}${target.hash}`;
+    }
   } catch {
     return null;
   }

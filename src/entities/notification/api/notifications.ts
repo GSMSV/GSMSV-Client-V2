@@ -90,6 +90,19 @@ export function deleteNotification(id: string, signal?: AbortSignal) {
   return requestNoContent(`/api/v2/notifications/${encodeURIComponent(id)}`, 'DELETE', signal);
 }
 
+const demoNotificationPaths: Record<string, string> = {
+  'vm-expiring': '/vms/portfolio-api',
+  'inquiry-replied': '/support/inquiries',
+  'database-capacity': `/databases/${encodeURIComponent('grn:gsmsv:database:demo-student:welcome-db')}`,
+  'app-deploy-failed': '/apps/demo-portfolio-web/demo',
+  'team-approved': '/teams/demo-team',
+};
+
+/** 목데이터 알림에는 실제 GRN이 없으므로 종류별로 관련 화면을 연결한다. */
+export function getDemoNotificationPath(item: NotificationItem): string | null {
+  return isDemoMode() ? demoNotificationPaths[item.kind] ?? null : null;
+}
+
 async function requestNoContent(path: string, method: 'POST' | 'DELETE', signal?: AbortSignal): Promise<void> {
   const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/+$/, '') ?? '';
   let response: Response;

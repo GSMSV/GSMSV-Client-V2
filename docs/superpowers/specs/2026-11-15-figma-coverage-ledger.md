@@ -49,16 +49,16 @@ Counts cover Product frames, States panels and Flows nodes together. "Gap" means
 
 | Domain | Product (OK/total) | States panels (OK/total) | Flows (OK/total) | OK | Gaps (of which PENDING-PR) |
 |---|---|---|---|---|---|
-| Auth/Home | 3/4 | 4/4 | 17/28 (+2 orphan text, N/A) | 24 | 12 |
+| Auth/Home | 4/4 | 4/4 | 28/28 (+2 orphan text, N/A) | 36 | 0 |
 | VM (A+B) | 10/12 | 19/49 | 39/97 | 68 | 90 (38) |
 | Serverless | 8/8 | 12/26 | 28/57 | 48 | 43 (6) |
 | Database (incl. 49) | 7/8 | 10/21 | 32/53 | 49 | 33 (0) |
 | Apps | 13/13 | 27/27 | 63/75 | 103 | 12 (0) |
 | Teams | 4/5 | 8/13 | 22/32 | 34 | 16 (OK† DEV only) |
 | Admin | 6/6 | 7/9 | 27/40 | 40 | 15 (0) |
-| Docs/Support/Status/CLI | 4/5 | 4/15 | 10/27 | 18 | 29 (24) |
+| Docs/Support/Status/CLI | 5/5 | 15/15 | 27/27 | 47 | 0 |
 | Account/Settings | 1/1 | 23/23 | 23/25 | 47 | 2 |
-| Shell/navigation | — | 5/11 | — (flows filed under Auth/Home 03-xx) | 5 | 6 |
+| Shell/navigation | — | 11/11 | — (flows filed under Auth/Home 03-xx) | 11 | 0 |
 | **Total** | **56/62** | **119/198** | **261/434** | **436** | **258** |
 
 ## Ledger
@@ -73,7 +73,7 @@ Mock mode is judged under the dev server (`import.meta.env.DEV`) with `?demo=1`.
 | 01 | DataGSM 로그인 | 407:36883 | 1440x1080 | `/login` | `src/pages/auth/LoginPage.tsx` | OK | Intro panel, benefits card, 서비스 상태 + DataGSM으로 계속하기 match |
 | 02 | 역할 선택 | 407:36910 | 1440x1080 | `/__demo/role-selection` | `src/pages/auth/RoleSelectionDemoPage.tsx` | OK | Demo-only route; the real login never shows role selection |
 | 03 | 홈 · 내 Resources | 48:16 | 1440x1658 | `/` | `src/pages/home/PersonalResourcesPage.tsx` | OK | Demo branch is DEV-only on develop (PR #143 removes the gate) |
-| 04 | 홈 · 첫 방문 | 52:174 | 1440x1080 | `/` (firstVisit branch) | `src/pages/home/PersonalResourcesPage.tsx:749` | PENDING-PR #143 | develop: `firstVisit` is set only by the unrouted `DemoEntryPage` or after 탈퇴 (`demoWithdrawal.ts:63`). PR #143 derives it from having no personal VMs or functions |
+| 04 | 홈 · 첫 방문 | 52:174 | 1440x1080 | `/` (firstVisit branch) | `src/pages/home/PersonalResourcesPage.tsx` | OK | firstVisit is derived from having no personal VMs or functions (#143) |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
@@ -97,29 +97,29 @@ Mock mode is judged under the dev server (`import.meta.env.DEV`) with `?demo=1`.
 | 02-01 · 호버 · 관리자로 선택 | 407:31508 | select 관리자 → admin console | Card selects the role; 계속 calls `selectDemoRole('admin')` → `/admin/infra` | OK |
 | 03 · 홈 · 내 Resources | 203:25815 | entry: 02 일반 사용자 → 03; sidebar 홈 | `selectDemoRole('user')` → `/`. Sidebar 홈 → `/` | OK |
 | 03-01 · 범위 선택 펼침 | 204:23337 | scope trigger → dropdown | `StudentTopbar` listbox lists 내 Resources + demo teams (`PersonalResourcesPage.tsx:633`). A team option goes to `/teams/:id` | OK |
-| 03-02 · VM 검색 | 203:26044 | 검색 → search panel | develop: `loadResourceSearch` calls the real `/api/v2/*` (no demo branch, no proxy), so the panel shows "일부 Resource를 불러오지 못했습니다" and only covers Apps/DB. PR #144 adds a demo source for VM·DB·함수·앱. Title stays "검색", not "VM 검색" | PENDING-PR #144 |
-| 03-03 · 검색 결과가 없어요 | 203:26301 | query with no match → empty state | develop: `isEmpty` needs `!hadError`, which is always false in mock, so the empty state never shows. PR #144 fixes this | PENDING-PR #144 |
+| 03-02 · VM 검색 | 203:26044 | 검색 → search panel | `loadResourceSearch` has a demo source for VM·DB·함수·앱 (#144). Title "검색" matches the S01 panel | OK |
+| 03-03 · 검색 결과가 없어요 | 203:26301 | query with no match → empty state | Empty state shows in mock mode (#144) | OK |
 | 03-04 · 알림 | 203:26563 | 알림 → panel with 2 unread | `NotificationPanel` uses demo seed (2 unread): "읽지 않은 알림이 2개 있습니다…" | OK |
 | 03-05 · 알림 | 203:26858 | all read state | 모두 읽음 → "모든 알림을 읽었습니다." | OK |
 | 03-06 · 김지민 | 203:27162 | profile → role/profile panel | `StudentProfile` panel shows role, teams, 로그아웃/팀 설정/관리자로 전환/계정 설정 | OK |
-| 03-07 · VM을 만들지 못했어요 | 203:27452 | home shows failed-VM-create banner | No failed-create state on home (`VmStatus` is queued/running/stopped only) | MISSING |
+| 03-07 · VM을 만들지 못했어요 | 203:27452 | home shows failed-VM-create banner | `?demoError=vm-create` records a failed request (library-api · 2 vCPU · 4 GB · 20 GB) in the home demo store (`recordDemoVmCreateFailure`, also callable from VM create). Banner with 닫기 / 설정 수정 (draft saved → `/vms/new`) / 같은 설정으로 재시도 (re-queues if quota allows) in `src/pages/home/PersonalResourcesPage.tsx` | OK |
 | 03-08 · 생성을 취소할까요? | 203:27705 | queued row → cancel confirm | Clicking the portfolio-worker 대기 중 row opens the `ModalSurface` confirm (`PersonalResourcesPage.tsx:787,890`) | OK |
-| 03-09 · 생성이 이미 시작됐어요 | 203:27953 | cancel after start → info dialog | develop: queued VMs never advance, so the `started` phase is reachable only by changing state in another tab. PR #143 adds a time-based initializing phase | PENDING-PR #143 |
-| 03-10 · 연결이 끊겼어요 | 203:28197 | offline → dialog | No offline/`navigator.onLine` handling anywhere | MISSING |
-| 03-11 · 졸업 전에 자료를 옮겨주세요 | 203:28437 | graduating student → notice dialog | Admin can set a graduation date (`demoData.ts:204`), but no student-side dialog exists | MISSING |
-| 03-12 · 로딩 | 739:52604 | home loading skeleton | `LoadingCard`s render only until the dynamic imports resolve (no demo delay), so the state is not visible | UNREACHABLE |
-| 03-13 · 오류 | 745:61330 | home load error | `ErrorCard` is only on the real-API path; no demo failure toggle | UNREACHABLE |
+| 03-09 · 생성이 이미 시작됐어요 | 203:27953 | cancel after start → info dialog | Time-based initializing phase (#143) makes the `started` phase reachable | OK |
+| 03-10 · 연결이 끊겼어요 | 203:28197 | offline → dialog | `src/widgets/student-shell/ui/GlobalStateDialogs.tsx` opens on the browser `offline` event on every route (root layout), or `?demoError=offline` in mock mode. 다시 확인 reloads once online | OK |
+| 03-11 · 졸업 전에 자료를 옮겨주세요 | 203:28437 | graduating student → notice dialog | Home dialog when the admin graduation date (`getDemoGraduationDate`, set in 관리자 · 계정) is within 30 days (D-30/D-7 rule), or `?demoError=graduation`. Shows date, personal VM/function counts, Docs 보기 → `/help`; dismissal stored per date (`src/pages/home/PersonalResourcesPage.tsx`) | OK |
+| 03-12 · 로딩 | 739:52604 | home loading skeleton | Demo load awaits `simulateDemoRequest('home')`; full-page LoadingCard skeleton per Figma (`src/pages/home/PersonalResourcesPage.tsx`) | OK |
+| 03-13 · 오류 | 745:61330 | home load error | `?demoError=home` → ErrorCard layout per Figma; 다시 시도 succeeds (`src/pages/home/PersonalResourcesPage.tsx`) | OK |
 | 03-14 · 호버 · Serverless | 225:25343 | sidebar Serverless → Serverless list | `StudentShell.navigateToItem('serverless')` → `/serverless` | OK |
-| 04 · 홈 · 첫 방문 | 203:25642 | entry: first login with no resources → 04 | develop: needs `firstVisit` flag (unrouted `DemoEntryPage` or after 탈퇴) | PENDING-PR #143 |
-| 04-01 · 로딩 | 741:52834 | first-visit loading | The regular home loading cards flash for one frame; no first-visit skeleton or delay | UNREACHABLE |
-| 04-02 · 오류 | 747:59268 | first-visit load error | No demo error path | UNREACHABLE |
+| 04 · 홈 · 첫 방문 | 203:25642 | entry: first login with no resources → 04 | firstVisit derived from empty personal VMs/functions (#143) | OK |
+| 04-01 · 로딩 | 741:52834 | first-visit loading | First-visit title + 2 cards + Docs panel skeleton while `simulateDemoRequest('home')` waits (`src/pages/home/PersonalResourcesPage.tsx`) | OK |
+| 04-02 · 오류 | 747:59268 | first-visit load error | `?demoError=home` with no personal resources → first-visit ErrorCard layout (`src/pages/home/PersonalResourcesPage.tsx`) | OK |
 | 04-03 · 호버 · 첫 VM 만들기 | 226:25659 | 첫 VM 만들기 → VM 생성 | `navigate('/vms/new')` (`PersonalResourcesPage.tsx:760`) | OK |
 | (orphan text) 아이디어를 서버로. | 203:25150 | Stray TEXT node on the Flows canvas, not a screen | N/A | N/A |
 | (orphan text) GSM SV에서 나만의 개발 환경을 시작하세요. | 203:25151 | Stray TEXT node on the Flows canvas, not a screen | N/A | N/A |
 
 
 #### Counts
-Product: 4 total (OK 3 / non-OK 1); States panels: 4 (OK 4 / non-OK 0); Flows: 28 + 2 orphan text (OK 17 / non-OK 11 / N/A 2)
+Product: 4 total (OK 4); States panels: 4 (OK 4); Flows: 28 + 2 orphan text (OK 28 / N/A 2). Updated by `codex/figma-auth-shell-docs`.
 
 ### VM (part A: create, overview, monitoring, team VM)
 
@@ -828,24 +828,24 @@ Product: 6 total (OK 6 / non-OK 0); States panels: 9 total (OK 7 / non-OK 2: 1 P
 | 20 | Docs와 FAQ | 53:3283 | 1440x1318 | /help | src/pages/docs/AuthenticatedDocsPage.tsx | OK | StudentShell activeItem=docs; develop calls real listMyTeams (PR #144 switches to demo teams) |
 | 21 | 문의 | 53:3544 | 1440x1149 | /support/inquiries | src/pages/support/InquiryDemoPage.tsx (demo-workflows/routes.tsx:27) | OK | DemoOnlyGate + WorkflowLayout activeStudentItem=support |
 | 39 | 공개 Docs · 비로그인 | 131:5473 | 1440x1462 | /docs | src/pages/docs/PublicDocsPage.tsx | OK | Signed-out allowed by DemoSessionGate; code adds a "로그인하면 내 VM의 만료일…" notice card not in the design |
-| 40 | 서비스 상태 · 공개 | 131:5725 | 1440x1765 | /status | src/pages/status/PublicStatusPage.tsx | PARTIAL | Demo data only when `import.meta.env.DEV && isDemoMode()`; always shows 2 notices (Serverless 지연 + 예정 점검) that base frame lacks; 로그인 badge comes from real /health. PR #144 makes it demo-mode-only and sets the login badge to 'up' |
+| 40 | 서비스 상태 · 공개 | 131:5725 | 1440x1765 | /status | src/pages/status/PublicStatusPage.tsx | OK | Demo data is mock-mode-only and the login badge is 'up' (#144). The two notices (Serverless 지연 + 예정 점검) are in the base frame too |
 | 41 | CLI 로그인 승인 | 131:6232 | 1440x1080 | /cli/approve?code=WDJB-MJHT (from /cli) | src/pages/auth/CliLoginApprovalDemoPage.tsx | OK | Signed-in + matching code. PR #143 moves layout to CliLoginFrame.tsx |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| 47 CLI 승인·공개 화면 상태 (131:7906) | 로그인하면 승인 화면으로 돌아옵니다 | 131:7910 | develop: `!user` Warning "승인하려면 먼저 로그인해야 합니다…" (CliLoginApprovalDemoPage:176); PR #143: `!student` state with DataGSM 로그인 → /login?returnTo | Signed out → open /cli/approve?code=WDJB-MJHT | PENDING-PR #143 | develop copy and layout differ; develop checks only getSessionUser, not profile.signedOut |
-| 131:7906 | 코드를 입력하세요 | 131:7925 | develop: CliLoginEntryDemoPage title "CLI 로그인"; PR #143: CliCodeForm "코드를 입력하세요" + hint | Open /cli | PENDING-PR #143 | develop copy is different |
-| 131:7906 | 코드를 찾을 수 없습니다 | 131:7947 | develop: inline error "코드를 찾을 수 없습니다. 터미널에…" (Entry:74); PR #143: error title + hint copy | /cli → enter a wrong 8-char code → 계속/다음 | PENDING-PR #143 | develop shows only an inline error, with no title change |
-| 131:7906 | 승인했습니다 | 131:7971 | develop: after decide, status=승인 완료 → `consumed` → title "이미 처리된 코드입니다" + notice; PR #143: outcome state "승인했습니다" + 연결된 CLI 기기 보기 | /cli/approve?code=… signed in → 승인 | PENDING-PR #143 | develop shows the wrong state |
-| 131:7906 | 요청을 거부했습니다 | 131:7996 | develop: same consumed bug; PR #143: outcome 거부됨 + 문의하기 / 모든 기기에서 로그아웃 | … → 거부 | PENDING-PR #143 | develop shows the wrong state |
-| 131:7906 | 코드가 만료됐습니다 | 131:8017 | develop: Warning "요청이 만료되었습니다"; PR #143: expired state + code summary | Wait about 9 min (expiresAtMs) then open approve | PENDING-PR #143 | No shortcut to trigger it; you have to wait for the code to time out |
+| 131:7906 | 로그인하면 승인 화면으로 돌아옵니다 | 131:7910 | `src/pages/auth/CliLoginApprovalDemoPage.tsx` `!student` state | Signed out → /cli/approve?code=WDJB-MJHT | OK | (#143) |
+| 131:7906 | 코드를 입력하세요 | 131:7925 | `CliCodeForm` | Open /cli | OK | (#143) |
+| 131:7906 | 코드를 찾을 수 없습니다 | 131:7947 | `CliCodeForm` error state | /cli → wrong code → 다음 | OK | (#143) |
+| 131:7906 | 승인했습니다 | 131:7971 | `src/pages/auth/CliLoginApprovalDemoPage.tsx` outcome state | /cli/approve signed in → 승인 | OK | Verified after #143: no longer shows 이미 처리된 코드. Copy aligned (터미널로 돌아가세요… / 계정 설정 › 연결된 CLI 기기) |
+| 131:7906 | 요청을 거부했습니다 | 131:7996 | `src/pages/auth/CliLoginApprovalDemoPage.tsx` outcome state | … → 거부 | OK | Verified after #143; 문의하기/모든 기기에서 로그아웃 icons added |
+| 131:7906 | 코드가 만료됐습니다 | 131:8017 | `src/pages/auth/CliLoginApprovalDemoPage.tsx` expired state | `/cli/approve?code=WDJB-MJHT&demoError=cli-expired` (or `/cli?demoError=cli-expired` → enter code), or wait ~9 min | OK | |
 | 131:7906 | 이미 처리된 코드입니다 | 131:8034 | Title "이미 처리된 코드입니다" when status is 승인 완료/거부됨 | Approve or reject, then reload /cli/approve?code=… | OK | PR #143 aligns the body copy and adds 닫기 |
-| 131:7906 | 내 VM 사용 기간 | 131:8046 | none on develop; PR #144: signed-in LoginNotice with VM 만료 + 연장하기 (PublicDocsPage) | Signed-in demo student → /docs | PENDING-PR #144 | develop always shows the signed-out notice |
-| 131:7906 | 문서가 도움이 되지 않았습니까? | 131:8069 | none on develop (아니요 navigates to /support/inquiries only if DEV); PR #144: ModalSurface FeedbackDialog with 첨부된 문서 + 문의 내용 | /docs → 도움이 됐습니까? → 아니요 | PENDING-PR #144 | |
-| 131:7906 | VM Network·접속 장애 | 131:8100 | PR #144: statusScenarios['network-outage'] Banner | /status?status=network-outage | PENDING-PR #144 | URL param only; nothing in the UI switches to it |
-| 131:7906 | VM 생성 점검 중 | 131:8108 | PR #144: statusScenarios.maintenance | /status?status=maintenance | PENDING-PR #144 | URL param only |
-| 131:7906 | 모든 서비스가 정상입니다 | 131:8115 | PR #144: statusScenarios.normal | /status?status=normal | PENDING-PR #144 | URL param only |
+| 131:7906 | 내 VM 사용 기간 | 131:8046 | PublicDocsPage signed-in LoginNotice | Signed-in demo student → /docs | OK | (#144) |
+| 131:7906 | 문서가 도움이 되지 않았습니까? | 131:8069 | PublicDocsPage FeedbackDialog | /docs → 아니요 | OK | (#144) |
+| 131:7906 | VM Network·접속 장애 | 131:8100 | statusScenarios['network-outage'] | /status?status=network-outage | OK | URL trigger (server-driven state in production) |
+| 131:7906 | VM 생성 점검 중 | 131:8108 | statusScenarios.maintenance | /status?status=maintenance | OK | URL trigger |
+| 131:7906 | 모든 서비스가 정상입니다 | 131:8115 | statusScenarios.normal | /status?status=normal | OK | URL trigger |
 | 37 팀 승인·문의 확인 상태 (103:1841) | 이 질문을 삭제하시겠습니까? | 103:1927 | InquiryDemoPage `pendingDelete` ModalSurface (:193-206) | /support/inquiries → row "질문 삭제" | OK | Shows 답변 완료 · 관리자 답변 N건 |
 | 38 조회·빈 상태·삭제 안내 (103:1983) | 아직 등록한 질문이 없습니다 | 103:2025 | InquiryDemoPage EmptyInquiryState (:183-186) | Delete both seeded questions (inquiry-2, inquiry-5) | OK | Copy matches |
 | 43 계정·관리자 설정 (104:2098) | CLI 로그인 승인 | 104:2164 | CliLoginApprovalDemoPage pending state (코드/기기/로그인 계정) | /cli → WDJB-MJHT → /cli/approve (signed in) | OK | |
@@ -854,35 +854,35 @@ Product: 6 total (OK 6 / non-OK 0); States panels: 9 total (OK 7 / non-OK 2: 1 P
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
 | 20 · Docs와 FAQ | 203:56415 | entry: sidebar Docs → /help | StudentShell docs:'/help' (StudentShell.tsx:118); also Docs links on home/serverless | OK |
-| 20-01 · 호버 · Instance | 241:28202 | click topic "Instance" → Instance doc | `UnavailableTopic aria-disabled` (AuthenticatedDocsPage unsupportedTopics); no handler; PR #144 unchanged | DEAD-END |
-| 21 · 문의 | 203:56638 | entry: sidebar 문의 / Docs 문의하기 → /support/inquiries | Works in DEV; StudentShell `demoMode = DEV && isDemoMode()` disables 문의, and the /help 문의하기 buttons are disabled when !DEV, so a deployed ?demo=1 build has no way in. PR #144 uses isDemoMode() | PENDING-PR #144 |
+| 20-01 · 호버 · Instance | 241:28202 | click topic "Instance" → Instance doc | All topic tabs are buttons that switch the article (banner + 순서 card) in `src/pages/docs/AuthenticatedDocsPage.tsx`; hash kept for deep links | OK |
+| 21 · 문의 | 203:56638 | entry: sidebar 문의 / Docs 문의하기 → /support/inquiries | `isDemoMode()` gating (#144) | OK |
 | 21-01 · 관련 VM 선택 펼침 | 204:24381 | open 관련 VM select | Native `<select>` (WorkflowLayout Select) opens the OS list | OK |
 | 21-02 · 아직 등록한 질문이 없어요 | 203:56812 | empty list state | Reachable after deleting all of my questions | OK |
 | 21-03 · 이 질문을 삭제할까요? | 203:57007 | 질문 삭제 → confirm dialog | pendingDelete modal; the overlay's stray "삭제 사유와 정확한 VM 이름을 입력해 주세요." input is not implemented (likely leftover in the design) | OK |
-| 21-04 · 로딩 | 741:56200 | page loading skeleton | Synchronous localStorage read; Suspense fallback=null; no skeleton | MISSING |
-| 21-05 · 오류 | 747:63033 | page load error | No load-error path (only save/delete failure notices) | MISSING |
+| 21-04 · 로딩 | 741:56200 | page loading skeleton | `simulateDemoRequest('inquiries')` → two LoadingCards (`src/pages/support/InquiryDemoPage.tsx`) | OK |
+| 21-05 · 오류 | 747:63033 | page load error | `?demoError=inquiries` → two ErrorCards; 다시 시도 loads the list | OK |
 | 21-06 · 호버 · 질문 등록 | 241:28429 | 질문 등록 → question added | submit() validates 1~500 chars, prepends row, success Alert | OK |
 | 39 · 공개 Docs · 비로그인 | 203:68976 | entry: /status header Docs, direct /docs | Status page Docs button `location.assign('/docs')`; signed-out allowed | OK |
-| 39-01 · 내 VM 사용 기간 | 203:69202 | signed-in /docs shows VM expiry block | Not on develop; PR #144 adds the signed-in block + 연장 dialog | PENDING-PR #144 |
-| 39-02 · 문서가 도움이 되지 않았나요? | 203:69448 | 아니요 → feedback dialog | develop: navigates to /support/inquiries?article=… (DEV only), otherwise nothing; PR #144 opens the dialog and keeps the draft through login | PENDING-PR #144 |
-| 39-03 · 호버 · SSH로 접속하기 | 241:32240 | click nav "SSH로 접속하기" → SSH doc | `StaticNavItem as="span" aria-disabled` (PublicDocsPage:227); PR #144 unchanged | DEAD-END |
+| 39-01 · 내 VM 사용 기간 | 203:69202 | signed-in /docs shows VM expiry block | (#144) | OK |
+| 39-02 · 문서가 도움이 되지 않았나요? | 203:69448 | 아니요 → feedback dialog | (#144) | OK |
+| 39-03 · 호버 · SSH로 접속하기 | 241:32240 | click nav "SSH로 접속하기" → SSH doc | Nav item opens the SSH article (`#ssh-steps`) in `src/pages/docs/PublicDocsPage.tsx` | OK |
 | 40 · 서비스 상태 · 공개 | 203:69700 | entry: sidebar 서비스 상태 / Docs header link | onOpenStatus → navigate('/status'); HeaderLink href=/status | OK |
-| 40-01 · VM Network·접속 장애 | 203:70207 | outage banner state | PR #144 only, via ?status=network-outage | PENDING-PR #144 |
-| 40-02 · VM 생성 점검 중 | 203:70723 | maintenance banner state | PR #144 only, via ?status=maintenance | PENDING-PR #144 |
-| 40-03 · 모든 서비스가 정상이에요 | 203:71238 | all-normal banner state | PR #144 only, via ?status=normal | PENDING-PR #144 |
+| 40-01 · VM Network·접속 장애 | 203:70207 | outage banner state | ?status=network-outage | OK |
+| 40-02 · VM 생성 점검 중 | 203:70723 | maintenance banner state | ?status=maintenance | OK |
+| 40-03 · 모든 서비스가 정상이에요 | 203:71238 | all-normal banner state | ?status=normal | OK |
 | 40-04 · 호버 · GSM SV 열기 | 241:32472 | GSM SV 열기 → app home | `window.location.assign('/')` (signed out → /login via gate) | OK |
 | 41 · CLI 로그인 승인 | 203:71758 | entry: /cli enter code → /cli/approve?code= | Entry submit navigates to approve (develop sends signed-out users to /login?returnTo first) | OK |
-| 41-01 · 로그인하면 승인 화면으로 돌아와요 | 203:71834 | signed-out approve → login prompt | develop: different warning copy; PR #143 adds the exact state | PENDING-PR #143 |
-| 41-02 · 코드를 입력하세요 | 203:71924 | /cli code form | develop: "CLI 로그인" form; PR #143 adds the exact copy | PENDING-PR #143 |
-| 41-03 · 코드를 찾을 수 없어요 | 203:72018 | wrong code → not-found | develop: inline error only; PR #143 adds the titled state | PENDING-PR #143 |
-| 41-04 · 승인했어요 | 203:72111 | 승인 → success state | develop shows "이미 처리된 코드입니다" (consumed); PR #143 adds the outcome state | PENDING-PR #143 |
-| 41-05 · 요청을 거부했어요 | 203:72211 | 거부 → rejected state | Same develop bug; PR #143 fixes | PENDING-PR #143 |
-| 41-06 · 코드가 만료됐어요 | 203:72305 | expired code state | develop: warning only, after waiting about 9 min; PR #143 adds the state (still wait-only) | PENDING-PR #143 |
+| 41-01 · 로그인하면 승인 화면으로 돌아와요 | 203:71834 | signed-out approve → login prompt | (#143) | OK |
+| 41-02 · 코드를 입력하세요 | 203:71924 | /cli code form | (#143) | OK |
+| 41-03 · 코드를 찾을 수 없어요 | 203:72018 | wrong code → not-found | (#143) | OK |
+| 41-04 · 승인했어요 | 203:72111 | 승인 → success state | Outcome state, copy aligned | OK |
+| 41-05 · 요청을 거부했어요 | 203:72211 | 거부 → rejected state | Outcome state | OK |
+| 41-06 · 코드가 만료됐어요 | 203:72305 | expired code state | `?demoError=cli-expired` (carried from /cli to approve) | OK |
 | 41-07 · 이미 처리된 코드예요 | 203:72397 | reused code state | Reload approve after a decision → title "이미 처리된 코드입니다" | OK |
-| 41-08 · 호버 · 승인 | 241:32985 | 승인 → 41-04 승인했어요 | develop goes to the consumed/이미 처리됨 view; PR #143 shows 승인했습니다 | PENDING-PR #143 |
+| 41-08 · 호버 · 승인 | 241:32985 | 승인 → 41-04 승인했어요 | Verified | OK |
 
 #### Counts
-Product: 5 total (OK 4 / non-OK 1 PARTIAL); States panels: 15 total (OK 4 / PENDING-PR #143 6 / PENDING-PR #144 5); Flows: 27 total (OK 10 / DEAD-END 2 / MISSING 2 / PENDING-PR #144 6 / PENDING-PR #143 7)
+Product: 5 total (OK 5); States panels: 15 total (OK 15); Flows: 27 total (OK 27). Updated by `codex/figma-auth-shell-docs`.
 
 ### Account/Settings
 
@@ -960,15 +960,15 @@ Product: 1 total (OK 1 / non-OK 0); States panels: 23 (OK 23 / non-OK 0); Flows:
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| S01 · 검색·알림·프로필 패널 (53:2828) | 검색 | 53:2832 | `ResourceSearchPanel` | topbar "이름 또는 GRN으로 검색" | PENDING-PR #144 | develop: real API in mock → partial-error, Apps/DB only. Title "검색" vs design "VM 검색"; groups 내 Resources / 팀 match |
-| 53:2828 | 검색 결과가 없어요 | 53:2855 | `ResourceSearchPanel` isEmpty | type a non-matching query | PENDING-PR #144 | develop: unreachable because `hadError` is always true in mock |
-| 53:2828 | 알림 (2 unread) | 53:2877 | `NotificationPanel` | topbar 알림 | OK | Seeded items have `resource: null`, so clicking only marks read and does not navigate as the design says |
-| 53:2828 | 알림 (all read) | 53:2910 | `NotificationPanel` unreadCount 0 | 모두 읽음 | OK | "최근 알림 50개 · 15일" footnote and the "읽지 않은 알림이 없습니다." line are missing |
-| 53:2828 | 김지민 · 일반 사용자 | 53:2941 | `StudentProfile` panel | topbar profile button | OK | Title uses the session name "김민수", not the profile "김지민". 관리자로 전환 → `/admin/infra` without changing the demo role, so a student is bounced back to `/` (`AdminInfrastructurePage.tsx:574`) |
-| S03 · 공통 예외·이탈 확인 (53:3152) | 다시 로그인해 주세요 | 53:3156 | — | — | MISSING | `DemoSessionGate` redirects silently to `/login?returnTo=`; there is no session-expired dialog |
-| 53:3152 | 요청이 너무 많아요 | 53:3171 | — | — | MISSING | No 429/rate-limit dialog with a countdown (only inline 429 handling in a few features) |
-| 53:3152 | 찾을 수 없어요 | 53:3191 | — | — | MISSING | Router has no `*` route or `errorElement`; unknown paths show the router's default error page |
-| 53:3152 | 연결이 끊겼어요 | 53:3206 | — | — | MISSING | No offline handling |
+| S01 · 검색·알림·프로필 패널 (53:2828) | 검색 | 53:2832 | `ResourceSearchPanel` | topbar search | OK | Demo source (#144) |
+| 53:2828 | 검색 결과가 없어요 | 53:2855 | `ResourceSearchPanel` isEmpty | non-matching query | OK | (#144) |
+| 53:2828 | 알림 (2 unread) | 53:2877 | `NotificationPanel` | topbar 알림 | OK | Copy "알림을 누르면 관련 화면으로 이동합니다"; demo items navigate by kind (`getDemoNotificationPath`) |
+| 53:2828 | 알림 (all read) | 53:2910 | `NotificationPanel` unreadCount 0 | 모두 읽음 | OK | 50개·15일 footnote and "읽지 않은 알림이 없습니다." added |
+| 53:2828 | 김지민 · 일반 사용자 | 53:2941 | `StudentProfile` panel | topbar profile | OK | 관리자로 전환 now switches the demo role before opening `/admin/infra` |
+| S03 · 공통 예외·이탈 확인 (53:3152) | 다시 로그인해 주세요 | 53:3156 | `src/widgets/student-shell/ui/GlobalStateDialogs.tsx` | `?demoError=session` | OK | DataGSM으로 로그인 → `/login?returnTo=<current>`; login returns there |
+| 53:3152 | 요청이 너무 많아요 | 53:3171 | `src/widgets/student-shell/ui/GlobalStateDialogs.tsx` | `?demoError=rate-limit` | OK | 24s countdown button |
+| 53:3152 | 찾을 수 없어요 | 53:3191 | `src/pages/not-found/NotFoundPage.tsx` | any unknown path (normal + mock) | OK | `*` route + root `errorElement` for 404 |
+| 53:3152 | 연결이 끊겼어요 | 53:3206 | `src/widgets/student-shell/ui/GlobalStateDialogs.tsx` | browser offline / `?demoError=offline` | OK | |
 | 53:3152 | 이전 작업이 진행 중이에요 | 53:3221 | `VmOverviewPage` powerDialog `restart-progress` | `/vms/:id` restart while an operation is running | OK | VM-specific, not a shared component |
 | 53:3152 | 작성 중인 내용이 사라져요 | 53:3261 | `shared/ui/feedback/UnsavedChangesDialog` | leave `/settings` with an unsaved photo draft or notification change; shell nav with `hasUnsavedInput` | OK | — |
 
@@ -978,7 +978,7 @@ Product: 1 total (OK 1 / non-OK 0); States panels: 23 (OK 23 / non-OK 0); Flows:
 | (shell flows are the 03-01…03-06 rows under Auth/Home) | — | — | — | — |
 
 #### Counts
-Product: 0; States panels: 11 (OK 5 / non-OK 6); Flows: 0 (covered under Auth/Home)
+Product: 0; States panels: 11 (OK 11); Flows: 0 (covered under Auth/Home). Updated by `codex/figma-auth-shell-docs`.
 
 ## Gaps
 
@@ -986,15 +986,12 @@ Every non-OK item, grouped by domain, with the file(s) that would need to change
 
 ### Auth/Home
 
-- `52:174` / `203:25642` 04 홈 · 첫 방문: PENDING-PR #143. On develop the first-visit flag is set only by `DemoEntryPage`, which no route renders, or by 탈퇴. Files: `src/pages/home/PersonalResourcesPage.tsx:540`, `src/pages/demo/DemoEntryPage.tsx`
-- `203:26044` 03-02 VM 검색: PENDING-PR #144. Mock search calls the real API. The design label says "VM 검색" scoped to VMs, but the States panel and PR #144 search VM·DB·함수·앱; the code title is "검색". Files: `src/features/global-resource-search/api/loadResourceSearch.ts`
-- `203:26301` 03-03 검색 결과가 없어요: PENDING-PR #144. The empty state is blocked by `hadError` in mock. Files: `src/features/global-resource-search/ui/ResourceSearchPanel.tsx:225`
-- `203:27452` 03-07 VM을 만들지 못했어요: MISSING. No failed-create banner on home. Files: `src/pages/home/PersonalResourcesPage.tsx`
-- `203:27953` 03-09 생성이 이미 시작됐어요: PENDING-PR #143. Queued VMs never advance on develop. Files: `src/pages/home/PersonalResourcesPage.tsx:694`
-- `203:28197` 03-10 연결이 끊겼어요: MISSING. No offline detection. Files: `src/pages/home/PersonalResourcesPage.tsx`
-- `203:28437` 03-11 졸업 전에 자료를 옮겨주세요: MISSING. No student graduation notice. Files: `src/pages/home/PersonalResourcesPage.tsx`
-- `739:52604` 03-12, `741:52834` 04-01 로딩: UNREACHABLE. No demo delay, so loading cards only flash for one frame.
-- `745:61330` 03-13, `747:59268` 04-02 오류: UNREACHABLE. Error cards only render on a real-API failure.
+All gaps fixed in `codex/figma-auth-shell-docs` (re-verified after #143/#144):
+- 04 / 03-02 / 03-03 / 03-09: already fixed by #143/#144.
+- 03-07 VM을 만들지 못했어요: `?demoError=vm-create` (or `recordDemoVmCreateFailure` from `src/entities/home`) → banner in `src/pages/home/PersonalResourcesPage.tsx`.
+- 03-10 연결이 끊겼어요: global dialog (`src/widgets/student-shell/ui/GlobalStateDialogs.tsx`), browser offline or `?demoError=offline`.
+- 03-11 졸업 안내: admin graduation date within 30 days, or `?demoError=graduation`.
+- 03-12/04-01 로딩, 03-13/04-02 오류: `simulateDemoRequest('home')`, `?demoError=home`.
 
 ### VM (part A: create, overview, monitoring, team VM)
 
@@ -1134,16 +1131,12 @@ Every non-OK item, grouped by domain, with the file(s) that would need to change
 
 ### Docs/Support/Status/CLI
 
-- `131:5725` 40 서비스 상태 · 공개 — PARTIAL: demo data gated on DEV; extra notices; login badge from real /health. Files: `src/pages/status/PublicStatusPage.tsx` (PR #144 fixes the gating and the badge, not the extra notices)
-- `241:28202` 20-01 호버 · Instance — DEAD-END: topic is a disabled span. Files: `src/pages/docs/AuthenticatedDocsPage.tsx`
-- `241:32240` 39-03 호버 · SSH로 접속하기 — DEAD-END: nav item is a disabled span, and PR #144 does not change it. Files: `src/pages/docs/PublicDocsPage.tsx:227`
-- `741:56200` 21-04 문의 · 로딩 — MISSING: no loading skeleton. Files: `src/pages/support/InquiryDemoPage.tsx`
-- `747:63033` 21-05 문의 · 오류 — MISSING: no load-error state or demo failure toggle. Files: `src/pages/support/InquiryDemoPage.tsx`
-- `203:56638` 21 entry — PENDING-PR #144: 문의 is disabled outside DEV (`StudentShell.tsx:100`, AuthenticatedDocsPage 문의하기 buttons).
-- `131:7971`/`131:7996`, `203:72111`/`203:72211`/`241:32985` — PENDING-PR #143: on develop, 승인/거부 lands on the "이미 처리된 코드입니다" view. Files: `src/pages/auth/CliLoginApprovalDemoPage.tsx:172`
-- `131:7910`/`7925`/`7947`/`8017`, `203:71834`/`71924`/`72018`/`72305` — PENDING-PR #143: CLI copy and states differ on develop. Expiry can only be reached by waiting about 9 min (no UI trigger).
-- `131:8046`/`8069`, `203:69202`/`69448` — PENDING-PR #144: signed-in VM block and feedback dialog are missing on develop.
-- `131:8100`/`8108`/`8115`, `203:70207`/`70723`/`71238` — PENDING-PR #144: status scenarios exist only behind the `?status=` URL param (no in-UI trigger).
+All gaps fixed in `codex/figma-auth-shell-docs` (re-verified after #143/#144):
+- 40: base frame includes both notices; gating/badge fixed by #144.
+- 20-01 Instance: topic tabs switch articles (`AuthenticatedDocsPage.tsx`). 39-03 SSH: SSH article in `PublicDocsPage.tsx`.
+- 21-04/21-05: `simulateDemoRequest('inquiries')`, `?demoError=inquiries` (`InquiryDemoPage.tsx`).
+- CLI approve/reject verified (no 이미 처리된 코드); expired state via `?demoError=cli-expired`.
+- Status scenarios stay URL-driven (`?status=`): in production they come from the status server, there is no student control that changes service health.
 
 ### Account/Settings
 
@@ -1152,10 +1145,7 @@ Every non-OK item, grouped by domain, with the file(s) that would need to change
 
 ### Shell/navigation
 
-- `53:2832` S01 검색: PENDING-PR #144. No demo data source on develop. Files: `src/features/global-resource-search/api/loadResourceSearch.ts`
-- `53:2855` S01 검색 결과가 없어요: PENDING-PR #144. Files: `src/features/global-resource-search/ui/ResourceSearchPanel.tsx`
-- `53:3156` 다시 로그인해 주세요: MISSING. Files: `src/pages/demo/DemoSessionGate.tsx`
-- `53:3171` 요청이 너무 많아요: MISSING. Files: `src/shared/ui/feedback/*`
-- `53:3191` 찾을 수 없어요: MISSING. No catch-all route. Files: `src/app/router.tsx`
-- `53:3206` 연결이 끊겼어요: MISSING. Files: `src/shared/ui/feedback/*`
-- Not counted as gaps (panels marked OK): the profile panel's 관리자로 전환 bounces a student demo session back to `/`, and notification clicks never navigate. Files: `src/widgets/student-shell/ui/StudentProfile.tsx:218`, `src/entities/notification/api/notifications.ts:31`
+All gaps fixed in `codex/figma-auth-shell-docs`:
+- 찾을 수 없어요: `*` route + root `errorElement` (`src/pages/not-found/NotFoundPage.tsx`), normal and mock mode.
+- 다시 로그인해 주세요 / 요청이 너무 많아요 / 연결이 끊겼어요: `GlobalStateDialogs` in the router root layout; `?demoError=session|rate-limit|offline` (offline also on the real browser event).
+- Notification clicks now navigate in mock mode; 관리자로 전환 switches the demo role first.

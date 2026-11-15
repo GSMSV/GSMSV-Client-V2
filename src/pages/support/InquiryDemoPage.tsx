@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoInquiries, saveDemoInquiries, type Inquiry } from '../../entities/demo-workflows';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
-import { ModalSurface } from '../../shared/ui/feedback';
+import { ErrorCard, LoadingCard, ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { Alert, Badge, Breadcrumb, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
@@ -134,10 +134,16 @@ const Answer = styled.section`
   overflow-wrap: anywhere;
 `;
 
+const InquiryStateError = styled(ErrorCard)`
+  height: 262px;
+`;
+
 export default function InquiryDemoPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [items, setItems] = useState(() => getDemoInquiries());
+  const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [loadKey, setLoadKey] = useState(0);
   const [vmName, setVmName] = useState('portfolio-api');
   const article = searchParams.get('article')?.trim().slice(0, 120);
   const rawArticleUrl = searchParams.get('articleUrl');
@@ -149,6 +155,22 @@ export default function InquiryDemoPage() {
   const [pendingDelete, setPendingDelete] = useState<Inquiry | null>(null);
   const myItems = items.filter((item) => item.isMine);
   const answers = myItems.filter(item => item.status === '답변 완료' && item.reply);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadState('loading');
+    // ?demoError=inquiries: 첫 조회만 실패하고 다시 시도하면 목록을 불러온다.
+    simulateDemoRequest('inquiries', controller.signal)
+      .then(() => {
+        if (controller.signal.aborted) return;
+        setItems(getDemoInquiries());
+        setLoadState('ready');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLoadState('error');
+      });
+    return () => controller.abort();
+  }, [loadKey]);
 
   function submit() {
     if (!isDemoMode()) return;
@@ -174,6 +196,9 @@ export default function InquiryDemoPage() {
   return <DemoOnlyGate><WorkflowLayout activeStudentItem="support"><PageStack>
     <Breadcrumb>문의</Breadcrumb>
     <Heading><TitleGroup><Title>문의</Title><Subtitle>해결되지 않은 문제를 남겨주시면 관리자가 답변해 드립니다.</Subtitle></TitleGroup><Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/help')}>Docs 먼저 보기</Button></Heading>
+    {loadState === 'loading' && <><LoadingCard height={262} /><LoadingCard height={262} /></>}
+    {loadState === 'error' && <><InquiryStateError onRetry={() => setLoadKey(value => value + 1)} /><InquiryStateError onRetry={() => setLoadKey(value => value + 1)} /></>}
+    {loadState === 'ready' && <>
     {notice && <Alert $tone={notice.startsWith('질문을 등록') || notice.startsWith('질문을 삭제') ? 'success' : 'warning'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
     <InquiryCard><NewInquiryHeader><div><SectionTitle>새 문의</SectionTitle><Hint>문제가 발생한 상황과 시도한 방법을 함께 알려주세요.</Hint></div><Button icon={<Octicon name="plus" size={16} />} onClick={submit}>질문 등록</Button></NewInquiryHeader>
       <Field>관련 VM<Select value={vmName} onChange={(event) => setVmName(event.target.value)}><option value="">선택 안 함</option><option>portfolio-api</option><option>portfolio-worker</option><option>connect-api · GSM Connect</option><option>connect-db · GSM Connect</option></Select></Field>
@@ -186,6 +211,7 @@ export default function InquiryDemoPage() {
         <Hint>· 관련 VM을 선택하면 상황을 설명하기 쉽습니다.<br />· 문의 내용은 1~500자까지 입력할 수 있습니다.</Hint>
       </EmptyInquiryState> : <InquiryList>{myItems.map((item) => <InquiryRow key={item.id}><InquiryIndicator aria-hidden="true"><Octicon name={item.status === '답변 완료' ? 'check-circle' : 'clock'} size={20} /></InquiryIndicator><InquiryCopy><InquiryTitle>{item.title}</InquiryTitle><InquiryDate>{item.createdAt} 등록</InquiryDate><Hint>{item.status === '답변 완료' ? `답변 완료 · ${item.repliedAt ?? '관리자가 답변했습니다.'}` : '검토가 끝나면 알림으로 안내해 드립니다.'}</Hint><InquiryStatus>{item.status}</InquiryStatus></InquiryCopy><Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} onClick={() => setPendingDelete(item)}>질문 삭제</Button></InquiryRow>)}</InquiryList>}
     </InquiryCard>
+    </>}
     {answers.map(item => <Answer key={item.id} aria-label={`${item.title} · 관리자 답변`}>
       <Muted><strong>관리자 답변</strong>{answers.length > 1 && ` · ${item.title}`}</Muted>
       <Muted>{item.reply}</Muted>
