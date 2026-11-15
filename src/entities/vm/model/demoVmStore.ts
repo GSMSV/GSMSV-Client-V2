@@ -1,3 +1,4 @@
+import { getDemoTeam } from '../../team/demo';
 import { readDemoState, writeDemoState } from '../../../shared/demo';
 
 export type VmStatus = 'queued' | 'running' | 'stopped';
@@ -24,6 +25,8 @@ export interface DemoVm {
   role: 'leader' | 'member';
   status: VmStatus;
   lastRestartedAt?: string;
+  powerRequestTimes?: number[];
+  requestedAtMs?: number;
   cpu: number;
   memory: number;
   disk: number;
@@ -52,9 +55,17 @@ export interface DemoVmQuota {
   diskLimit: number;
 }
 
+export interface DeletedDemoVm {
+  id: string;
+  grn: string;
+  teamId?: string;
+  reason: 'expired' | 'manual';
+}
+
 export interface DemoVmState {
   schemaVersion?: number;
   vms: DemoVm[];
+  deletedVms?: DeletedDemoVm[];
   personalQuota: DemoVmQuota;
   /** Legacy default-team quota retained for callers and stored demos created before per-team quotas. */
   teamQuota: DemoVmQuota;
@@ -72,7 +83,6 @@ export interface VmDraft {
 }
 
 const stateKey = 'vm-resources';
-const personalCreateFlowStateKey = 'vm-personal-create-flow';
 const personalDraftKey = 'vm-personal-create-draft';
 const teamDraftKey = 'vm-team-create-draft';
 // The team VM Figma states use 2026-10-26 00:00 KST as their reference time.
@@ -80,9 +90,27 @@ const teamDraftKey = 'vm-team-create-draft';
 export const demoTeamReferenceTime = Date.UTC(2026, 9, 25, 15);
 
 export function getDemoVmExpiryTime(expiresAt: string): number | undefined {
-  const match = expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  const match = expiresAt.match(/^(\d{4})\.(\d{2})\.(\d{2})(?: (\d{2}):(\d{2}))?/);
   if (!match) return undefined;
-  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 5);
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4] ?? 14) - 9, Number(match[5] ?? 0));
+}
+
+const dayMs = 24 * 60 * 60 * 1000;
+
+export function getDemoVmGraceEnd(vm: DemoVm): number | undefined {
+  if (vm.status === 'queued' || vm.requestedAtMs === undefined) return undefined;
+  const expiry = getDemoVmExpiryTime(vm.expiresAt);
+  return expiry === undefined ? undefined : expiry + 3 * dayMs;
+}
+
+export function isDemoVmExpired(vm: DemoVm): boolean {
+  const graceEnd = getDemoVmGraceEnd(vm);
+  return graceEnd !== undefined && Date.now() >= graceEnd - 3 * dayMs;
+}
+
+export function canRecoverDemoVm(vm: DemoVm): boolean {
+  const graceEnd = getDemoVmGraceEnd(vm);
+  return graceEnd !== undefined && isDemoVmExpired(vm) && Date.now() < graceEnd;
 }
 
 export function getDemoVmDaysRemaining(expiresAt: string, referenceTime = demoTeamReferenceTime): number | undefined {
@@ -91,12 +119,25 @@ export function getDemoVmDaysRemaining(expiresAt: string, referenceTime = demoTe
   return Math.max(0, Math.ceil((expiryTime - referenceTime) / (24 * 60 * 60 * 1000)));
 }
 
-export function canExtendDemoTeamVm(vm: Pick<DemoVm, 'expiresAt' | 'status'>): boolean {
+export function canCreateDemoTeamVm(teamId: string): boolean {
+  const team = getDemoTeam(teamId);
+  return team?.status === 'approved' && (team.my_role === 'leader' || team.my_role === 'devops');
+}
+
+export function canManageDemoVm(vm: DemoVm): boolean {
+  if (vm.owner === 'personal') return true;
+  return vm.role !== 'member' && Boolean(vm.teamId && canCreateDemoTeamVm(vm.teamId));
+}
+
+export function canExtendDemoTeamVm(vm: DemoVm): boolean {
+  if (!vm.teamId || !getDemoTeam(vm.teamId)?.my_role) return false;
+  if (isDemoVmExpired(vm)) return canRecoverDemoVm(vm);
   const expiryTime = getDemoVmExpiryTime(vm.expiresAt);
+  const referenceTime = vm.requestedAtMs !== undefined ? Date.now() : demoTeamReferenceTime;
   return vm.status !== 'queued'
     && expiryTime !== undefined
-    && demoTeamReferenceTime >= expiryTime - 7 * 24 * 60 * 60 * 1000
-    && demoTeamReferenceTime < expiryTime;
+    && referenceTime >= expiryTime - 7 * 24 * 60 * 60 * 1000
+    && referenceTime < expiryTime;
 }
 
 const initialVmState: DemoVmState = {
@@ -212,21 +253,6 @@ const initialVmState: DemoVmState = {
   sequence: 1,
 };
 
-// The create-flow Figma frames are a separate snapshot from the populated home fixture.
-// Their 2/4/20 request and 4/8/30 post-request quota imply 2/4/10 already allocated.
-const initialPersonalCreateFlowState: DemoVmState = {
-  schemaVersion: 4,
-  vms: [{
-    ...initialVmState.vms[0],
-    disk: 10,
-    demoQuotaDisk: 10,
-  }],
-  personalQuota: { cpu: 2, memory: 4, disk: 10, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
-  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
-  teamQuotas: { 'demo-team': { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
-  sequence: 1,
-};
-
 const personalDraft: VmDraft = {
   cpu: 2,
   memory: 4,
@@ -241,11 +267,64 @@ const teamDraft: VmDraft = {
   memory: 4,
   disk: 20,
   os: 'Linux Ubuntu 22.04 LTS',
-  name: 'connect-api',
+  name: 'connect-web',
   purpose: 'GSM Connect 서비스 API 서버 운영',
 };
 
+const queueDurationMs = 15_000;
+const setupDurationMs = 5_000;
+
+export function isDemoVmInitializing(vm: DemoVm): boolean {
+  return vm.status === 'queued' && vm.requestedAtMs !== undefined && Date.now() >= vm.requestedAtMs + queueDurationMs;
+}
+
+export function formatDemoVmDate(timestamp: number): string {
+  const local = new Date(timestamp + 9 * 60 * 60 * 1000).toISOString();
+  return local.slice(0, 10).replaceAll('-', '.') + ' ' + local.slice(11, 16) + ' (KST)';
+}
+
 export function getDemoVmState(): DemoVmState {
+  const state = readStoredDemoVmState();
+  const now = Date.now();
+  let changed = false;
+  const deletedVms = [...(state.deletedVms ?? [])];
+  const vms = state.vms.flatMap(vm => {
+    const graceEnd = getDemoVmGraceEnd(vm);
+    if (graceEnd !== undefined && now >= graceEnd) {
+      changed = true;
+      deletedVms.push({ id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'expired' });
+      return [];
+    }
+    if (vm.status === 'running' && isDemoVmExpired(vm)) {
+      changed = true;
+      return { ...vm, status: 'stopped' as const };
+    }
+    if (vm.status !== 'queued' || vm.requestedAtMs === undefined) return vm;
+    const completedAt = vm.requestedAtMs + queueDurationMs + setupDurationMs;
+    if (now < completedAt) return vm;
+    changed = true;
+    const duration = vm.owner === 'team' ? 30 : 7;
+    const expiresAt = completedAt + duration * dayMs;
+    if (now >= expiresAt + 3 * dayMs) {
+      deletedVms.push({ id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'expired' });
+      return [];
+    }
+    return {
+      ...vm,
+      status: now >= expiresAt ? 'stopped' as const : 'running' as const,
+      createdAt: formatDemoVmDate(completedAt),
+      expiresAt: formatDemoVmDate(expiresAt),
+      internalIp: '10.20.0.' + (100 + vm.requestedAtMs % 100),
+      sshPort: vm.owner === 'team' ? 32117 : 32104,
+      password: 'gsvm-demo-' + vm.requestedAtMs.toString(36),
+    };
+  });
+  if (!changed) return state;
+  const next = { ...state, vms, deletedVms };
+  return saveDemoVmState(next) ? readStoredDemoVmState() : state;
+}
+
+function readStoredDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
   if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
   if ((stored.schemaVersion ?? 0) >= 4) return stored;
@@ -339,74 +418,19 @@ export function getDemoVmState(): DemoVmState {
   return migratedState;
 }
 
-export function getDemoVmCreateState(owner: VmOwner): DemoVmState {
-  if (owner === 'team') return getDemoVmState();
-  const stored = readDemoState<DemoVmState | null>(personalCreateFlowStateKey, null);
-  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) {
-    return initialPersonalCreateFlowState;
-  }
-  return stored;
-}
-
-export function saveDemoVmCreateState(owner: VmOwner, state: DemoVmState): boolean {
-  if (owner === 'team') return saveDemoVmState(state);
-  const personalVms = state.vms.filter(vm => vm.owner === 'personal');
-  return writeDemoState(personalCreateFlowStateKey, {
+export function removeDemoVm(state: DemoVmState, vm: DemoVm): DemoVmState {
+  return {
     ...state,
-    schemaVersion: 4,
-    personalQuota: {
-      ...state.personalQuota,
-      cpu: personalVms.reduce((sum, vm) => sum + vm.cpu, 0),
-      memory: personalVms.reduce((sum, vm) => sum + vm.memory, 0),
-      disk: personalVms.reduce((sum, vm) => sum + quotaDisk(vm), 0),
-    },
-  });
-}
-
-/** Saves the create-flow snapshot and upserts personal requests into the shared VM collection. */
-export function saveDemoVmCreateRequest(owner: VmOwner, state: DemoVmState, vm: DemoVm): boolean {
-  if (owner === 'team') return saveDemoVmState(state);
-
-  const current = getDemoVmState();
-  const existing = current.vms.find(item => item.owner === 'personal' && item.id === 'portfolio-worker');
-  const sharedVm = existing
-    ? { ...existing, ...vm, id: existing.id, grn: existing.grn }
-    : vm;
-  const sharedState = {
-    ...current,
-    vms: existing
-      ? current.vms.map(item => item.id === existing.id ? sharedVm : item)
-      : [...current.vms, sharedVm],
-    sequence: Math.max(current.sequence, state.sequence),
+    vms: state.vms.filter(item => item.id !== vm.id),
+    deletedVms: [...(state.deletedVms ?? []), { id: vm.id, grn: vm.grn, teamId: vm.teamId, reason: 'manual' }],
   };
-
-  if (!saveDemoVmState(sharedState)) return false;
-  if (saveDemoVmCreateState(owner, state)) return true;
-  saveDemoVmState(current);
-  return false;
 }
 
-/** Cancels a queued demo request and returns its quota in both personal VM views. */
 export function cancelDemoVmCreateRequest(vmId: string): boolean {
   const current = getDemoVmState();
   const target = current.vms.find(vm => vm.id === vmId);
-  if (!target || target.status !== 'queued' || (target.owner === 'team' && target.role === 'member')) return false;
-
-  let personalCreateState: DemoVmState | null = null;
-  if (target.owner === 'personal') {
-    const createState = getDemoVmCreateState('personal');
-    if (createState.vms.some(vm => vm.id === vmId)) {
-      personalCreateState = createState;
-      const nextCreateState = { ...createState, vms: createState.vms.filter(vm => vm.id !== vmId) };
-      if (!saveDemoVmCreateState('personal', nextCreateState)) return false;
-    }
-  }
-
-  const next = { ...current, vms: current.vms.filter(vm => vm.id !== vmId) };
-  if (saveDemoVmState(next)) return true;
-
-  if (personalCreateState) saveDemoVmCreateState('personal', personalCreateState);
-  return false;
+  if (!target || target.status !== 'queued' || isDemoVmInitializing(target) || !canManageDemoVm(target)) return false;
+  return saveDemoVmState({ ...current, vms: current.vms.filter(vm => vm.id !== vmId) });
 }
 
 export function saveDemoVmState(state: DemoVmState): boolean {
@@ -452,28 +476,45 @@ function quotaDisk(vm: DemoVm): number {
   return vm.demoQuotaDisk ?? vm.disk;
 }
 
-export function getDemoVmDraft(owner: VmOwner): VmDraft {
-  const draft = readDemoState<VmDraft | null>(owner === 'team' ? teamDraftKey : personalDraftKey, null);
+function vmDraftKey(owner: VmOwner, teamId?: string): string {
+  if (owner === 'personal') return personalDraftKey;
+  return !teamId || teamId === 'demo-team' ? teamDraftKey : `${teamDraftKey}.${teamId}`;
+}
+
+export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
+  const draft = readDemoState<VmDraft | null>(vmDraftKey(owner, teamId), null);
   if (!draft) return owner === 'team' ? teamDraft : personalDraft;
   const isPreviousPersonalSeed = owner === 'personal'
     && draft.cpu === 2 && draft.memory === 4 && draft.disk === 10
     && draft.os === 'Linux Ubuntu 22.04 LTS'
     && draft.name === 'portfolio-batch'
     && draft.purpose === '포트폴리오 프로젝트의 배치 작업 서버 운영';
+  const isPreviousTeamSeed = owner === 'team' && draft.name === 'connect-api'
+    && draft.purpose === teamDraft.purpose && draft.cpu === teamDraft.cpu
+    && draft.memory === teamDraft.memory && draft.disk === teamDraft.disk && draft.os === teamDraft.os;
+  if (isPreviousTeamSeed) return teamDraft;
   return isPreviousPersonalSeed ? personalDraft : draft;
 }
 
-export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft): void {
-  writeDemoState(owner === 'team' ? teamDraftKey : personalDraftKey, draft);
+export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft, teamId?: string): void {
+  writeDemoState(vmDraftKey(owner, teamId), draft);
 }
 
-export function resetDemoVmDraft(owner: VmOwner): void {
-  saveDemoVmDraft(owner, owner === 'team' ? teamDraft : personalDraft);
+export function resetDemoVmDraft(owner: VmOwner, teamId?: string): void {
+  saveDemoVmDraft(owner, owner === 'team' ? teamDraft : personalDraft, teamId);
 }
 
 export function getDemoVmQuota(state: DemoVmState, teamId: string): DemoVmQuota {
-  if (teamId === 'demo-team') return state.teamQuota;
-  return state.teamQuotas?.[teamId] ?? { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 };
+  const quota = (teamId === 'demo-team' ? state.teamQuota : state.teamQuotas?.[teamId])
+    ?? { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 };
+  const limits = getDemoTeam(teamId)?.quota?.vm;
+  if (!limits) return quota;
+  return {
+    ...quota,
+    cpuLimit: limits.vcpu.limit,
+    memoryLimit: limits.ram_gb.limit,
+    diskLimit: limits.ssd_gb.limit,
+  };
 }
 
 export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {
@@ -494,8 +535,9 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     ...(team ? { teamId, teamName } : {}),
     ...(team ? { teamScenario: 'leader-create' as const } : {}),
     creator: team ? creatorName : '김지민',
-    role: team ? 'leader' : 'leader',
+    role: 'leader',
     status: 'queued',
+    requestedAtMs: Date.now(),
     cpu: draft.cpu,
     memory: draft.memory,
     disk: draft.disk,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmQuota, getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canManageDemoVm, getDemoVmQuota, getDemoVmState, removeDemoVm, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { clearDemoNetworkState, getDemoNetworkState, saveDemoNetworkState } from '../../entities/network';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
@@ -10,6 +10,7 @@ import { DeleteConfirmDialog } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Heading, Hint, Input, Row, Surface, SurfaceTitle, Textarea } from './VmDemoPrimitives';
+import { VmUnavailablePage } from './VmUnavailablePage';
 
 const Title = styled.h1`
   margin: 0;
@@ -132,8 +133,10 @@ const FailureActions = styled.div`
 export function VmSettingsPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const navigate = useNavigate();
-  const [state, setState] = useState(() => getDemoVmState());
-  const [purpose, setPurpose] = useState('');
+  const [state, setState] = useDemoVmResourceState(vmId);
+  const [purpose, setPurpose] = useState<string | null>(null);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
+  const [passwordResetError, setPasswordResetError] = useState('');
   const [notice, setNotice] = useState('');
   const [nameEditing, setNameEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -149,7 +152,8 @@ export function VmSettingsPage() {
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
-  if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
+  if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
+  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
   if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
@@ -160,12 +164,12 @@ export function VmSettingsPage() {
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
   const network = getDemoNetworkState(vmRecord.grn);
-  const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
+  const readOnly = vmRecord.status === 'queued' || !canManageDemoVm(vmRecord);
   const quota = vmRecord.owner === 'team' ? getDemoVmQuota(state, vmRecord.teamId ?? 'demo-team') : state.personalQuota;
   const remainingDisk = Math.max(0, quota.diskLimit - quota.disk);
   const resizableDiskLimit = vmRecord.disk + Math.floor(remainingDisk / 10) * 10;
-  const canResizeDisk = !memberReadOnly && resizableDiskLimit > vmRecord.disk;
-  const displayedPurpose = purpose || vmRecord.purpose;
+  const canResizeDisk = !readOnly && resizableDiskLimit > vmRecord.disk;
+  const displayedPurpose = purpose ?? vmRecord.purpose;
 
   function persistState(next: typeof state) {
     if (!saveDemoVmState(next)) return false;
@@ -174,16 +178,24 @@ export function VmSettingsPage() {
   }
 
   function savePurpose() {
+    if (readOnly) return;
     if (!displayedPurpose.trim() || displayedPurpose.trim().length > 100) {
       setNotice('사용 목적을 100자 이내로 입력해 주세요. 공백만 입력할 수 없습니다.');
       return;
     }
-    const next = { ...state, vms: state.vms.map(item => item.id === vmRecord.id ? { ...item, purpose: displayedPurpose.trim() } : item) };
+    const latest = getDemoVmState();
+    const target = latest.vms.find(item => item.id === vmRecord.id);
+    if (!target || !canManageDemoVm(target)) {
+      setState(latest);
+      setNotice('현재 권한으로는 사용 목적을 저장할 수 없습니다.');
+      return;
+    }
+    const next = { ...latest, vms: latest.vms.map(item => item.id === vmRecord.id ? { ...item, purpose: displayedPurpose.trim() } : item) };
     if (!persistState(next)) {
       setNotice('사용 목적을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    setPurpose('');
+    setPurpose(null);
     setNotice('사용 목적을 저장했습니다.');
   }
 
@@ -201,7 +213,7 @@ export function VmSettingsPage() {
       setResizeError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
       return;
     }
-    if (latestVm.owner === 'team' && latestVm.role === 'member') {
+    if (!canManageDemoVm(latestVm)) {
       setState(latest);
       setResizeOpen(false);
       return;
@@ -256,14 +268,14 @@ export function VmSettingsPage() {
   }
 
   function startNameEdit() {
-    if (memberReadOnly) return;
+    if (readOnly) return;
     setNameDraft(vmRecord.name);
     setNameError('');
     setNameEditing(true);
   }
 
   function saveName() {
-    if (memberReadOnly || nameSaving) return;
+    if (readOnly || nameSaving) return;
     const value = nameDraft.trim();
     const validationError = validateVmName(value);
     if (validationError) {
@@ -289,6 +301,12 @@ export function VmSettingsPage() {
         setNameError('VM을 찾을 수 없습니다. 목록을 새로고침해 주세요.');
         return;
       }
+      if (!canManageDemoVm(latestVm)) {
+        setState(latest);
+        setNameSaving(false);
+        setNameError('현재 권한으로는 이름을 변경할 수 없습니다.');
+        return;
+      }
       if (duplicate) {
         setNameSaving(false);
         setNameError(vmRecord.owner === 'team'
@@ -310,19 +328,45 @@ export function VmSettingsPage() {
     }, 350);
   }
 
+  function resetPassword() {
+    if (readOnly) return;
+    const latest = getDemoVmState();
+    const target = latest.vms.find(item => item.id === vmRecord.id);
+    if (!target || !canManageDemoVm(target)) {
+      setPasswordResetError('현재 상태에서는 비밀번호를 재설정할 수 없습니다.');
+      return;
+    }
+    const password = 'gsvm-demo-' + crypto.randomUUID().slice(0, 12);
+    const next = { ...latest, vms: latest.vms.map(item => item.id === target.id ? { ...item, password } : item) };
+    if (!persistState(next)) {
+      setPasswordResetError('비밀번호를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    setPasswordResetOpen(false);
+    setNotice('목데이터 비밀번호를 재설정했습니다. 개요에서 확인할 수 있습니다.');
+  }
+
   function openDeleteDialog() {
-    if (memberReadOnly || vmRecord.status === 'queued') return;
+    if (readOnly || vmRecord.status === 'queued') return;
     setDeleteName('');
     setDeleteError('');
     setDeleteOpen(true);
   }
 
   function deleteVm() {
-    if (memberReadOnly || deleteSaving || deleteName !== vmRecord.name) return;
+    if (readOnly || deleteSaving || deleteName !== vmRecord.name) return;
     setDeleteSaving(true);
     window.setTimeout(() => {
       const latest = getDemoVmState();
-      if (!latest.vms.some(item => item.id === vmRecord.id)) {
+      const target = latest.vms.find(item => item.id === vmRecord.id);
+      if (target && !canManageDemoVm(target)) {
+        setState(latest);
+        setDeleteSaving(false);
+        setDeleteOpen(false);
+        setNotice('팀장 또는 DevOps만 VM을 삭제할 수 있습니다.');
+        return;
+      }
+      if (!target) {
         setDeleteSaving(false);
         setDeleteOpen(false);
         navigate(vmRecord.owner === 'team' ? `/teams/${encodeURIComponent(vmRecord.teamId ?? 'demo-team')}/vms` : '/');
@@ -335,7 +379,7 @@ export function VmSettingsPage() {
         setDeleteError('연결된 Network 정보를 정리하지 못했습니다. 기존 VM 상태를 유지했으니 잠시 후 다시 시도해 주세요.');
         return;
       }
-      const next = { ...latest, vms: latest.vms.filter(item => item.id !== vmRecord.id) };
+      const next = removeDemoVm(latest, target);
       if (!saveDemoVmState(next)) {
         const networkRestored = saveDemoNetworkState(vmRecord.grn, networkBeforeDelete);
         setDeleteSaving(false);
@@ -352,7 +396,7 @@ export function VmSettingsPage() {
     }, vmRecord.status === 'running' ? 650 : 250);
   }
 
-  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'} hasUnsavedInput={Boolean(purpose) || nameEditing}>
+  return <DemoShell activeItem="home" scopeLabel={vm.owner === 'team' ? `${teamName} · 일반 팀원` : '내 Resources'} teamScopeId={routeTeamId} userName={vm.owner === 'team' ? '윤채원' : '김지민'} hasUnsavedInput={purpose !== null || nameEditing}>
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.owner === 'team' ? '팀 VM' : '개인 VM'} · VM 설정</StatusLine></div></Heading>
@@ -361,12 +405,12 @@ export function VmSettingsPage() {
         <SurfaceTitle>사용 목적</SurfaceTitle>
         <Hint>관리자가 확인하며 기준에 맞지 않으면 VM이 삭제될 수 있습니다.</Hint>
         <FactValue>어떤 용도로 사용합니까?</FactValue>
-        <Textarea value={displayedPurpose} maxLength={100} disabled={memberReadOnly} onChange={event => setPurpose(event.currentTarget.value)} />
-        <Row><Hint>100자 이내로 입력해 주세요. 공백만 입력할 수 없습니다.</Hint><Button variant="primary" icon={<Octicon name="check" />} disabled={memberReadOnly || !purpose} onClick={savePurpose}>사용 목적 저장</Button></Row>
+        <Textarea value={displayedPurpose} maxLength={100} disabled={readOnly} onChange={event => setPurpose(event.currentTarget.value)} />
+        <Row><Hint>100자 이내로 입력해 주세요. 공백만 입력할 수 없습니다.</Hint><Button variant="primary" icon={<Octicon name="check" />} disabled={readOnly || purpose === null} onClick={savePurpose}>사용 목적 저장</Button></Row>
       </Surface>
       <Surface>
         <SurfaceTitle>Resources</SurfaceTitle>
-        <Hint>{canResizeDisk ? `SSD는 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 10 GB 단위로 늘릴 수 있습니다. 남은 할당량 ${remainingDisk} GB입니다.` : memberReadOnly ? '팀장 또는 DevOps만 VM 사양을 변경할 수 있습니다.' : `사양은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 늘릴 수 있습니다. 현재 남은 할당량이 없어 늘릴 수 없습니다.`}</Hint>
+        <Hint>{canResizeDisk ? `SSD는 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 10 GB 단위로 늘릴 수 있습니다. 남은 할당량 ${remainingDisk} GB입니다.` : readOnly ? '팀장 또는 DevOps만 VM 사양을 변경할 수 있습니다.' : `사양은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 늘릴 수 있습니다. 현재 남은 할당량이 없어 늘릴 수 없습니다.`}</Hint>
         <SliderField label="vCPU" value={vm.cpu} min={1} max={vm.cpu} valueLabel={`${vm.cpu} vCPU`} minLabel="최소 1" maxLabel={`최대 ${vm.cpu} · 남은 할당량 0`} disabled />
         <SliderField label="RAM" value={vm.memory} min={1} max={vm.memory} valueLabel={`${vm.memory} GB`} minLabel="최소 1 GB" maxLabel={`최대 ${vm.memory} GB · 남은 할당량 0`} disabled />
         <SliderField label="SSD" value={vm.disk} min={vm.disk} max={vm.disk} valueLabel={`${vm.disk} GB`} minLabel={`현재 ${vm.disk} GB · 줄일 수 없습니다`} maxLabel={`최대 ${resizableDiskLimit} GB · 남은 할당량 ${remainingDisk} GB`} helper="SSD는 늘릴 수만 있습니다. 늘린 뒤에는 VM 안에서 파일 시스템을 늘려야 합니다." showHelper disabled />
@@ -374,14 +418,29 @@ export function VmSettingsPage() {
       </Surface>
       <Surface>
         <SurfaceTitle>Instance 정보</SurfaceTitle>
-        <InstanceRow><Octicon name="server" />{nameEditing ? <NameEdit><NameInput aria-label="VM 이름" aria-invalid={Boolean(nameError || validateVmName(nameDraft.trim()))} autoFocus maxLength={40} value={nameDraft} disabled={nameSaving} onChange={event => { setNameDraft(event.currentTarget.value); setNameError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); saveName(); } else if (event.key === 'Escape') cancelNameEdit(); }} /><Button variant="secondary" disabled={nameSaving || Boolean(validateVmName(nameDraft.trim()))} onClick={saveName}>{nameSaving ? '저장 중' : nameError ? '다시 시도' : '저장'}</Button><Button variant="ghost" disabled={nameSaving} onClick={cancelNameEdit}>취소</Button></NameEdit> : <div><Hint>이름</Hint><FactValue>{vm.name}</FactValue></div>}{!nameEditing && <Button variant="ghost" icon={<Octicon name="pencil" />} disabled={memberReadOnly} onClick={startNameEdit}>변경</Button>}</InstanceRow>
+        <InstanceRow><Octicon name="server" />{nameEditing ? <NameEdit><NameInput aria-label="VM 이름" aria-invalid={Boolean(nameError || validateVmName(nameDraft.trim()))} autoFocus maxLength={40} value={nameDraft} disabled={nameSaving} onChange={event => { setNameDraft(event.currentTarget.value); setNameError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); saveName(); } else if (event.key === 'Escape') cancelNameEdit(); }} /><Button variant="secondary" disabled={nameSaving || Boolean(validateVmName(nameDraft.trim()))} onClick={saveName}>{nameSaving ? '저장 중' : nameError ? '다시 시도' : '저장'}</Button><Button variant="ghost" disabled={nameSaving} onClick={cancelNameEdit}>취소</Button></NameEdit> : <div><Hint>이름</Hint><FactValue>{vm.name}</FactValue></div>}{!nameEditing && <Button variant="ghost" icon={<Octicon name="pencil" />} disabled={readOnly} onClick={startNameEdit}>변경</Button>}</InstanceRow>
         {nameEditing && <NameError role={nameError || validateVmName(nameDraft.trim()) ? 'alert' : 'note'}>{nameError || validateVmName(nameDraft.trim()) || 'Enter를 누르면 저장하고, Esc를 누르면 취소합니다. 최대 40자 · 영문·숫자로 시작 · 영문, 숫자, -, _만 사용'}</NameError>}
         <InstanceRow><Octicon name="terminal" /><div><Hint>운영체제</Hint><FactValue>{vm.os}</FactValue></div></InstanceRow>
         <InstanceRow><Octicon name="cpu" /><div><Hint>Node 종류</Hint><FactValue>{vm.nodeType}</FactValue></div></InstanceRow>
       </Surface>
-      <WarningBar><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={memberReadOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
+      <Surface>
+        <SurfaceTitle>SSH 초기 비밀번호</SurfaceTitle>
+        <Row><Hint>초기 비밀번호를 재설정한 뒤 개요에서 확인할 수 있습니다.</Hint><Button variant="secondary" disabled={readOnly} icon={<Octicon name="key" />} onClick={() => { setPasswordResetError(''); setPasswordResetOpen(true); }}>비밀번호 재설정</Button></Row>
+      </Surface>
+      <WarningBar><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={readOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
       {notice && <Hint role="status">{notice}</Hint>}
     </DemoPage>
+    {passwordResetOpen && <ModalSurface labelledBy="vm-reset-password-title" onDismiss={() => setPasswordResetOpen(false)}>
+      <ResizePanel>
+        <ResizeTitle id="vm-reset-password-title">비밀번호를 재설정하시겠습니까?</ResizeTitle>
+        <ResizeCopy>새 초기 비밀번호는 VM 개요에서 확인할 수 있습니다.</ResizeCopy>
+        {passwordResetError && <NameError role="alert">{passwordResetError}</NameError>}
+        <ResizeActions>
+          <Button variant="secondary" onClick={() => setPasswordResetOpen(false)}>취소</Button>
+          <Button variant="primary" onClick={resetPassword}>비밀번호 재설정</Button>
+        </ResizeActions>
+      </ResizePanel>
+    </ModalSurface>}
     {resizeOpen && <ModalSurface labelledBy="vm-resize-title" onDismiss={() => setResizeOpen(false)}>
       <ResizePanel>
         <ResizeTitle id="vm-resize-title">디스크 늘리기</ResizeTitle>

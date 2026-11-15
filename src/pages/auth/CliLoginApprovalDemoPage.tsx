@@ -1,70 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoCliRequest, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
-import { getSessionUser } from '../../entities/session';
+import { getDemoCliRequestByCode, isDemoCliRequestExpired, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
+import { getDemoProfile, saveDemoProfile, updateDemoProfile } from '../../entities/profile';
+import { clearSessionUser, getSessionUser } from '../../entities/session';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
+import { CliCodeForm } from './CliLoginEntryDemoPage';
+import { CliLoginFrame } from './CliLoginFrame';
 
-const Page = styled.div`
-  min-height: 100vh;
-  background: ${({ theme }) => theme.colors.canvas};
-  color: ${({ theme }) => theme.colors.text};
-`;
-const Header = styled.header`
-  display: flex;
-  height: 74px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-
-  @media (max-width: 480px) {
-    height: auto;
-    min-height: 74px;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 16px;
-  }
-`;
-const Logo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font: 700 20px/28px ${({ theme }) => theme.typography.h2.family}, sans-serif;
-`;
-const LogoMark = styled.img`
-  display: block;
-  width: 24px;
-  height: 24px;
-`;
-const SignedIn = styled.span`
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: ${({ theme }) => theme.colors.muted};
-  font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
-
-  @media (max-width: 480px) {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-`;
-const Center = styled.main`
-  display: flex;
-  justify-content: center;
-  padding: 80px 24px;
-`;
-const Panel = styled.section`
-  width: min(560px, 100%);
-  padding: 24px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.surface};
-`;
 const Title = styled.h1`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
@@ -124,66 +69,155 @@ const Actions = styled.div`
   margin-top: 20px;
 `;
 
+const StateTitle = styled(Title)`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 700 24px/34px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const StateActions = styled(Actions)`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+`;
+
 export default function CliLoginApprovalDemoPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [request, setRequest] = useState(() => getDemoCliRequest());
-  const [notice, setNotice] = useState('');
-  const [now, setNow] = useState(() => Date.now());
+  const requestedCode = searchParams.get('code') ?? '';
+  if (!isDemoMode()) return <CliLoginFrame><StateTitle>목데이터 CLI 미리보기</StateTitle><Description>?demo=1 모드에서 CLI 로그인 승인을 확인할 수 있습니다.</Description></CliLoginFrame>;
+  return <CliApproval key={requestedCode} requestedCode={requestedCode} />;
+}
+
+function getCliStudent() {
+  const profile = getDemoProfile();
   const user = getSessionUser();
-  const email = user?.id === 'demo-admin' ? 'admin@example.com' : 'jimin@example.com';
-  const requestedCode = searchParams.get('code');
-  const hasRequestedCode = Boolean(requestedCode?.trim());
-  const normalizedCode = requestedCode?.replace(/-/g, '').toUpperCase() ?? '';
-  const codeIsValid = /^[A-Z0-9]{8}$/.test(normalizedCode);
-  const codeMatches = codeIsValid && normalizedCode === request.code.replace(/-/g, '').toUpperCase();
-  const expired = request.status === '만료됨' || (request.status === '확인 대기' && now >= (request.expiresAtMs ?? 0));
-  const consumed = request.status === '승인 완료' || request.status === '거부됨';
-  const active = isDemoMode() && Boolean(user) && codeMatches && request.status === '확인 대기' && !expired;
-  const expiresAtLabel = expired
-    ? '만료됨'
-    : `${Math.max(1, Math.ceil(((request.expiresAtMs ?? now) - now) / 60_000))}분 남음`;
+  return profile && !profile.signedOut && !profile.accountDeleted && user?.id === 'demo-student' && user.role === 'user' ? profile : null;
+}
+
+function CliApproval({ requestedCode }: { requestedCode: string }) {
+  const navigate = useNavigate();
+  const [request, setRequest] = useState(() => getDemoCliRequestByCode(requestedCode));
+  const [outcome, setOutcome] = useState<'승인 완료' | '거부됨'>();
+  const [notice, setNotice] = useState('');
+  const [now, setNow] = useState(Date.now);
+  const student = getCliStudent();
+  const expired = request ? isDemoCliRequestExpired(request, now) : false;
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    if (request?.status !== '확인 대기' || expired) return;
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+      setRequest(getDemoCliRequestByCode(requestedCode));
+    }, 1_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [expired, request?.status, requestedCode]);
 
-  useEffect(() => {
-    if (!expired || request.status !== '확인 대기') return;
-    const updated = { ...request, status: '만료됨' as const };
-    if (!saveDemoCliRequest(updated)) setNotice('만료 상태를 저장하지 못했습니다. 이 요청은 계속 승인할 수 없습니다.');
-    setRequest(updated);
-  }, [expired, request.status]);
+  if (!request) return <CliLoginFrame email={student?.email}>
+    <CliCodeForm initialCode={requestedCode} initialError={requestedCode.trim() ? '코드를 다시 확인하세요. 계속 안 되면 터미널에서 gsmsv login을 다시 실행하세요.' : ''} />
+  </CliLoginFrame>;
 
-  function decide(status: CliLoginRequest['status']) {
-    if (!active) return;
-    const updated = { ...request, status };
+  const consumed = request.status === '승인 완료' || request.status === '거부됨';
+
+  function decide(status: '승인 완료' | '거부됨') {
+    const latestProfile = getCliStudent();
+    if (!isDemoMode() || !latestProfile || outcome) return;
+    const latest = getDemoCliRequestByCode(requestedCode);
+    if (!latest || latest.status !== '확인 대기' || isDemoCliRequestExpired(latest)) {
+      setNow(Date.now());
+      setRequest(latest);
+      return;
+    }
+
+    const updated = { ...latest, status } satisfies CliLoginRequest;
+    if (status === '승인 완료') {
+      const device = { id: 'device-macbook', name: 'MacBook-Air', platform: 'macOS', lastUsed: '마지막 사용 방금' };
+      const cliDevices = [...latestProfile.cliDevices.filter(item => item.id !== device.id), device];
+      if (!updateDemoProfile({ cliDevices })) {
+        setNotice('CLI 기기를 저장하지 못했습니다. 다시 시도해 주세요.');
+        return;
+      }
+    }
+
     if (!saveDemoCliRequest(updated)) {
+      if (status === '승인 완료' && latestProfile) saveDemoProfile(latestProfile);
       setNotice('요청을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
     setRequest(updated);
-    setNotice(status === '승인 완료' ? 'CLI 로그인을 승인했습니다. 이 기기는 로컬 미리보기에서 연결된 것으로 표시됩니다.' : 'CLI 로그인 요청을 거부했습니다.');
+    setOutcome(status);
+    setNotice('');
   }
 
-  return <Page><Header><Logo><LogoMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Logo>{user && <SignedIn><Octicon name="person" size={16} /> {email}으로 로그인됨</SignedIn>}</Header><Center><Panel>
-    {!isDemoMode() ? <><Title>로컬 미리보기 전용</Title><Description>?demo=1 모드에서만 목데이터 승인 흐름을 확인할 수 있습니다.</Description></> : <>
-      <Title>{consumed ? '이미 처리된 코드입니다' : !hasRequestedCode ? '기기 코드가 필요합니다' : !codeIsValid || !codeMatches ? '유효하지 않은 코드입니다' : request.status === '확인 대기' ? 'CLI 로그인을 승인하시겠습니까?' : `CLI 로그인 ${request.status}`}</Title>
+  function logOutDevices() {
+    if (!getCliStudent()) return;
+    if (!updateDemoProfile({ cliDevices: [], signedOut: true })) {
+      setNotice('로그아웃 상태를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    clearSessionUser();
+    void navigate('/login', { replace: true });
+  }
+
+  const goToEntry = () => void navigate('/cli');
+  const close = <Button variant="secondary" onClick={goToEntry}>닫기</Button>;
+  const requestSummary = <Description>· 코드 {request.code} · {request.device}</Description>;
+  const error = notice && <Warning role="alert"><Octicon name="alert" size={18} />{notice}</Warning>;
+
+  let content;
+  if (outcome === '승인 완료') {
+    content = <>
+      <StateTitle><Octicon name="check-circle" size={24} />승인했습니다</StateTitle>
+      <Description>목데이터 CLI 기기가 연결되었습니다. 계정 설정에서 연결을 해제할 수 있습니다.</Description>
+      <Description>· 기기 · {request.device}</Description>
+      <StateActions><Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => void navigate('/settings?tab=cli')}>연결된 CLI 기기 보기</Button></StateActions>
+    </>;
+  } else if (outcome === '거부됨') {
+    content = <>
+      <StateTitle><Octicon name="x" size={24} />요청을 거부했습니다</StateTitle>
+      <Description>이 기기는 로그인되지 않았습니다. 직접 실행한 요청이 아니었다면 모든 기기에서 로그아웃하고 문의해 주세요.</Description>
+      {error}
+      <StateActions><Button variant="secondary" onClick={() => void navigate('/support/inquiries')}>문의하기</Button><Button variant="danger" onClick={logOutDevices}>모든 기기에서 로그아웃</Button></StateActions>
+    </>;
+  } else if (consumed) {
+    content = <>
+      <StateTitle><Octicon name="check" size={24} />이미 처리된 코드입니다</StateTitle>
+      <Description>같은 코드는 한 번만 쓸 수 있습니다. 터미널이 로그인됐는지 확인하세요.</Description>
+      {requestSummary}
+      <StateActions>{close}</StateActions>
+    </>;
+  } else if (expired) {
+    content = <>
+      <StateTitle><Octicon name="clock" size={24} />코드가 만료됐습니다</StateTitle>
+      <Description>코드는 요청 후 10분 동안만 쓸 수 있습니다. 터미널에서 gsmsv login을 다시 실행해 새 코드를 받으세요.</Description>
+      {requestSummary}
+      <StateActions>{close}</StateActions>
+    </>;
+  } else if (!student) {
+    const target = `/cli/approve?code=${encodeURIComponent(request.code)}`;
+    content = <>
+      <StateTitle><Octicon name="sign-in" size={24} />로그인하면 승인 화면으로 돌아옵니다</StateTitle>
+      <Description>CLI 승인은 로그인한 계정으로만 할 수 있습니다. DataGSM 로그인이 끝나면 코드가 입력된 승인 화면으로 돌아옵니다.</Description>
+      {requestSummary}
+      <StateActions><Button icon={<Octicon name="sign-in" size={16} />} onClick={() => void navigate(`/login?returnTo=${encodeURIComponent(target)}`)}>DataGSM으로 로그인</Button></StateActions>
+    </>;
+  } else {
+    const remainingMinutes = Math.max(1, Math.ceil(((request.expiresAtMs ?? now) - now) / 60_000));
+    content = <>
+      <Title>CLI 로그인을 승인하시겠습니까?</Title>
       <Description>터미널에 표시된 코드와 같은지 확인하세요.</Description>
-      <CodeCard><CodeText>{request.code}</CodeText><Description style={{ margin: 0, fontSize: 12 }}>코드는 요청 후 10분 동안 쓸 수 있습니다 · {expiresAtLabel}</Description></CodeCard>
-      {(!codeMatches || expired || consumed) && <Warning role="alert"><Octicon name="alert" size={18} />{consumed ? '이미 승인하거나 거부한 코드입니다.' : !hasRequestedCode ? '터미널의 8자리 코드를 입력해 주세요.' : expired ? '요청이 만료되었습니다.' : '코드가 일치하지 않습니다.'} 터미널에서 새 코드를 요청하세요.</Warning>}
-      {!user && <Warning role="status"><Octicon name="info" size={18} />승인하려면 먼저 로그인해야 합니다. 로그인 후 이 코드로 돌아옵니다.</Warning>}
+      <CodeCard><CodeText>{request.code}</CodeText><Description style={{ margin: 0, fontSize: 12 }}>코드는 요청 후 10분 동안 쓸 수 있습니다 · {remainingMinutes}분 남음</Description></CodeCard>
       <Warning><Octicon name="alert" size={20} /><span><strong>직접 실행한 요청이 아니면 거부하세요</strong><br />승인하면 이 기기에서 내 계정으로 VM과 함수를 다룰 수 있고, 로그인은 30일 동안 유지됩니다. 계정 설정 · 연결된 CLI 기기에서 언제든 해제할 수 있습니다.</span></Warning>
       <InfoLine><Octicon name="terminal" size={16} /><span><Label>기기</Label><Value>{request.device}</Value></span></InfoLine>
       <InfoLine><Octicon name="clock" size={16} /><span><Label>요청 시각</Label><Value>{request.requestedAt} · 방금</Value></span></InfoLine>
-      <InfoLine><Octicon name="person" size={16} /><span><Label>로그인 계정</Label><Value>김지민 · {email}</Value></span></InfoLine>
+      <InfoLine><Octicon name="person" size={16} /><span><Label>로그인 계정</Label><Value>{student.name} · {student.email}</Value></span></InfoLine>
       <InfoLine><Octicon name="key" size={16} /><span><Label>받는 권한</Label><Value>웹과 같은 권한 · VM·함수 조회, 생성, 전원, 연장</Value></span></InfoLine>
-      {notice && <Warning role="status"><Octicon name="info" size={18} />{notice}</Warning>}
-      <Actions>{!hasRequestedCode
-        ? <Button variant="primary" onClick={() => void navigate('/cli')}>코드 입력으로 이동</Button>
-        : !user && <Button variant="primary" onClick={() => { const target = `/cli/approve?code=${encodeURIComponent(requestedCode ?? '')}`; window.location.assign(`/login?returnTo=${encodeURIComponent(target)}`); }}>로그인</Button>}
-        <Button variant="secondary" disabled={!active} icon={<Octicon name="x" size={16} />} onClick={() => decide('거부됨')}>거부</Button><Button disabled={!active} icon={<Octicon name="check" size={16} />} onClick={() => decide('승인 완료')}>승인</Button></Actions>
-    </>}
-  </Panel></Center></Page>;
+      {error}
+      <Actions>
+        <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => decide('거부됨')}>거부</Button>
+        <Button icon={<Octicon name="check" size={16} />} onClick={() => decide('승인 완료')}>승인</Button>
+      </Actions>
+    </>;
+  }
+  return <CliLoginFrame email={student?.email}>{content}</CliLoginFrame>;
 }

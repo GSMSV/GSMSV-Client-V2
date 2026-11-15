@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmQuota, getDemoVmState, listDemoTeamVms } from '../../entities/vm';
+import { canCreateDemoTeamVm, getDemoVmQuota, getDemoVmState, isDemoVmInitializing, listDemoTeamVms } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
@@ -37,7 +37,7 @@ export function TeamVmListPage() {
   const vms = listDemoTeamVms(state, teamId);
   const team = getDemoTeam(teamId);
   const quota = getDemoVmQuota(state, teamId);
-  const canCreateInTeam = Boolean(team?.status === 'approved' && (team.my_role === null || team.my_role === 'leader' || team.my_role === 'devops'));
+  const canCreateInTeam = canCreateDemoTeamVm(teamId);
   const createQuotaReason = quota.cpu >= quota.cpuLimit
     ? '팀 vCPU를 모두 사용 중입니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
     : quota.memory + 1 > quota.memoryLimit
@@ -45,7 +45,16 @@ export function TeamVmListPage() {
       : quota.disk + 10 > quota.diskLimit
         ? '팀 SSD 할당량이 부족합니다. 팀 설정에서 할당량 늘리기를 요청하세요.'
         : undefined;
+  const hasPendingRequests = vms.some(vm => vm.status === 'queued' && vm.requestedAtMs !== undefined);
+  useEffect(() => {
+    if (!hasPendingRequests) return;
+    const timer = window.setInterval(() => setRefresh(value => value + 1), 1_000);
+    return () => window.clearInterval(timer);
+  }, [hasPendingRequests]);
+
   if (!isDemoMode()) return <Navigate to="/" replace />;
+
+  if (!team) return <Navigate to="/teams" replace />;
 
   return <DemoShell activeItem="home" scopeLabel={`${team?.name ?? '팀'} · 팀장`} teamScopeId={teamId} userName="김지민">
     <DemoPage>
@@ -57,7 +66,7 @@ export function TeamVmListPage() {
           <thead><tr><th>이름</th><th>상태</th><th>사양</th><th>생성한 사람</th><th>만료일</th><th>관리</th></tr></thead>
           <tbody>{vms.length === 0 ? <tr><td colSpan={6}>팀 VM이 없습니다.</td></tr> : vms.map(vm => <tr key={vm.id}>
             <td><TableAction onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</TableAction></td>
-            <td><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? '생성 대기 중' : '정지됨'}</StatusText></td>
+            <td><StatusText $status={vm.status}>{vm.status === 'running' ? '실행 중' : vm.status === 'queued' ? isDemoVmInitializing(vm) ? '초기 설정 중' : '생성 대기 중' : '정지됨'}</StatusText></td>
             <td>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</td><td>{vm.creator}</td><td>{vm.expiresAt}</td>
             <td><Button variant="ghost" onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(vm.id)}`)}>열기</Button></td>
           </tr>)}</tbody>

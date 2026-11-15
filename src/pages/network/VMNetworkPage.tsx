@@ -21,13 +21,15 @@ import {
   type NetworkProtocol,
   type PortForward,
 } from '../../entities/network';
-import type { DemoVm } from '../../entities/vm';
+import { getDemoTeam } from '../../entities/team/demo';
+import { canManageDemoVm, useDemoVmResourceState } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { VmUnavailablePage } from '../vm/VmUnavailablePage';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
 const Page = styled.div`
@@ -422,38 +424,28 @@ export default function VMNetworkPage() {
   const { vmGrn, teamId: routeTeamId } = useParams<{ vmGrn: string; teamId?: string }>();
   const navigate = useNavigate();
   const user = getSessionUser();
-  const demoMode = import.meta.env.DEV && isDemoMode();
-  const [demoVm, setDemoVm] = useState<DemoVm>();
-  const [demoVmResolved, setDemoVmResolved] = useState(false);
-  useEffect(() => {
-    if (!(import.meta.env.DEV && demoMode) || !vmGrn) {
-      setDemoVm(undefined);
-      setDemoVmResolved(true);
-      return;
-    }
-    let cancelled = false;
-    setDemoVmResolved(false);
-    void import('../../entities/vm').then(({ getDemoVmState }) => {
-      if (cancelled) return;
-      setDemoVm(getDemoVmState().vms.find(vm => vm.grn === vmGrn));
-      setDemoVmResolved(true);
-    });
-    return () => { cancelled = true; };
-  }, [demoMode, vmGrn]);
+  const demoMode = isDemoMode();
+  const [vmState] = useDemoVmResourceState(vmGrn);
+  const demoVm = demoMode ? vmState.vms.find(vm => (
+    (vm.grn === vmGrn || vm.id === vmGrn) && (!routeTeamId || vm.teamId === routeTeamId)
+  )) : undefined;
+  const networkGrn = demoMode ? demoVm?.grn : vmGrn;
+  const readOnly = demoMode && (!demoVm || demoVm.status === 'queued' || !canManageDemoVm(demoVm));
   const teamId = routeTeamId ?? (demoVm?.owner === 'team' ? demoVm.teamId : undefined);
   const resourceVmId = encodeURIComponent(demoVm?.id ?? vmGrn ?? '');
   const resourceBase = teamId
     ? `/teams/${encodeURIComponent(teamId)}/vms/${resourceVmId}`
     : `/vms/${resourceVmId}`;
   const fallbackNetworkPath = teamId
-    ? `/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(vmGrn ?? '')}/network`
-    : `/vms/${encodeURIComponent(vmGrn ?? '')}/network`;
+    ? `/teams/${encodeURIComponent(teamId)}/vms/${encodeURIComponent(networkGrn ?? vmGrn ?? '')}/network`
+    : `/vms/${encodeURIComponent(networkGrn ?? vmGrn ?? '')}/network`;
   const demoNavigationAvailable = Boolean(demoMode && demoVm && (demoVm.owner !== 'team' || demoVm.teamId === teamId));
   const [ports, setPorts] = useState<Loadable<Awaited<ReturnType<typeof listPortForwards>>>>(initial);
   const [rules, setRules] = useState<Loadable<Awaited<ReturnType<typeof listFirewallRules>>>>(initial);
   const [domains, setDomains] = useState<Loadable<Awaited<ReturnType<typeof listDomains>>>>(initial);
   const [reloadKey, setReloadKey] = useState(0);
   const [action, setAction] = useState<ActionKind>(null);
+  const [domainDetailsId, setDomainDetailsId] = useState<string>();
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -463,7 +455,8 @@ export default function VMNetworkPage() {
   const [domainForm, setDomainForm] = useState({ subdomain: '', internalPort: '' });
 
   const load = useCallback(async (signal: AbortSignal) => {
-    if (!vmGrn) {
+    if (!networkGrn) {
+      if (demoMode) return;
       setPorts({ value: null, loading: false, error: true });
       setRules({ value: null, loading: false, error: true });
       setDomains({ value: null, loading: false, error: true });
@@ -473,13 +466,13 @@ export default function VMNetworkPage() {
     setRules(current => ({ ...current, loading: true, error: false }));
     setDomains(current => ({ ...current, loading: true, error: false }));
     const [portResult, ruleResult, domainResult] = await Promise.allSettled([
-      listPortForwards(vmGrn, signal), listFirewallRules(vmGrn, signal), listDomains(vmGrn, signal),
+      listPortForwards(networkGrn, signal), listFirewallRules(networkGrn, signal), listDomains(networkGrn, signal),
     ]);
     if (signal.aborted) return;
     setPorts(portResult.status === 'fulfilled' ? { value: portResult.value, loading: false, error: false } : { value: null, loading: false, error: true });
     setRules(ruleResult.status === 'fulfilled' ? { value: ruleResult.value, loading: false, error: false } : { value: null, loading: false, error: true });
     setDomains(domainResult.status === 'fulfilled' ? { value: domainResult.value, loading: false, error: false } : { value: null, loading: false, error: true });
-  }, [vmGrn]);
+  }, [demoMode, networkGrn]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -488,8 +481,20 @@ export default function VMNetworkPage() {
   }, [load, reloadKey]);
 
   const reload = () => setReloadKey(value => value + 1);
+  const hasPendingDomain = domains.value?.items.some(domain => domain.sync_status === 'pending');
+  useEffect(() => {
+    if (!demoMode || !networkGrn || !hasPendingDomain) return;
+    const timer = window.setInterval(() => {
+      void listDomains(networkGrn)
+        .then(value => setDomains({ value, loading: false, error: false }))
+        .catch(() => setDomains({ value: null, loading: false, error: true }));
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [demoMode, hasPendingDomain, networkGrn]);
+
+  const domainDetails = domains.value?.items.find(domain => domain.id === domainDetailsId && domain.sync_status !== 'synced');
   const firewallEnabled = rules.value?.enabled ?? false;
-  const firewallAllowRuleCount = rules.value?.items.filter(rule => rule.action === 'accept').length ?? 0;
+  const firewallAllowRuleCount = rules.value?.items.filter(rule => rule.action === 'accept' && rule.direction === 'in').length ?? 0;
   const customPortCount = ports.value?.items.filter(port => port.kind === 'custom').length ?? 0;
   const portsRemaining = Math.max(0, (ports.value?.limits.custom ?? 0) - customPortCount);
   const domainRemaining = Math.max(0, (domains.value?.limits.per_vm ?? 0) - (domains.value?.items.length ?? 0));
@@ -522,18 +527,20 @@ export default function VMNetworkPage() {
     setDomainForm({ subdomain: '', internalPort: '' });
   };
 
-  const handleActionError = (cause: unknown, label: string) => setError(apiMessage(cause, label));
+  const handleActionError = (cause: unknown, label: string) => {
+    setError(demoMode && cause instanceof Error ? cause.message : apiMessage(cause, label));
+  };
 
   async function submitPort(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!vmGrn) return;
+    if (readOnly || !networkGrn) return;
     const internalPort = Number.parseInt(portForm.internalPort, 10);
     if (!Number.isInteger(internalPort) || internalPort < 1 || internalPort > 65535) {
       setError('내부 포트는 1부터 65535 사이의 숫자여야 합니다.'); return;
     }
     setSubmitting(true); setError('');
     try {
-      await createPortForward(vmGrn, {
+      await createPortForward(networkGrn, {
         internal_port: internalPort,
         protocol: portForm.protocol,
         ...(portForm.allowedSource.trim() ? { allowed_source: portForm.allowedSource.trim() } : {}),
@@ -545,7 +552,7 @@ export default function VMNetworkPage() {
 
   async function submitRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!vmGrn) return;
+    if (readOnly || !networkGrn) return;
     if (ruleForm.protocol !== 'icmp' && !ruleForm.dport.trim()) { setError('포트 또는 포트 범위를 입력해 주세요.'); return; }
     if (ruleForm.protocol !== 'icmp' && !/^(?:[1-9]\d{0,4})(?::(?:[1-9]\d{0,4}))?$/.test(ruleForm.dport.trim())) {
       setError('포트는 1~65535 숫자 하나 또는 시작:끝 범위로 입력해 주세요.'); return;
@@ -555,14 +562,15 @@ export default function VMNetworkPage() {
       if (startPort > 65535 || endPort > 65535 || endPort < startPort) { setError('포트 범위는 1~65535이고 끝 포트가 시작 포트보다 커야 합니다.'); return; }
     }
     setError('');
-    setAction('firewall-confirm');
+    if (demoMode && firewallEnabled) await confirmFirewallRule();
+    else setAction('firewall-confirm');
   }
 
   async function confirmFirewallRule() {
-    if (!vmGrn) return;
+    if (readOnly || !networkGrn) return;
     setSubmitting(true); setError(''); setAction('firewall-loading');
     try {
-      await createFirewallRule(vmGrn, {
+      await createFirewallRule(networkGrn, {
         action: ruleForm.action,
         direction: ruleForm.direction,
         protocol: ruleForm.protocol,
@@ -574,13 +582,13 @@ export default function VMNetworkPage() {
   }
 
   async function setFirewallState(enabled: boolean) {
-    if (!vmGrn || !demoMode) return;
+    if (readOnly || !networkGrn || !demoMode) return;
     setSubmitting(true);
     setError('');
     setAction(enabled ? 'firewall-enable-loading' : 'firewall-disable-loading');
     try {
       await new Promise(resolve => window.setTimeout(resolve, 300));
-      await setFirewallEnabled(vmGrn, enabled);
+      await setFirewallEnabled(networkGrn, enabled);
       finishAction();
       setNotice(enabled ? '방화벽을 켰습니다.' : '방화벽을 껐습니다. 모든 수신 접속이 허용됩니다.');
       reload();
@@ -592,32 +600,39 @@ export default function VMNetworkPage() {
   }
 
   function toggleFirewall() {
-    if (!demoMode || !rules.value || submitting) return;
+    if (readOnly || !demoMode || !rules.value || submitting) return;
     if (firewallEnabled) setAction('firewall-disable-confirm');
     else void setFirewallState(true);
   }
 
   async function submitDomain(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!vmGrn) return;
+    if (readOnly || !networkGrn) return;
     const subdomain = domainForm.subdomain.trim();
     if (!/^[a-z0-9-]{1,63}$/.test(subdomain)) { setError('서브도메인은 영문 소문자, 숫자, 하이픈으로 1~63자 입력해 주세요.'); return; }
     if (!Number.isInteger(expectedInternalPort) || expectedInternalPort < 1 || expectedInternalPort > 65535) { setError('내부 포트는 1부터 65535 사이의 숫자여야 합니다.'); return; }
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       const [vmRepository, networkRepository] = await Promise.all([
         import('../../entities/vm'),
         import('../../entities/network/model/demoNetworkStore'),
       ]);
       const otherSubdomains = vmRepository.getDemoVmState().vms
-        .filter(vm => vm.grn !== vmGrn)
+        .filter(vm => vm.grn !== networkGrn)
         .flatMap(vm => networkRepository.getDemoNetworkState(vm.grn).domains.map(domain => domain.subdomain));
-      const validationError = networkRepository.getDemoDomainValidationError(vmGrn, subdomain, expectedInternalPort, otherSubdomains);
+      const validationError = networkRepository.getDemoDomainValidationError(networkGrn, subdomain, expectedInternalPort, otherSubdomains);
       if (validationError) { setError(validationError); return; }
+    }
+    if (demoMode && !isDemoMode()) {
+      setError('목데이터 모드가 종료되었습니다. 화면을 새로고침해 주세요.');
+      return;
     }
     setSubmitting(true); setError('');
     try {
-      await createDomain(vmGrn, { subdomain, internal_port: expectedInternalPort });
-      setNotice('HTTPS Domain을 연결했습니다.'); finishAction(); reload();
+      const result = await createDomain(networkGrn, { subdomain, internal_port: expectedInternalPort });
+      setNotice(result.sync_status === 'pending' ? 'HTTPS Domain 연결을 기다리고 있습니다.' : 'HTTPS Domain을 연결했습니다.');
+      if (demoMode && result.sync_status === 'pending') setDomainDetailsId(result.id);
+      finishAction();
+      reload();
     } catch (cause) {
       if (demoMode && cause instanceof Error) setError(cause.message);
       else handleActionError(cause, 'Domain 추가');
@@ -625,23 +640,38 @@ export default function VMNetworkPage() {
     }
   }
 
+  async function retryDomain(domain: Domain) {
+    if (readOnly || !networkGrn || !demoMode) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      const { demoRetryDomain } = await import('../../entities/network/model/demoNetworkStore');
+      demoRetryDomain(networkGrn, domain.id);
+      reload();
+    } catch (cause) {
+      handleActionError(cause, 'HTTPS 다시 연결');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function restoreDefaults() {
-    if (!vmGrn) return;
+    if (readOnly || !networkGrn) return;
     setSubmitting(true); setError('');
     try {
-      const result = await restoreDefaultPortForwards(vmGrn);
+      const result = await restoreDefaultPortForwards(networkGrn);
       setNotice(result.restored ? `기본 포트 ${result.restored}개를 복원했습니다.` : '기본 포트가 이미 모두 있습니다.');
       finishAction(); reload();
     } catch (cause) { handleActionError(cause, '기본 포트 복원'); setSubmitting(false); }
   }
 
   async function confirmDelete() {
-    if (!vmGrn || !confirmTarget) return;
+    if (readOnly || !networkGrn || !confirmTarget) return;
     setSubmitting(true); setError('');
     try {
-      if (confirmTarget.kind === 'port') await deletePortForward(vmGrn, confirmTarget.value.id);
-      else if (confirmTarget.kind === 'rule') await deleteFirewallRule(vmGrn, confirmTarget.value.id);
-      else await deleteDomain(vmGrn, confirmTarget.value.id);
+      if (confirmTarget.kind === 'port') await deletePortForward(networkGrn, confirmTarget.value.id);
+      else if (confirmTarget.kind === 'rule') await deleteFirewallRule(networkGrn, confirmTarget.value.id);
+      else await deleteDomain(networkGrn, confirmTarget.value.id);
       setNotice(`${confirmTarget.kind === 'port' ? '외부 접속 포트' : confirmTarget.kind === 'rule' ? '방화벽 규칙' : 'HTTPS Domain'}을 삭제했습니다.`);
       finishAction(); reload();
     } catch (cause) { handleActionError(cause, '삭제'); setSubmitting(false); }
@@ -652,11 +682,13 @@ export default function VMNetworkPage() {
   const publicHost = ports.value?.public_host;
   const userName = demoVm?.owner === 'team' ? '윤채원' : user?.name ?? '사용자';
 
-  if (demoMode && demoVmResolved && routeTeamId && (!demoVm || demoVm.owner !== 'team' || demoVm.teamId !== routeTeamId)) {
-    return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}/vms`} replace />;
+  if (demoMode && routeTeamId && !getDemoTeam(routeTeamId)) {
+    return <Navigate to="/teams" replace />;
   }
-  if (demoMode && demoVmResolved && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
-    return <Navigate to={`/teams/${encodeURIComponent(demoVm.teamId)}/vms/${encodeURIComponent(demoVm.id)}/network`} replace />;
+  if (demoMode && !demoVm) return <VmUnavailablePage teamId={routeTeamId}
+    deleted={vmState.deletedVms?.find(item => (item.grn === vmGrn || item.id === vmGrn) && item.teamId === routeTeamId)} />;
+  if (demoMode && demoVm?.owner === 'team' && !routeTeamId && demoVm.teamId) {
+    return <Navigate to={`/teams/${encodeURIComponent(demoVm.teamId)}/vms/${encodeURIComponent(demoVm.grn)}/network`} replace />;
   }
 
   return (
@@ -678,8 +710,8 @@ export default function VMNetworkPage() {
       <Page>
         <Breadcrumb to={teamId ? `/teams/${encodeURIComponent(teamId)}` : '/'}>{teamId && demoVm?.owner === 'team' ? `${demoVm.teamName ?? '팀'} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
         <Heading>
-          <Title>VM Network</Title>
-          <Subtitle>외부 접속과 트래픽 규칙 관리</Subtitle>
+          <Title>{demoVm?.name ?? 'VM Network'}</Title>
+          <Subtitle>{demoVm ? (demoVm.status === 'running' ? '실행 중 · ' : demoVm.status === 'stopped' ? '정지됨 · ' : '생성 대기 중 · ') : ''}외부 접속과 트래픽 규칙 관리</Subtitle>
         </Heading>
         <Tabs aria-label="VM navigation">
           <Tab to={demoNavigationAvailable ? resourceBase : fallbackNetworkPath} aria-disabled={!demoNavigationAvailable} title={!demoNavigationAvailable ? 'VM 개요 API 계약이 없어 이 화면은 아직 연결되지 않았습니다.' : undefined} onClick={!demoNavigationAvailable ? event => event.preventDefault() : undefined}>개요</Tab>
@@ -702,8 +734,8 @@ export default function VMNetworkPage() {
           <SectionHeading>
             <SectionTitle>외부 접속 포트{ports.value ? ` · 커스텀 ${customPortCount}/${ports.value.limits.custom}` : ''}</SectionTitle>
             <SectionActions>
-              <Button variant="secondary" icon={<Octicon name="history" size={16} />} onClick={() => { setAction('restore'); setError(''); }}>기본 포트 복원</Button>
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={portsRemaining <= 0 || !ports.value} onClick={() => openAction('port')}>포트 추가</Button>
+              <Button variant="secondary" icon={<Octicon name="history" size={16} />} disabled={readOnly} onClick={() => { setAction('restore'); setError(''); }}>기본 포트 복원</Button>
+              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={readOnly || portsRemaining <= 0 || !ports.value} onClick={() => openAction('port')}>포트 추가</Button>
             </SectionActions>
           </SectionHeading>
           {busy && <LoadingCard height={142} />}
@@ -719,7 +751,7 @@ export default function VMNetworkPage() {
                     <td>{port.allowed_source ?? '0.0.0.0/0'}</td>
                     <td><TableActions>
                       {publicHost && <IconButton type="button" aria-label={`${portLabel(port)} 주소 복사`} title="주소 복사" onClick={() => void navigator.clipboard?.writeText(`${publicHost}:${port.external_port}`).then(() => setNotice('접속 주소를 복사했습니다.')).catch(() => setNotice('주소 복사에 실패했습니다.'))}><Octicon name="copy" size={16} /></IconButton>}
-                      <IconButton type="button" aria-label={`${portLabel(port)} 삭제`} title="삭제" onClick={() => { setConfirmTarget({ kind: 'port', value: port }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton>
+                      <IconButton type="button" aria-label={`${portLabel(port)} 삭제`} title="삭제" disabled={readOnly} onClick={() => { setConfirmTarget({ kind: 'port', value: port }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton>
                     </TableActions></td>
                   </tr>
                 ))}
@@ -729,11 +761,19 @@ export default function VMNetworkPage() {
           {ports.value && <Muted>외부 주소: {publicHost ?? '계약 응답에 호스트 정보가 없습니다.'}</Muted>}
         </Surface>}
 
+        {demoMode && firewallEnabled && firewallAllowRuleCount === 0 && <Banner role="status">
+          <Octicon name="alert" size={20} />
+          <BannerText><strong>모든 수신 접속이 막혀 있습니다</strong><BannerCaption>방화벽이 켜져 있지만 허용 규칙이 없습니다. SSH로도 접속할 수 없습니다.</BannerCaption></BannerText>
+          <SectionActions>
+            <Button variant="secondary" disabled={readOnly} onClick={toggleFirewall}>방화벽 끄기</Button>
+            <Button variant="primary" disabled={readOnly || ruleRemaining <= 0} onClick={() => openAction('rule')}>규칙 추가</Button>
+          </SectionActions>
+        </Banner>}
         {rules.error ? <ErrorPanel $height={240} onRetry={reload} /> : <Surface>
           <SectionHeading>
             <SectionTitle>방화벽 규칙 · {rules.value ? firewallEnabled ? '켜짐' : '꺼짐' : '—'}</SectionTitle>
             <SectionActions>
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={ruleRemaining <= 0 || !rules.value} onClick={() => openAction('rule')}>규칙 추가</Button>
+              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={readOnly || ruleRemaining <= 0 || !rules.value} onClick={() => openAction('rule')}>규칙 추가</Button>
             </SectionActions>
           </SectionHeading>
           {busy && <LoadingCard height={160} />}
@@ -747,8 +787,8 @@ export default function VMNetworkPage() {
                       <td><RuleAction $allowed={rule.action === 'accept'}>{rule.action === 'accept' ? '허용' : rule.action === 'drop' ? '차단' : '거부'} · {rule.direction === 'in' ? '수신' : '송신'}</RuleAction></td>
                       <td>{rule.protocol.toUpperCase()}{rule.dport ? ` · ${rule.dport}` : ''}</td>
                       <td>{rule.source ?? '전체'}</td>
-                      <td aria-label="목적지 정보는 목록 API 응답에 없습니다">—</td>
-                      <td><TableActions><IconButton type="button" aria-label="방화벽 규칙 삭제" title="삭제" onClick={() => { setConfirmTarget({ kind: 'rule', value: rule }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton></TableActions></td>
+                      <td>{demoVm?.internalIp ?? '—'}</td>
+                      <td><TableActions><IconButton type="button" aria-label="방화벽 규칙 삭제" title="삭제" disabled={readOnly} onClick={() => { setConfirmTarget({ kind: 'rule', value: rule }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton></TableActions></td>
                     </tr>
                   ))}
                 </tbody>
@@ -762,7 +802,7 @@ export default function VMNetworkPage() {
                 role="switch"
                 aria-checked={firewallEnabled}
                 aria-label="방화벽 사용 상태"
-                disabled={!demoMode || !rules.value || busy}
+                disabled={readOnly || !demoMode || !rules.value || busy}
                 title={!demoMode ? '계약에 방화벽 켜기/끄기 API가 없습니다.' : undefined}
                 onClick={toggleFirewall}
               >
@@ -777,7 +817,7 @@ export default function VMNetworkPage() {
           <SectionHeading>
             <SectionTitle>HTTPS Domain · {domains.value ? `${domains.value.items.length}/${domains.value.limits.per_vm}` : '—'}</SectionTitle>
             <SectionActions>
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={domainRemaining <= 0 || !domains.value} onClick={() => openAction('domain')}>Domain 추가</Button>
+              <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={readOnly || domainRemaining <= 0 || !domains.value} onClick={() => openAction('domain')}>Domain 추가</Button>
             </SectionActions>
           </SectionHeading>
           {busy && <LoadingCard height={140} />}
@@ -791,9 +831,11 @@ export default function VMNetworkPage() {
                     <td>{domain.internal_port}</td>
                     <td><Synced $status={domain.sync_status}>{syncLabel(domain.sync_status)}</Synced></td>
                     <td><TableActions>
-                      <IconButton as="a" href={domain.url} target="_blank" rel="noreferrer" aria-label="Domain 열기" title="열기"><Octicon name="link-external" size={16} /></IconButton>
+                      {demoMode && domain.sync_status !== 'synced'
+                        ? <IconButton type="button" aria-label="Domain 연결 상태 보기" title="연결 상태" onClick={() => { setDomainDetailsId(domain.id); setError(''); }}><Octicon name="info" size={16} /></IconButton>
+                        : <IconButton as="a" href={domain.url} target="_blank" rel="noreferrer" aria-label="Domain 열기" title="열기"><Octicon name="link-external" size={16} /></IconButton>}
                       <IconButton type="button" aria-label="Domain 주소 복사" title="복사" onClick={() => void navigator.clipboard?.writeText(domain.url).then(() => setNotice('Domain 주소를 복사했습니다.')).catch(() => setNotice('주소 복사에 실패했습니다.'))}><Octicon name="copy" size={16} /></IconButton>
-                      <IconButton type="button" aria-label="Domain 삭제" title="삭제" onClick={() => { setConfirmTarget({ kind: 'domain', value: domain }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton>
+                      <IconButton type="button" aria-label="Domain 삭제" title="삭제" disabled={readOnly} onClick={() => { setConfirmTarget({ kind: 'domain', value: domain }); setError(''); }}><Octicon name="trashcan" size={16} /></IconButton>
                     </TableActions></td>
                   </tr>
                 ))}
@@ -904,6 +946,18 @@ export default function VMNetworkPage() {
         <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={finishAction}>취소</Button><Button variant="primary" icon={<Octicon name="history" size={16} />} disabled={submitting} onClick={() => void restoreDefaults()}>{submitting ? '복원 중…' : '기본 포트 복원'}</Button></DialogActions>
       </DialogFrame>}
 
+      {domainDetails && !confirmTarget && <DialogFrame title={domainDetails.sync_status === 'pending' ? 'HTTPS 다시 연결 중 · 2/3' : 'HTTPS 연결에 실패했습니다'} onClose={() => setDomainDetailsId(undefined)}>
+        <DialogCopy>{domainDetails.url} → 내부 {domainDetails.internal_port}</DialogCopy>
+        {domainDetails.sync_status === 'failed' && <DialogCopy>내부 {domainDetails.internal_port} 포트가 응답하지 않습니다. 목데이터에서 TCP 포트를 추가한 뒤 다시 연결할 수 있습니다.</DialogCopy>}
+        {error && <InlineError role="alert">{error}</InlineError>}
+        <DialogActions>
+          <Button variant="secondary" onClick={() => setDomainDetailsId(undefined)}>닫기</Button>
+          {domainDetails.sync_status === 'failed' && <>
+            <Button variant="secondary" disabled={readOnly} icon={<Octicon name="trashcan" size={16} />} onClick={() => { setDomainDetailsId(undefined); setConfirmTarget({ kind: 'domain', value: domainDetails }); }}>Domain 삭제</Button>
+            <Button variant="primary" disabled={readOnly || submitting} icon={<Octicon name="sync" size={16} />} onClick={() => void retryDomain(domainDetails)}>다시 연결</Button>
+          </>}
+        </DialogActions>
+      </DialogFrame>}
       {confirmTarget && <DialogFrame title={
         confirmTarget.kind === 'port' && confirmTarget.value.kind === 'ssh'
           ? 'SSH 기본 포트를 삭제할까요?'
