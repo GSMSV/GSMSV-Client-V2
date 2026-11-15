@@ -1,5 +1,6 @@
 export { Banner, type BannerProps, type BannerTone } from './Banner';
 export { DeleteConfirmDialog, type DeleteConfirmDialogProps } from './DeleteConfirmDialog';
+export { ModalSurface } from './ModalSurface';
 export { UnsavedChangesDialog } from './UnsavedChangesDialog';
 export { ErrorCard, type ErrorCardProps, type ErrorCardSize } from './ErrorCard';
 export { LoadingBar, LoadingCard, type LoadingBarProps, type LoadingCardProps } from './Loading';

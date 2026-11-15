@@ -1,4 +1,5 @@
 export {
+  addDemoNotification,
   deleteNotification,
   listNotifications,
   markAllNotificationsRead,
