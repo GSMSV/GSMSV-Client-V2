@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 import { Button, NavigationItem } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 
 export type ServerlessVersionTab = '코드' | '버전' | 'Trigger' | '환경변수' | '테스트' | 'Logs';
@@ -159,6 +161,33 @@ const SummaryDescription = styled.p`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
+const RollbackDialogContent = styled.div`
+  box-sizing: border-box;
+  display: flex;
+  width: min(480px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+`;
+
+const RollbackDialogTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const RollbackDialogCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const RollbackDialogActions = styled.footer`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 export function ServerlessVersionsPage({
   functionName,
   description,
@@ -166,6 +195,10 @@ export function ServerlessVersionsPage({
   onSelectTab,
   onRollback,
 }: ServerlessVersionsPageProps) {
+  const [rollbackVersionId, setRollbackVersionId] = useState<string | null>(null);
+  const rollbackVersion = versions.find(version => version.id === rollbackVersionId);
+  const nextVersion = Math.max(0, ...versions.map(version => Number(version.id) || 0)) + 1;
+
   return (
     <Page data-node-id="593:6260">
       <Breadcrumb>Serverless</Breadcrumb>
@@ -209,7 +242,7 @@ export function ServerlessVersionsPage({
                     variant="ghost"
                     icon={<Octicon name="history" size={16} />}
                     disabled={!onRollback}
-                    onClick={() => onRollback?.(version.id)}
+                    onClick={() => setRollbackVersionId(version.id)}
                   >되돌리기</Button>
                 )}
               </Cell>
@@ -222,6 +255,19 @@ export function ServerlessVersionsPage({
         <SummaryTitle>버전에는 코드 · Runtime · 실행 제한만 담깁니다</SummaryTitle>
         <SummaryDescription>되돌리면 고른 버전으로 새 버전이 하나 더 생깁니다. 환경변수 · Trigger · DB 연결은 바뀌지 않습니다. 최근 10개를 보관합니다.</SummaryDescription>
       </Summary>
+      {rollbackVersion && <ModalSurface labelledBy="serverless-rollback-title" onDismiss={() => setRollbackVersionId(null)}>
+        <RollbackDialogContent>
+          <RollbackDialogTitle id="serverless-rollback-title">{rollbackVersion.label}로 되돌리시겠습니까?</RollbackDialogTitle>
+          <RollbackDialogCopy>
+            · {rollbackVersion.label}의 코드·Runtime·실행 제한으로 새 버전 {nextVersion}을 만듭니다.
+            <br />· 환경변수·Trigger·DB 연결은 그대로입니다.
+          </RollbackDialogCopy>
+          <RollbackDialogActions>
+            <Button type="button" variant="secondary" onClick={() => setRollbackVersionId(null)}>취소</Button>
+            <Button type="button" variant="primary" icon={<Octicon name="history" size={16} />} onClick={() => { const versionId = rollbackVersion.id; setRollbackVersionId(null); onRollback?.(versionId); }}>되돌리기</Button>
+          </RollbackDialogActions>
+        </RollbackDialogContent>
+      </ModalSurface>}
     </Page>
   );
 }

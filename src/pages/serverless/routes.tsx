@@ -18,6 +18,7 @@ import {
   getNextCronExecution,
   loadDemoServerlessState,
   regenerateDemoServerlessUrl,
+  redactDemoServerlessSecrets,
   rollbackDemoServerlessVersion,
   saveDemoServerlessCode,
   saveDemoServerlessSettings,
@@ -126,6 +127,7 @@ export function ServerlessFunctionRoute() {
         triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP'
           ? `${trigger.type} ${trigger.schedule === 'ALL' ? '전체' : trigger.schedule}`
           : `${describeCronExpression(trigger.schedule)} 예약 실행`).join(' · ') || '연결된 Trigger 없음'}
+        deleteSummary={`· 버전 ${fn.versions.length}개 · HTTP Trigger ${fn.triggers.filter(trigger => trigger.type === 'HTTP').length}개 · 예약 Trigger ${fn.triggers.filter(trigger => trigger.type === 'Cron').length}개 · 환경변수 ${fn.variables.length}개`}
         enabledTabs={enabledTabs}
         onNavigateTab={tab => void navigate(tabPath(fn.id, tab))}
         onManageTriggers={() => void navigate(tabPath(fn.id, 'Trigger'))}
@@ -208,6 +210,7 @@ export function ServerlessTabRoute() {
   const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const [page, setPage] = useState(1);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<'inactive' | 'quota' | 'missing' | null>(null);
   useEffect(() => { setPage(1); setSelectedRunId(null); }, [functionId, tab]);
   const fn = getFunction(functionId, demoMode);
   void revision;
@@ -242,11 +245,30 @@ export function ServerlessTabRoute() {
       onSelectDatabase={id => { setDemoServerlessDatabase(fn.id, id); changed(); }}
     />;
   } else if (tab === 'test') {
+    const quota = getDemoServerlessQuota();
     content = <TestPage
       functionName={fn.name}
-      result={fn.testResult}
+      result={fn.testResult ? {
+        ...fn.testResult,
+        responseJson: redactDemoServerlessSecrets(fn.testResult.responseJson, fn.variables),
+        statusMessage: redactDemoServerlessSecrets(fn.testResult.statusMessage, fn.variables),
+        logs: redactDemoServerlessSecrets(fn.testResult.logs, fn.variables),
+      } : null}
+      active={fn.active}
+      dailyExecutions={quota.daily_executions}
+      executionError={executionError}
+      onDismissExecutionError={() => setExecutionError(null)}
+      onActivate={() => { setDemoServerlessActive(fn.id, true); setExecutionError(null); changed(); }}
       enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTestTab[]}
-      onExecute={payload => { executeDemoServerlessTest(fn.id, payload); changed(); }}
+      onExecute={async payload => {
+        const execution = await executeDemoServerlessTest(fn.id, payload);
+        if (execution.kind === 'executed') {
+          setExecutionError(null);
+          changed();
+        } else {
+          setExecutionError(execution.kind);
+        }
+      }}
       onCopyResponse={response => { void navigator.clipboard.writeText(response); }}
       onViewLogs={() => void navigate(tabPath(fn.id, 'logs'))}
       onSelectTab={tab => selectTab(tab)}
@@ -256,7 +278,10 @@ export function ServerlessTabRoute() {
     const runs = fn.runs.slice((page - 1) * pageSize, page * pageSize);
     content = <LogsPage
       functionName={fn.name}
-      runs={runs}
+      runs={runs.map(run => ({
+        ...run,
+        outputLines: run.outputLines?.map(line => redactDemoServerlessSecrets(line, fn.variables)),
+      }))}
       totalCount={fn.runs.length}
       page={page}
       pageSize={pageSize}

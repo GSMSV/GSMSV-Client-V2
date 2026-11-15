@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Banner } from '../../shared/ui/feedback';
+import { DeleteConfirmDialog } from '../../shared/ui/feedback';
 import { Button, NavigationItem, SegmentedControl, Switch } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 import type { ServerlessRuntime } from './ServerlessCreatePage';
@@ -25,6 +26,7 @@ export interface ServerlessFunctionPageProps {
   extensionMessage?: string;
   savedVersionLabel?: string;
   triggerSummary?: string;
+  deleteSummary?: string;
   enabledTabs?: readonly ServerlessFunctionTab[];
   onNavigateTab?: (tab: ServerlessFunctionTab) => void;
   onDelete?: () => void;
@@ -299,6 +301,16 @@ const DangerButton = styled(Button)`
   background: ${({ theme }) => theme.colors.dangerSoft};
 `;
 
+const DeleteOverlay = styled.div`
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 54%);
+`;
+
 function displayRuntime(runtime: ServerlessRuntime) {
   if (runtime === 'javascript') return 'JavaScript';
   return runtime === 'typescript' ? 'TypeScript' : 'Python';
@@ -316,6 +328,7 @@ export function ServerlessFunctionPage({
   extensionMessage = '지금 연장하면 10월 20일 14:00까지 사용할 수 있습니다.',
   savedVersionLabel = '버전 7 · 2026. 09. 29. 14:32 저장',
   triggerSummary = 'HTTP POST · 매일 09:00 예약 실행',
+  deleteSummary = '· 버전 7개 · HTTP Trigger 1개 · 예약 Trigger 1개 · 환경변수 2개',
   enabledTabs = ['코드'],
   onNavigateTab,
   onDelete,
@@ -331,6 +344,8 @@ export function ServerlessFunctionPage({
   const [memoryMb, setMemoryMb] = useState<'128' | '256'>(String(initialMemory) as '128' | '256');
   const [active, setActive] = useState(initialActive);
   const [code, setCode] = useState(initialCode);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const lineCount = code.split('\n').length;
   const hasSettingsWriter = Boolean(onSaveSettings);
 
@@ -371,7 +386,7 @@ export function ServerlessFunctionPage({
           ))}
         </Tabs>
         <Actions>
-          <DangerButton variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!onDelete} onClick={onDelete}>함수 삭제</DangerButton>
+          <DangerButton variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!onDelete} onClick={() => { setDeleteConfirmation(''); setDeleteDialogOpen(true); }}>함수 삭제</DangerButton>
           <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!hasSettingsWriter} onClick={saveSettings}>설정 저장</Button>
         </Actions>
       </TabsRow>
@@ -470,6 +485,24 @@ export function ServerlessFunctionPage({
           <Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} disabled={!onManageTriggers} onClick={onManageTriggers}>Trigger 관리</Button>
         </TriggerRow>
       </Panel>
+      {deleteDialogOpen && <DeleteOverlay onMouseDown={event => { if (event.target === event.currentTarget) setDeleteDialogOpen(false); }}>
+        <DeleteConfirmDialog
+          open
+          title={`${name}를 삭제하시겠습니까?`}
+          description="함수와 버전, Trigger, 실행 Log를 모두 지웁니다. 호출 주소는 바로 막힙니다."
+          items={deleteSummary}
+          fieldLabel="확인하려면 함수 이름을 입력하세요"
+          confirmationName={name}
+          value={deleteConfirmation}
+          onValueChange={setDeleteConfirmation}
+          onConfirm={() => { setDeleteDialogOpen(false); onDelete?.(); }}
+          onCancel={() => setDeleteDialogOpen(false)}
+          caption="삭제한 함수는 되살릴 수 없습니다."
+          hint={`${name}를 정확하게 입력해 주세요.`}
+          confirmLabel="삭제"
+          confirmDisabled={!onDelete}
+        />
+      </DeleteOverlay>}
     </Page>
   );
 }
