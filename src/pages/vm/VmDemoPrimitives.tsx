@@ -174,6 +174,7 @@ export const Textarea = styled.textarea`
 
 export const Banner = styled.div<{ $tone?: 'primary' | 'warning' | 'muted' }>`
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 16px;
   padding: 16px;
@@ -185,6 +186,7 @@ export const Banner = styled.div<{ $tone?: 'primary' | 'warning' | 'muted' }>`
 export const BannerCopy = styled.div`
   display: flex;
   min-width: 0;
+  flex: 1 1 240px;
   flex-direction: column;
   gap: 8px;
   color: ${({ theme }) => theme.colors.muted};

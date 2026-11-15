@@ -123,23 +123,17 @@ Product: 4 total (OK 4); States panels: 4 (OK 4); Flows: 28 + 2 orphan text (OK 
 
 ### VM (part A: create, overview, monitoring, team VM)
 
-Basis: develop cc72e2e read in `?demo=1` mode, judged for a **production build**, which is what the spec targets. Key cross-cutting finding: on develop several VM-related paths still check `import.meta.env.DEV`, so they are dead in a prod build even with `?demo=1`. The affected paths:
-- `PersonalResourcesPage` (`demoMode = import.meta.env.DEV && isDemoMode()`): home VM list, queued-work row, and the "VM 만들기" button.
-- Team data in `TeamsHomePage`.
-- `useDemoVmExtension` (`if (!import.meta.env.DEV ...) return`): the "14일 연장" button.
-- `networkApi`: Network-page mutations.
-
-PR #143 removes these guards. Where that is the only blocker, the row is marked PENDING-PR #143. VM pages read localStorage synchronously, and the demo routes are imported eagerly (router.tsx:61), so **no VM page has a loading or error rendering path**.
+Basis: re-verified on `codex/figma-vm` (develop 781dc44 + this PR) in a production `?demo=1` build. PR #143 removed the DEV guards (home VM list, team home, `useDemoVmExtension`, `networkApi`), so every former "PENDING-PR #143" row was re-checked against current code. Every VM page now awaits a demo request through `useVmPageLoad` (`src/pages/vm/VmPageLoad.tsx`, built on `simulateDemoRequest`), so the Figma `로딩` frames show for ~600 ms and the `오류` frames appear with `?demoError=<scope>` (first request fails, 다시 시도 succeeds). Scopes: `vm-create-page` (create steps), `vm` (overview), `vm-monitoring`, `vm-create` (create request failure, shared with the home banner from #147).
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
-| 05 | VM 생성 · 사양 | 52:372 | 1440x1187 | /vms/new | src/pages/vm/VmCreatePage.tsx (step=spec) | OK | Entry via sidebar "VM 생성" works in prod; the home "VM 만들기" button is disabled in prod (DEV guard) |
+| 05 | VM 생성 · 사양 | 52:372 | 1440x1187 | /vms/new | src/pages/vm/VmCreatePage.tsx (step=spec) | OK | Entry via sidebar "VM 생성" and the home "VM 만들기" button |
 | 06 | VM 생성 · 이름·목적 | 52:615 | 1440x1111 | /vms/new/details | VmCreatePage (details) | OK | |
 | 07 | VM 생성 · 확인 | 52:810 | 1440x1095 | /vms/new/review | VmCreatePage (review) | OK | |
 | 08 | VM 개요 | 52:1034 | 1440x1447 | /vms/:vmId (portfolio-api) | src/pages/vm/VmOverviewPage.tsx | OK | |
-| 09 | VM Monitoring | 52:1416 | 1440x1241 | /vms/:vmId/monitoring | src/pages/vm/VmMonitoringPage.tsx | OK | Always shows the CPU-92% warning banner, even when the VM is stopped (fixed in #143) |
-| 34 | 팀 VM · 일반 팀원 | 102:4924 | 1440x1493 | /teams/demo-team/vms/connect-api | VmOverviewPage (role=member → read-only) | OK | Scope label and user (윤채원) are hard-coded as 일반 팀원 for every team VM; in prod the entry from team home is DEV-only (see Flows 34) |
+| 09 | VM Monitoring | 52:1416 | 1440x1241 | /vms/:vmId/monitoring | src/pages/vm/VmMonitoringPage.tsx | OK | CPU-92% banner only while running |
+| 34 | 팀 VM · 일반 팀원 | 102:4924 | 1440x1493 | /teams/demo-team/vms/connect-api | VmOverviewPage (role=member → read-only) | OK | |
 | 36 | 팀 VM 생성 · 사양 | 116:4990 | 1440x1351 | /teams/:teamId/vms/new | VmCreatePage owner=team | OK | |
 | 37 | 팀 VM 생성 · 이름·목적 | 116:5227 | 1440x1080 | /teams/:teamId/vms/new/details | VmCreatePage owner=team | OK | |
 | 38 | 팀 VM 생성 · 확인 | 116:5405 | 1440x1269 | /teams/:teamId/vms/new/review | VmCreatePage owner=team | OK | |
@@ -147,181 +141,181 @@ PR #143 removes these guards. Where that is the only blocker, the row is marked 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| VM 생성 · 입력 확인 (52:2583) | 입력 내용을 확인해 주세요 | 52:2638 | VmCreatePage `error` → `<Banner role="alert">` at page bottom | /vms/new/details: clear 사용 목적 → "다음: 확인" | PARTIAL | Only a single-line inline banner; no dialog, title, or per-field errors (not in #143 either) |
-| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (LoginPage.tsx:285) | Only via /login?error=OAUTH_STATE_INVALID (real OAuth callback) | UNREACHABLE | No mock UI path; works only if the URL is typed directly |
+| VM 생성 · 입력 확인 (52:2583) | 입력 내용을 확인해 주세요 | 52:2638 | VmCreatePage `validation` dialog with VM 이름 / 사용 목적 fields and per-field errors | /vms/new/details: clear 사용 목적 (or type "-bad") → "다음: 확인" | OK | |
+| VM 생성 · 입력 확인 (52:2583) | 인증 시간이 지났어요 | 52:2689 | LoginErrorDialog kind=expired (src/pages/auth/LoginPage.tsx) | /login?error=OAUTH_STATE_INVALID | UNREACHABLE | Auth domain file; only the real OAuth state-expiry redirect produces it. Left to the Auth/Home owner |
 | 전원·VM 삭제 (52:4019) | VM을 강제로 정지할까요? | 52:4023 | VmOverviewPage powerDialog='force-confirm' | /vms/portfolio-api → "강제 정지" | OK | |
-| 전원·VM 삭제 (52:4019) | 종료 요청 후 응답을 기다리고 있어요 | 52:4049 | powerDialog='graceful-progress' (2.2 s) | "정상 종료" | OK | Same copy also appears as an inline banner after "기다리기" |
+| 전원·VM 삭제 (52:4019) | 종료 요청 후 응답을 기다리고 있어요 | 52:4049 | powerDialog='graceful-progress' (2.2 s) | "정상 종료" | OK | |
 | 전원·VM 삭제 (52:4019) | 영구 삭제 typed confirm | 52:4084 | VmSettingsPage → DeleteConfirmDialog | /vms/:id/settings → "VM 삭제" | OK | |
-| 전원·VM 삭제 (52:4019) | VM 삭제에 실패했어요 | 52:4119 | VmSettingsPage deleteError modal | Only if `saveDemoVmState` fails (localStorage write error) | UNREACHABLE | No demo failure toggle |
-| 접속 · 예외·정지 (52:4148) | SSH 기본 포트가 없어요 | 52:4202 | VmOverviewPage warning banner + "기본 포트 복원" (when sshCommand is null) | Delete the SSH port on the Network page, then return to 개요 | PENDING-PR #143 | Works in dev; in prod the Network-page mutation goes through the DEV-guarded networkApi |
-| 접속 · 예외·정지 (52:4148) | 지금은 정지 상태예요 | 52:4250 | none on develop; #143 adds a stopped banner in VmMonitoringPage | Stop the VM → Monitoring | PENDING-PR #143 | #143 copy is shorter (no bullet lines) |
-| S02 (53:2988) | VM을 만들지 못했어요 | 53:3014 | none | — | MISSING | No creation-failure state in VmCreatePage or the home page, on develop or in #143 |
-| S02 (53:2988) | 초기 설정을 진행하고 있어요 | 53:3045 | #143: `isDemoVmInitializing` (15 s after request) → overview banner + home row "설정 중" | Create a VM and wait about 15 s | PENDING-PR #143 | On develop, queued VMs never progress. #143 hides the SSH sections instead of showing disabled "초기 설정이 끝난 뒤…" controls |
-| S02 (53:2988) | 만료되어 정지됐어요 | 53:3114 | #143: overview warning banner + "연장하고 보관" | Only after a real 7-day expiry (fixtures have no `requestedAtMs`) | PENDING-PR #143 | Effectively unreachable even after #143; no demo fixture |
-| D01 (103:1686) | 생성을 취소하시겠습니까? | 103:1690 | VmOverviewPage cancelDialog='confirm' (team); PersonalResourcesPage queued row (personal) | Team: create a team VM → open it → "생성 취소" | OK | Personal path (home queued row) is DEV-only on develop; #143 also adds the button for personal VMs in the overview |
-| D01 (103:1686) | 생성이 이미 시작됐습니다 | 103:1711 | cancelDialog='started' | Needs the VM to leave queued before confirming | PENDING-PR #143 | On develop, queued VMs never start; #143 adds timed progression |
-| D01 (103:1686) | 아직 이 목적으로 사용 중입니까? | 103:1759 | DemoVmExtensionDialog (features/vm-extension) | Personal VM: "14일 연장" × 4 | PENDING-PR #143 | `useDemoVmExtension` returns early outside DEV, so extension is dead in prod |
-| D01 (103:1686) | 비밀번호를 재설정하시겠습니까? | 103:1784 | none on develop; #143 adds `resetPassword` dialog in VmSettingsPage | Settings → reset password | PENDING-PR #143 | |
-| D01 (103:1686) | 디스크 늘리기 | 103:1811 | VmSettingsPage resize dialog | Settings → "디스크 늘리기" | OK | |
-| 41 할당량·권한 (104:1772) | 개인 할당량을 모두 사용하고 있어요 | 104:1776 | develop: home button disabled with tooltip only; #143: spec-step banner + "다음" disabled | Use up the personal quota → /vms/new | PENDING-PR #143 | #143 shows a banner, not a dialog, and drops the vCPU/RAM/SSD bullet lines |
-| 41 할당량·권한 (104:1772) | 지금은 학생 전체 자원이 부족해요 | 104:1803 | #143: VmCreatePage sharedQuotaBlocked dialog (total allocated vCPU + draft > 14) | Create VMs until the pool is exceeded → "VM 생성 요청" | PENDING-PR #143 | |
-| 41 할당량·권한 (104:1772) | 팀 할당량이 부족해요 | 104:1824 | develop: team-list create button disabled with tooltip; #143: spec-step banner | Exhaust the team quota → /teams/:id/vms/new | PENDING-PR #143 | Figma is a review-step dialog with exact shortfall numbers; #143 gives only a generic spec banner |
-| 41 할당량·권한 (104:1772) | 팀장 또는 DevOps만 할 수 있어요 | 104:1883 | none; power buttons are disabled with a `title` tooltip | Member view of connect-api → 재시작 | MISSING | Not in #143 either |
-| 44 팀 생성·연장 (116:6959) | 일반 팀원은 팀 VM을 만들 수 없어요 | 116:6963 | none; VmCreatePage silently `<Navigate>`s to team home, and the button is hidden | Hand over team leadership → sidebar "VM 생성" | MISSING | |
-| 44 팀 생성·연장 (116:6959) | 아직 연장 기간이 아니에요 | 116:6991 | none; "14일 연장" is disabled with a `title` only | No fixture outside the 7-day window (connect-api has 4 days left, connect-db 5) | MISSING | |
-| 44 팀 생성·연장 (116:6959) | 연장했어요 · VM은 정지 상태예요 | 116:7012 | none; only the status hint "사용 기간을 14일 연장했습니다." | Member extends connect-db (stopped) | MISSING | Also blocked in prod by the DEV-only extension |
-| 38 조회·빈 상태 (103:1983) | 이미 삭제된 Instance입니다 | 103:2070 | develop: missing VM → silent redirect; #143: VmUnavailablePage (deletedVms) | Delete a VM, then open its URL | PENDING-PR #143 | |
+| 전원·VM 삭제 (52:4019) | VM 삭제에 실패했어요 | 52:4119 | VmSettingsPage deleteError modal (Figma copy) | `?demoError=vm-delete` → "VM 삭제" (retry succeeds) | OK | |
+| 접속 · 예외·정지 (52:4148) | SSH 기본 포트가 없어요 | 52:4202 | VmOverviewPage warning banner + "기본 포트 복원" | Delete the SSH port on Network, return to 개요 | OK | |
+| 접속 · 예외·정지 (52:4148) | 지금은 정지 상태예요 | 52:4250 | VmMonitoringPage stopped banner with Figma bullets + "기록 다시 불러오기" / "VM 시작" | Stop portfolio-api → Monitoring | OK | |
+| S02 (53:2988) | VM을 만들지 못했어요 | 53:3014 | VmCreatePage `createFailed` dialog (닫기 / 설정 수정 / 같은 설정으로 재시도) | `?demoError=vm-create` on /vms/new/review → "VM 생성 요청" | OK | Home banner variant is in #147 (PersonalResourcesPage) |
+| S02 (53:2988) | 초기 설정을 진행하고 있어요 | 53:3045 | `isDemoVmInitializing` (15 s after request) → overview banner | Create a VM and wait ~15 s | OK | |
+| S02 (53:2988) | 만료되어 정지됐어요 | 53:3114 | VmOverviewPage expired warning banner + "연장하고 보관" | /teams/demo-team/vms/connect-db (seed now expired 1 day ago, inside the 3-day grace) | OK | Seed in src/entities/vm/model/demoVmStore.ts (`expiredTeamVmTimes`, schema 5) |
+| D01 (103:1686) | 생성을 취소하시겠습니까? | 103:1690 | VmOverviewPage cancelDialog='confirm' | /vms/portfolio-worker → "생성 취소" | OK | |
+| D01 (103:1686) | 생성이 이미 시작됐습니다 | 103:1711 | cancelDialog='started' | Create a VM, wait 15 s, then "생성 취소" | OK | |
+| D01 (103:1686) | 아직 이 목적으로 사용 중입니까? | 103:1759 | DemoVmExtensionDialog (features/vm-extension) | Personal VM: "14일 연장" × 4 | OK | |
+| D01 (103:1686) | 비밀번호를 재설정하시겠습니까? | 103:1784 | VmSettingsPage password reset dialog (Figma copy; requires running VM) | Settings → "비밀번호 재설정" | OK | |
+| D01 (103:1686) | 디스크 늘리기 | 103:1811 | VmSettingsPage resize dialog with SliderField | Settings → "디스크 늘리기" | OK | |
+| 41 할당량·권한 (104:1772) | 개인 할당량을 모두 사용하고 있어요 | 104:1776 | VmCreatePage personal-quota dialog (내 Resources / 팀 만들기) | /vms/new with the seed (vCPU 4/4) | OK | |
+| 41 할당량·권한 (104:1772) | 지금은 학생 전체 자원이 부족해요 | 104:1803 | VmCreatePage sharedQuotaBlocked dialog | Cancel portfolio-worker, then create a personal VM → "VM 생성 요청" | OK | Other students' simulated usage drops 20 s after the first shortage, so "잠시 후 다시 시도" is now true |
+| 41 할당량·권한 (104:1772) | 팀 할당량이 부족해요 | 104:1824 | VmCreatePage team-quota review dialog with exact shortfall (사양 줄이기 / 할당량 늘리기 요청 → TeamQuotaRequestDialog) | Approve the team, create team VMs until the quota is used, then request another | OK | |
+| 41 할당량·권한 (104:1772) | 팀장 또는 DevOps만 할 수 있어요 | 104:1883 | VmOverviewPage `permissionAction` dialog | Member view of connect-api → 재시작 (or any power button) | OK | |
+| 44 팀 생성·연장 (116:6959) | 일반 팀원은 팀 VM을 만들 수 없어요 | 116:6963 | VmCreatePage `TeamMemberCreateBlocked` | Hand over team leadership → sidebar "VM 생성" in team scope | OK | |
+| 44 팀 생성·연장 (116:6959) | 아직 연장 기간이 아니에요 | 116:6991 | VmOverviewPage inline "아직 연장 기간이 아닙니다" card | Member extends connect-api once (expiry moves to 11.13), card replaces the expiry banner | OK | |
+| 44 팀 생성·연장 (116:6959) | 연장했어요 · VM은 정지 상태예요 | 116:7012 | VmOverviewPage `extendedStopped` dialog | Member extends connect-db (stopped, expired) → "연장하고 보관" | OK | |
+| 38 조회·빈 상태 (103:1983) | 이미 삭제된 Instance입니다 | 103:2070 | VmUnavailablePage (deleted) | Delete a VM, then open its URL (team VMs also via /vms/<id>) | OK | `findDeletedDemoVm` in src/pages/vm/vmDemoHelpers.ts no longer requires a matching team route |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
-| 05 · VM 생성 · 사양 | 203:28672 | Entry: sidebar VM 생성 / home "VM 만들기" → /vms/new | Sidebar works in prod (VmDemoPrimitives DemoShell); home button disabled in prod | OK |
-| 05-01 · 개인 할당량을 모두 사용 | 203:28883 | Spec with exhausted quota → dialog | develop: none; #143 adds a banner | PENDING-PR #143 |
-| 05-02 · 다시 로그인해 주세요 | 203:29353 | Expired session on spec → re-login dialog | develop: none; #143 dialog when the session is not demo-student | PENDING-PR #143 |
-| 05-03 · 로딩 | 741:53001 | Spec loading skeleton | Synchronous render, no loading path | MISSING |
-| 05-04 · 오류 | 747:59456 | Spec load error | No error path | MISSING |
+| 05 · VM 생성 · 사양 | 203:28672 | Entry: sidebar VM 생성 / home "VM 만들기" → /vms/new | Both work in prod `?demo=1` | OK |
+| 05-01 · 개인 할당량을 모두 사용 | 203:28883 | Spec with exhausted quota → dialog | Personal-quota dialog | OK |
+| 05-02 · 다시 로그인해 주세요 | 203:29353 | Expired session on spec → re-login dialog | Shown only when there is no session (any demo user — student or admin — counts as signed in) | OK |
+| 05-03 · 로딩 | 741:53001 | Spec loading skeleton | `useVmPageLoad('vm-create-page')` placeholders | OK |
+| 05-04 · 오류 | 747:59456 | Spec load error | `?demoError=vm-create-page` | OK |
 | 05-05 · 호버 · Ubuntu Server | 226:25838 | Click OS "Ubuntu Server" → selected | OsSelector sets `draft.os` | OK |
 | 06 · VM 생성 · 이름·목적 | 203:29566 | Entry: 05 "다음: 이름·목적" | navigate(/vms/new/details) | OK |
-| 06-01 · 입력 내용을 확인해 주세요 | 203:29743 | Invalid input → validation dialog | Inline bottom banner only | PARTIAL |
-| 06-02 · 작성 중인 내용이 사라져요 | 203:29948 | Leave details with input → unsaved dialog | hasUnsavedInput → StudentShell UnsavedChangesDialog on sidebar navigation | OK |
-| 06-03 · 로딩 | 741:53150 | Loading | none | MISSING |
-| 06-04 · 오류 | 747:59626 | Error | none | MISSING |
+| 06-01 · 입력 내용을 확인해 주세요 | 203:29743 | Invalid input → validation dialog | Validation dialog with field errors | OK |
+| 06-02 · 작성 중인 내용이 사라져요 | 203:29948 | Leave details with input → unsaved dialog | StudentShell UnsavedChangesDialog | OK |
+| 06-03 · 로딩 | 741:53150 | Loading | placeholders | OK |
+| 06-04 · 오류 | 747:59626 | Error | `?demoError=vm-create-page` | OK |
 | 06-05 · 호버 · 다음: 확인 | 226:26041 | "다음: 확인" → 07 | validDraft → /vms/new/review | OK |
 | 07 · VM 생성 · 확인 | 203:30139 | Entry: from 06 | OK | OK |
-| 07-01 · 학생 전체 자원이 부족 | 203:30357 | "VM 생성 요청" → pool-shortage dialog | develop: none; #143 adds it | PENDING-PR #143 |
-| 07-02 · 로딩 | 741:53311 | Loading | none | MISSING |
-| 07-03 · 오류 | 747:59801 | Error | none | MISSING |
-| 07-04 · 호버 · VM 생성 요청 | 226:26217 | "VM 생성 요청" → home with queued work | Saves the queued VM, navigates to /; in prod the home ignores demo VMs (DEV guard) | PENDING-PR #143 |
-| 08 · VM 개요 | 203:30585 | Entry: home VM row / "VM 관리" → /vms/:id | Home demo rows are DEV-only in prod; direct URL works | PENDING-PR #143 |
-| 08-01 · 초기 설정을 진행 | 203:30937 | Initializing VM overview | develop: queued forever; #143 initializing banner | PENDING-PR #143 |
-| 08-02 · SSH 기본 포트가 없어요 | 203:31319 | SSH port deleted → warning + restore | Banner exists; triggering it needs Network-page deletion (DEV-guarded networkApi) | PENDING-PR #143 |
-| 08-03 · 만료되어 정지됐어요 | 203:31691 | Expired VM → banner + extend | develop: none; #143 time-based only | PENDING-PR #143 |
-| 08-04 · 아직 이 목적으로 사용 중 | 203:32063 | 4th extension → purpose dialog | Dialog exists, but extension is dead in prod (DEV guard) | PENDING-PR #143 |
+| 07-01 · 학생 전체 자원이 부족 | 203:30357 | "VM 생성 요청" → pool-shortage dialog | sharedQuotaBlocked dialog (Figma copy) | OK |
+| 07-02 · 로딩 | 741:53311 | Loading | placeholders | OK |
+| 07-03 · 오류 | 747:59801 | Error | `?demoError=vm-create-page` | OK |
+| 07-04 · 호버 · VM 생성 요청 | 226:26217 | "VM 생성 요청" → home with queued work | Saves the queued VM, navigates to / | OK |
+| 08 · VM 개요 | 203:30585 | Entry: home VM row / "VM 관리" → /vms/:id | Home demo rows link here | OK |
+| 08-01 · 초기 설정을 진행 | 203:30937 | Initializing VM overview | initializing banner | OK |
+| 08-02 · SSH 기본 포트가 없어요 | 203:31319 | SSH port deleted → warning + restore | Banner + "기본 포트 복원" | OK |
+| 08-03 · 만료되어 정지됐어요 | 203:31691 | Expired VM → banner + extend | Expired banner; reachable on the expired connect-db seed | OK |
+| 08-04 · 아직 이 목적으로 사용 중 | 203:32063 | 4th extension → purpose dialog | DemoVmExtensionDialog | OK |
 | 08-05 · VM을 강제로 정지할까요? | 203:32431 | "강제 정지" → confirm | force-confirm dialog | OK |
 | 08-06 · 종료 요청 후 응답을 기다리고 | 203:32808 | "정상 종료" → waiting dialog | graceful-progress | OK |
-| 08-07 · 이전 작업이 진행 중 | 203:33194 | During restart → in-progress dialog | restart-progress with disabled buttons | OK |
-| 08-08 · 요청이 너무 많아요 | 203:33571 | Rapid power requests → rate-limit dialog | develop: none; #143: 3 requests per 30 s → countdown dialog | PENDING-PR #143 |
-| 08-09 · 찾을 수 없어요 | 203:33928 | Unknown VM id → not-found page | develop: silent Navigate to /; #143 VmUnavailablePage | PENDING-PR #143 |
-| 08-10 · 이미 삭제된 Instance | 203:34283 | Deleted VM URL → deleted page | develop: redirect; #143 VmUnavailablePage(deleted) | PENDING-PR #143 |
-| 08-11 · 로딩 | 741:53489 | Loading | none | MISSING |
-| 08-12 · 오류 | 747:59993 | Error | none | MISSING |
+| 08-07 · 이전 작업이 진행 중 | 203:33194 | During restart → in-progress dialog | restart-progress | OK |
+| 08-08 · 요청이 너무 많아요 | 203:33571 | Rapid power requests → rate-limit dialog | 3 requests per 30 s → countdown dialog | OK |
+| 08-09 · 찾을 수 없어요 | 203:33928 | Unknown VM id → not-found page | VmUnavailablePage | OK |
+| 08-10 · 이미 삭제된 Instance | 203:34283 | Deleted VM URL → deleted page | VmUnavailablePage(deleted), personal and team | OK |
+| 08-11 · 로딩 | 741:53489 | Loading | `useVmPageLoad('vm')` placeholders | OK |
+| 08-12 · 오류 | 747:59993 | Error | `?demoError=vm` | OK |
 | 08-13 · 호버 · Monitoring | 226:26431 | Monitoring tab → 09 | DetailTabs → /vms/:id/monitoring | OK |
 | 09 · VM Monitoring | 203:40659 | Entry: Monitoring tab | OK | OK |
-| 09-01 · 지금은 정지 상태예요 | 203:40854 | Stopped VM monitoring banner | develop: none (shows the CPU warning instead); #143 adds it | PENDING-PR #143 |
-| 09-02 · 로딩 | 741:53733 | Loading | none | MISSING |
-| 09-03 · 오류 | 747:60286 | Error | none | MISSING |
-| 09-04 · 호버 · 24시간 | 226:26765 | "24시간" → range switch | setRange('24시간') swaps samples | OK |
-| 34 · 팀 VM · 일반 팀원 | 203:63647 | Entry: team home VM row → /teams/demo-team/vms/connect-api | TeamsHomePage demo VM rows are DEV-only in prod | PENDING-PR #143 |
-| 34-01 · 아직 연장 기간이 아니에요 | 203:63923 | Too early to extend → inline notice | Disabled button + tooltip; no fixture | MISSING |
-| 34-02 · 연장했어요 · VM은 정지 상태 | 203:64219 | Member extends stopped VM → dialog | Status hint only | MISSING |
-| 34-03 · 팀장 또는 DevOps만 | 203:64527 | Member clicks 재시작 → permission dialog | Buttons disabled; no dialog | MISSING |
-| 34-04 · 로딩 | 741:58900 | Loading | none | MISSING |
-| 34-05 · 오류 | 747:66160 | Error | none | MISSING |
-| 34-06 · 호버 · Network | 241:31247 | Network tab → team VM Network | DetailTabs → /teams/demo-team/vms/team-vm-connect-api/network; destination is correct, but Network data in prod goes through the DEV-guarded networkApi | PENDING-PR #143 |
-| 36 · 팀 VM 생성 · 사양 | 203:65010 | Entry: team home "팀 VM 만들기" → /teams/:id/vms/new | Button only appears once demo team data loads (DEV-only in prod) | PENDING-PR #143 |
-| 36-01 · 로딩 | 741:59127 | Loading | none | MISSING |
-| 36-02 · 오류 | 747:66429 | Error | none | MISSING |
+| 09-01 · 지금은 정지 상태예요 | 203:40854 | Stopped VM monitoring banner | Stopped banner with actions | OK |
+| 09-02 · 로딩 | 741:53733 | Loading | `useVmPageLoad('vm-monitoring')` | OK |
+| 09-03 · 오류 | 747:60286 | Error | `?demoError=vm-monitoring` | OK |
+| 09-04 · 호버 · 24시간 | 226:26765 | "24시간" → range switch | setRange('24시간') | OK |
+| 34 · 팀 VM · 일반 팀원 | 203:63647 | Entry: team home VM row → /teams/demo-team/vms/connect-api | Team home demo rows link here | OK |
+| 34-01 · 아직 연장 기간이 아니에요 | 203:63923 | Too early to extend → inline notice | Inline card after the first extension | OK |
+| 34-02 · 연장했어요 · VM은 정지 상태 | 203:64219 | Member extends stopped VM → dialog | extendedStopped dialog | OK |
+| 34-03 · 팀장 또는 DevOps만 | 203:64527 | Member clicks 재시작 → permission dialog | permissionAction dialog | OK |
+| 34-04 · 로딩 | 741:58900 | Loading | placeholders (team layout) | OK |
+| 34-05 · 오류 | 747:66160 | Error | `?demoError=vm` | OK |
+| 34-06 · 호버 · Network | 241:31247 | Network tab → team VM Network | DetailTabs → /teams/demo-team/vms/team-vm-connect-api/network | OK |
+| 36 · 팀 VM 생성 · 사양 | 203:65010 | Entry: team home "팀 VM 만들기" → /teams/:id/vms/new | Team home button (approved team, leader/DevOps) | OK |
+| 36-01 · 로딩 | 741:59127 | Loading | placeholders | OK |
+| 36-02 · 오류 | 747:66429 | Error | `?demoError=vm-create-page` | OK |
 | 36-03 · 호버 · Ubuntu Server | 241:31620 | Select OS | OsSelector | OK |
 | 37 · 팀 VM 생성 · 이름·목적 | 203:65221 | Entry: 36 "다음" | navigate(details) | OK |
-| 37-01 · 로딩 | 741:59286 | Loading | none | MISSING |
-| 37-02 · 오류 | 747:66609 | Error | none | MISSING |
+| 37-01 · 로딩 | 741:59286 | Loading | placeholders | OK |
+| 37-02 · 오류 | 747:66609 | Error | `?demoError=vm-create-page` | OK |
 | 37-03 · 호버 · 이전: 사양 | 241:31837 | "이전: 사양" → 36 | back() → /teams/:id/vms/new | OK |
 | 38 · 팀 VM 생성 · 확인 | 203:65396 | Entry: 37 "다음: 확인" | OK | OK |
-| 38-01 · 팀 할당량이 부족해요 | 203:65612 | Request over team quota → review dialog | develop: none; #143 spec banner only (partial) | PENDING-PR #143 |
-| 38-02 · 로딩 | 741:59443 | Loading | none | MISSING |
-| 38-03 · 오류 | 747:66780 | Error | none | MISSING |
-| 38-04 · 호버 · 팀 VM 생성 요청 | 241:32018 | "팀 VM 생성 요청" → team VM list with queued VM | Saves the request, navigates to /teams/:id/vms (TeamVmListPage, works in prod) | OK |
+| 38-01 · 팀 할당량이 부족해요 | 203:65612 | Request over team quota → review dialog | Team-quota review dialog with shortfall | OK |
+| 38-02 · 로딩 | 741:59443 | Loading | placeholders | OK |
+| 38-03 · 오류 | 747:66780 | Error | `?demoError=vm-create-page` | OK |
+| 38-04 · 호버 · 팀 VM 생성 요청 | 241:32018 | "팀 VM 생성 요청" → team VM list with queued VM | Saves the request, navigates to /teams/:id/vms | OK |
 
 #### Counts
-Product: 9 total (OK 9 / non-OK 0); States panels: 24 total (OK 5 / non-OK 19: PENDING-PR #143 11, MISSING 5, UNREACHABLE 2, PARTIAL 1); Flows: 56 total (OK 17 / non-OK 39: PENDING-PR #143 17, MISSING 21, PARTIAL 1)
+Product: 9 total (OK 9). States panels: 24 total (OK 23 / UNREACHABLE 1 — 52:2689, Auth domain; 104:1851 is filed under Teams and is now also opened from the team-quota dialog). Flows: 56 total (OK 56).
 
 ### VM (part B: Network, Snapshot, Settings)
 
-Cross-cutting note: on develop, `VMNetworkPage` and `networkApi` treat mock mode as `import.meta.env.DEV && isDemoMode()`. The router mounts the demo routes when `DEV || isDemoMode()`, so in a **production build with `?demo=1`** the Network page calls the real `/api/v2/vms/...` endpoints. Those calls fail, and each section shows its ErrorPanel. The firewall switch is also disabled there. PR #143 drops the DEV guard (networkApi.ts, VMNetworkPage.tsx). The statuses below judge DEV mock mode. In a prod-build mock, every Network row is effectively **PENDING-PR #143**. Snapshot and Settings pages use `isDemoMode()` only, so they work in both builds.
+Basis: re-verified on `codex/figma-vm`. PR #143 removed the DEV guard from `networkApi` and `VMNetworkPage`, so Network works in a production `?demo=1` build. Scopes added here: `vm-network` (page load), `vm-firewall` (firewall enable/disable result), `vm-snapshots`, `vm-settings`, `vm-rename`, `vm-delete`.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
 |---|---|---|---|---|---|---|---|
-| 10 | 10 · VM Network | 52:1640 | 1440x1417 | `/vms/:vmGrn/network` (main router, router.tsx:228), `/teams/:teamId/vms/:vmGrn/network` (demoRoutes.tsx:27) | `src/pages/network/VMNetworkPage.tsx` | PARTIAL | Ports, firewall and Domain sections are all present. The heading says "VM Network" where the design shows the VM name and status; PR #143 fixes this. Works in mock mode only in DEV builds (see note) |
-| 11 | 11 · VM Snapshot | 52:1994 | 1440x1131 | `/vms/:vmId/snapshots`, `/teams/:teamId/vms/:vmId/snapshots` | `src/pages/vm/VmSnapshotsPage.tsx` | OK | Has the 3 metric cards, auto toggle, table and info card |
-| 12 | 12 · VM 설정 | 52:2260 | 1440x1627 | `/vms/:vmId/settings`, `/teams/:teamId/vms/:vmId/settings` | `src/pages/vm/VmSettingsPage.tsx` | PARTIAL | The password reset section (the entry point for 12-08) is missing on develop. PENDING-PR #143 adds the "SSH 초기 비밀번호" surface |
+| 10 | 10 · VM Network | 52:1640 | 1440x1417 | `/vms/:vmGrn/network`, `/teams/:teamId/vms/:vmGrn/network` | `src/pages/network/VMNetworkPage.tsx` | OK | Heading shows the VM name and status; port count reads "3/30" |
+| 11 | 11 · VM Snapshot | 52:1994 | 1440x1131 | `/vms/:vmId/snapshots`, `/teams/:teamId/vms/:vmId/snapshots` | `src/pages/vm/VmSnapshotsPage.tsx` | OK | |
+| 12 | 12 · VM 설정 | 52:2260 | 1440x1627 | `/vms/:vmId/settings`, `/teams/:teamId/vms/:vmId/settings` | `src/pages/vm/VmSettingsPage.tsx` | OK | Includes the "SSH 초기 비밀번호" section |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
-| Network · 포트·방화벽·Domain (52:2757) | 외부 접속 포트 추가 | 52:2761 | VMNetworkPage `action==='port'` DialogFrame (l.807) | /vms/vm-portfolio-api/network → "포트 추가" | OK | The "현재 3/30개 사용 중" line is missing; the count is in the section title |
-| 52:2757 | SSH 기본 포트를 삭제할까요? | 52:2812 | `confirmTarget` kind port/ssh (l.907-933) | SSH row trash icon | OK | Single-sentence copy; the 3 detail bullets are missing |
-| 52:2757 | 방화벽 규칙 추가 | 52:2836 | `action==='rule'` DialogFrame (l.819) | Firewall section → "규칙 추가" | OK | Fixed-destination hint ("목적지 10.20.0.104") is missing |
-| 52:2757 | 방화벽 규칙을 삭제할까요? | 52:2896 | `confirmTarget` kind rule | Rule row trash icon | PARTIAL | Generic title "삭제할까요?" and a one-line copy; source→destination details are missing |
-| 52:2757 | HTTPS Domain 추가 | 52:2919 | `action==='domain'` DialogFrame (l.891) | "Domain 추가" (portfolio-api seed has 1/2) | OK | Develop's demo rejects an internal port with no matching port forward (demoNetworkStore.ts:78); PR #143 removes this check |
-| 52:2757 | 동기화에 실패한 Domain을 삭제할까요? | 52:2960 | `confirmTarget` kind domain + `sync_status==='failed'` (l.910-931) | None on develop: demo domains are always `synced` | PENDING-PR #143 | PR #143 creates domains as `pending` and resolves them to `failed` when no TCP port matches |
-| Snapshot · 생성·복원·삭제 (52:3898) | 수동 Snapshot 만들기 | 52:3902 | VmSnapshotsPage dialog `create` (l.308) | /vms/portfolio-api/snapshots → "Snapshot 만들기" | OK | Also has an in-dialog loading state |
-| 52:3898 | 이 Snapshot으로 복원할까요? | 52:3935 | dialog `restore` (l.336) | "before-release" row → restore icon | OK | Copy matches the design |
-| 52:3898 | 자동 Snapshot을 삭제할까요? | 52:3964 | dialog `delete` with automatic snapshot (l.351) | "auto-20260929" row → trash icon | OK | Shows "삭제 중" in the row afterwards |
-| 52:3898 | 복원을 완료했어요 | 52:3988 | dialog `restore-complete` (l.362) | Confirm restore → after 350 ms | OK | Has "VM 시작" button |
-| 42 · Network·Serverless 보완 (104:1927) | 방화벽을 켜고 규칙을 추가할까요? | 104:1931 | `action==='firewall-confirm'` (l.832) | Submit the rule dialog | PARTIAL | Shown even when the firewall is already on; PR #143 limits it to firewall-off. The design's "지금 열린 포트 자동 허용" switch is missing |
-| 104:1927 | 모든 수신 접속이 막혀 있습니다 | 104:1975 | None on develop | Delete all allow rules while the firewall is on | PENDING-PR #143 | PR #143 adds a Banner with "방화벽 끄기" / "규칙 추가" buttons |
-| 104:1927 | 방화벽을 끄시겠습니까? | 104:1994 | `action==='firewall-disable-confirm'` (l.855) | Firewall switch while it is on | OK | Copy matches the design |
-| 104:1927 | HTTPS 다시 연결 중 · 2/3 | 104:2016 | None on develop | None | PENDING-PR #143 | PR #143 adds a `domainDetails` dialog for pending domains |
-| 104:1927 | HTTPS 연결에 실패했습니다 | 104:2031 | None on develop | None | PENDING-PR #143 | PR #143 adds a failed-domain dialog with "다시 연결" / "Domain 삭제" |
-| 45 · 이름 변경·방화벽 적용 상태 (128:2058) | 이름 변경 | 128:2062 | VmSettingsPage inline `nameEditing` (l.377-378) | /vms/portfolio-api/settings → "변경" | OK | Hint text matches; Enter saves, Esc cancels |
-| 128:2058 | 이름 형식이 맞지 않습니다 | 128:2089 | `validateVmName` inline NameError | Type "-bad name" | OK | The save button is disabled |
-| 128:2058 | 같은 이름의 VM이 있습니다 | 128:2118 | `validateVmName` duplicate | Type "portfolio-worker" | OK | Copy matches the design |
-| 128:2058 | 이름을 저장하는 중입니다 | 128:2146 | `nameSaving` (button shows "저장 중", input disabled) | Save a valid new name (350 ms) | OK | There is no explicit "저장하는 중" heading |
-| 128:2058 | 이름을 바꿨습니다 | 128:2167 | `notice` Hint role=status (l.309) | Save succeeds | PARTIAL | Shows inline status text, not the designed dialog |
-| 128:2058 | 이름을 바꾸지 못했습니다 | 128:2186 | NameError "이름을 저장하지 못했습니다…" + "다시 시도" | Only when localStorage write fails | UNREACHABLE | No demo failure toggle |
-| 128:2058 | 방화벽을 켜는 중입니다 | 128:2213 | `action==='firewall-enable-loading'` (l.863) | Firewall switch while it is off (300 ms) | OK | Rendered as a dialog, not inline |
-| 128:2058 | 방화벽을 켜지 못했습니다 | 128:2233 | `firewall-enable-error` (l.868); `firewall-error` (l.846) | Only when the storage write fails | UNREACHABLE | Copy matches the design |
-| 128:2058 | 방화벽을 끄지 못했습니다 | 128:2252 | `firewall-disable-error` (l.882) | Only when the storage write fails | UNREACHABLE | Copy matches the design |
-| 128:2058 | 방화벽이 꺼져 있습니다 | 128:2272 | None (only the title "방화벽 규칙 · 꺼짐" and the table empty row) | Delete all rules, then turn the switch off | MISSING | Empty-state copy ("첫 규칙을 추가하면 방화벽이 켜집니다") is not implemented; PR #143 doesn't add it |
+| Network · 포트·방화벽·Domain (52:2757) | 외부 접속 포트 추가 | 52:2761 | VMNetworkPage `action==='port'` | /vms/vm-portfolio-api/network → "포트 추가" | OK | Figma copy, "· 현재 3/30개 사용 중", protocol segmented |
+| 52:2757 | SSH 기본 포트를 삭제할까요? | 52:2812 | `confirmTarget` kind port/ssh | SSH row trash icon | OK | Figma title, port detail and bullets, "SSH 포트 삭제" |
+| 52:2757 | 방화벽 규칙 추가 | 52:2836 | `action==='rule'` | Firewall section → "규칙 추가" | OK | Destination hint "목적지 10.20.0.104" |
+| 52:2757 | 방화벽 규칙을 삭제할까요? | 52:2896 | `confirmTarget` kind rule | Rule row trash icon | OK | Rule summary, source → destination, firewall-state bullet, "규칙 삭제" |
+| 52:2757 | HTTPS Domain 추가 | 52:2919 | `action==='domain'` | "Domain 추가" | OK | Figma copy and hints |
+| 52:2757 | 동기화에 실패한 Domain을 삭제할까요? | 52:2960 | `confirmTarget` kind domain + failed | Add a Domain whose internal port has no TCP port (e.g. 3000) → wait 2 s → trash | OK | |
+| Snapshot · 생성·복원·삭제 (52:3898) | 수동 Snapshot 만들기 | 52:3902 | VmSnapshotsPage dialog `create` | "Snapshot 만들기" | OK | |
+| 52:3898 | 이 Snapshot으로 복원할까요? | 52:3935 | dialog `restore` | restore icon | OK | |
+| 52:3898 | 자동 Snapshot을 삭제할까요? | 52:3964 | dialog `delete` (automatic) | "auto-20260929" trash | OK | |
+| 52:3898 | 복원을 완료했어요 | 52:3988 | dialog `restore-complete` | Confirm restore | OK | |
+| 42 · Network·Serverless 보완 (104:1927) | 방화벽을 켜고 규칙을 추가할까요? | 104:1931 | `action==='firewall-confirm'` (only while the firewall is off) with 동작, 포트 and "지금 열린 포트 자동 허용" switch | Turn the firewall off → "규칙 추가" → submit | OK | The switch adds allow rules for the open ports (demo only) |
+| 104:1927 | 모든 수신 접속이 막혀 있습니다 | 104:1975 | Blocked banner | Delete all allow rules while the firewall is on | OK | |
+| 104:1927 | 방화벽을 끄시겠습니까? | 104:1994 | `action==='firewall-disable-confirm'` | Firewall switch while on | OK | |
+| 104:1927 | HTTPS 다시 연결 중 · 2/3 | 104:2016 | `domainDetails` (pending) | Add a Domain → info icon while 동기화 중 | OK | |
+| 104:1927 | HTTPS 연결에 실패했습니다 | 104:2031 | `domainDetails` (failed) with "Domain 삭제" / "다시 연결" | Failed Domain → info icon | OK | |
+| 45 · 이름 변경·방화벽 적용 상태 (128:2058) | 이름 변경 | 128:2062 | VmSettingsPage inline `nameEditing` | "변경" | OK | |
+| 128:2058 | 이름 형식이 맞지 않습니다 | 128:2089 | `validateVmName` | Type "-bad name" | OK | |
+| 128:2058 | 같은 이름의 VM이 있습니다 | 128:2118 | `validateVmName` duplicate | Type "portfolio-worker" | OK | |
+| 128:2058 | 이름을 저장하는 중입니다 | 128:2146 | `nameSaving` | Save a valid name | OK | |
+| 128:2058 | 이름을 바꿨습니다 | 128:2167 | `renamed` dialog (new name, SSH port, Domain) | Save succeeds | OK | |
+| 128:2058 | 이름을 바꾸지 못했습니다 | 128:2186 | NameError "서버에 연결하지 못했습니다…" + "다시 시도" | `?demoError=vm-rename` → save | OK | |
+| 128:2058 | 방화벽을 켜는 중입니다 | 128:2213 | Inline "방화벽을 켜는 중입니다" surface at the top of Network (rule add/delete disabled) | Firewall switch while off | OK | |
+| 128:2058 | 방화벽을 켜지 못했습니다 | 128:2233 | `firewall-enable-error` / `firewall-error` | `?demoError=vm-firewall` → turn the firewall on | OK | |
+| 128:2058 | 방화벽을 끄지 못했습니다 | 128:2252 | `firewall-disable-error` | `?demoError=vm-firewall` → turn the firewall off | OK | |
+| 128:2058 | 방화벽이 꺼져 있습니다 | 128:2272 | Firewall-off empty-state surface (switch + "규칙 추가") | Delete all rules, then turn the firewall off | OK | |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
-| 10 · VM Network | 203:41077 | Entry: Network tab from 07/08/11/12 | `DetailTabs` (VmDemoPrimitives.tsx:295) links to `/vms/vm-portfolio-api/network`, which renders VMNetworkPage | OK (DEV only; prod demo PENDING-PR #143) |
-| 10-01 · 방화벽이 꺼져 있어요 | 203:41400 | Firewall off with no rules → empty-state banner | Off state is reachable, but there's no banner or empty-state copy | MISSING |
+| 10 · VM Network | 203:41077 | Entry: Network tab from 07/08/11/12 | `DetailTabs` → `/vms/vm-portfolio-api/network` | OK |
+| 10-01 · 방화벽이 꺼져 있어요 | 203:41400 | Firewall off with no rules → empty state | Empty-state surface | OK |
 | 10-02 · 방화벽 규칙 추가 | 203:41743 | "규칙 추가" → rule dialog | `openAction('rule')` | OK |
-| 10-03 · 방화벽을 켜고 규칙을 추가할까요? | 203:42125 | Rule submit while firewall off → confirm with auto-allow switch | Confirm is always shown and the auto-allow switch is missing; PR #143 shows it only when the firewall is off | PENDING-PR #143 (switch still MISSING) |
-| 10-04 · 방화벽을 켜는 중이에요 | 203:42490 | Confirm → inline page "켜는 중" state | `firewall-loading` / `firewall-enable-loading` dialog (300 ms) | PARTIAL (dialog, not inline) |
-| 10-05 · 방화벽을 켜지 못했어요 | 203:42834 | Enable failure dialog | Renders only when the storage write fails | UNREACHABLE |
-| 10-06 · 모든 수신 접속이 막혀 있어요 | 203:43175 | Firewall on with 0 allow rules → blocked banner | No banner on develop | PENDING-PR #143 |
-| 10-07 · 방화벽 규칙을 삭제할까요? | 203:43518 | Rule trash → delete confirm | Opens a generic "삭제할까요?" confirm | OK (copy partial) |
+| 10-03 · 방화벽을 켜고 규칙을 추가할까요? | 203:42125 | Rule submit while firewall off → confirm with auto-allow switch | firewall-confirm with switch | OK |
+| 10-04 · 방화벽을 켜는 중이에요 | 203:42490 | Confirm → inline "켜는 중" state | Inline surface | OK |
+| 10-05 · 방화벽을 켜지 못했어요 | 203:42834 | Enable failure dialog | `?demoError=vm-firewall` | OK |
+| 10-06 · 모든 수신 접속이 막혀 있어요 | 203:43175 | Firewall on with 0 allow rules → blocked banner | Banner | OK |
+| 10-07 · 방화벽 규칙을 삭제할까요? | 203:43518 | Rule trash → delete confirm | Figma copy | OK |
 | 10-08 · 방화벽을 끌까요? | 203:43863 | Switch on→off → confirm | `firewall-disable-confirm` | OK |
-| 10-09 · 방화벽을 끄지 못했어요 | 203:44206 | Disable failure dialog | Renders only when the storage write fails | UNREACHABLE |
+| 10-09 · 방화벽을 끄지 못했어요 | 203:44206 | Disable failure dialog | `?demoError=vm-firewall` | OK |
 | 10-10 · 외부 접속 포트 추가 | 203:44547 | "포트 추가" → port dialog | `openAction('port')` | OK |
-| 10-11 · SSH 기본 포트를 삭제할까요? | 203:44914 | SSH row trash → SSH confirm | SSH-specific title | OK |
+| 10-11 · SSH 기본 포트를 삭제할까요? | 203:44914 | SSH row trash → SSH confirm | SSH-specific dialog | OK |
 | 10-12 · HTTPS Domain 추가 | 203:45260 | "Domain 추가" → domain dialog | `openAction('domain')` | OK |
-| 10-13 · HTTPS 다시 연결 중 · 2/3 | 203:45619 | Pending domain → retry-progress dialog | Not implemented; domains are always synced | PENDING-PR #143 |
-| 10-14 · HTTPS 연결에 실패했어요 | 203:45958 | Failed domain → failure dialog | Not implemented | PENDING-PR #143 |
-| 10-15 · 동기화에 실패한 Domain을 삭제할까요? | 203:46302 | Failed domain trash → failed-domain confirm | Dialog code exists, but no failed domain is ever produced | PENDING-PR #143 |
-| 10-16 · VM Network · 로딩 | 741:53928 | Page loading skeleton | Each section shows a `LoadingCard` while `busy`; demo resolves almost instantly | OK |
-| 10-17 · VM Network · 오류 | 747:60509 | Page load error | Each section shows an `ErrorPanel` on list failure; demo lists never fail | UNREACHABLE |
+| 10-13 · HTTPS 다시 연결 중 · 2/3 | 203:45619 | Pending domain → retry-progress dialog | `domainDetails` pending (opens automatically after adding) | OK |
+| 10-14 · HTTPS 연결에 실패했어요 | 203:45958 | Failed domain → failure dialog | `domainDetails` failed | OK |
+| 10-15 · 동기화에 실패한 Domain을 삭제할까요? | 203:46302 | Failed domain trash → failed-domain confirm | Failed-domain confirm | OK |
+| 10-16 · VM Network · 로딩 | 741:53928 | Page loading skeleton | `simulateDemoRequest('vm-network')` keeps the section LoadingCards up ~600 ms | OK |
+| 10-17 · VM Network · 오류 | 747:60509 | Page load error | `?demoError=vm-network` → three ErrorPanels | OK |
 | 10-18 · 호버 · 포트 추가 | 226:26964 | Click "포트 추가" → 10-10 | Opens the port dialog | OK |
-| 11 · VM Snapshot | 203:46647 | Entry: Snapshot tab | `DetailTabs` links to `/vms/portfolio-api/snapshots`; the Network page tab works too when `demoVm` is resolved | OK |
+| 11 · VM Snapshot | 203:46647 | Entry: Snapshot tab | `DetailTabs` | OK |
 | 11-01 · 수동 Snapshot 만들기 | 203:46881 | "Snapshot 만들기" → create dialog | `openCreateSnapshot` | OK |
 | 11-02 · 이 Snapshot으로 복원할까요? | 203:47146 | Row restore → confirm | `openRestoreSnapshot` | OK |
-| 11-03 · 복원을 완료했어요 | 203:47408 | Confirm restore → done dialog | `restore-complete` after 350 ms; VM is stopped | OK |
+| 11-03 · 복원을 완료했어요 | 203:47408 | Confirm restore → done dialog | `restore-complete` | OK |
 | 11-04 · 자동 Snapshot을 삭제할까요? | 203:47672 | Auto snapshot trash → confirm | Automatic title and bullet | OK |
-| 11-05 · VM Snapshot · 로딩 | 741:54198 | Page loading skeleton | Page renders synchronously from localStorage; no page-level loading | MISSING |
-| 11-06 · VM Snapshot · 오류 | 747:60800 | Page load error | No error rendering; an unknown VM redirects home | MISSING |
+| 11-05 · VM Snapshot · 로딩 | 741:54198 | Page loading skeleton | `useVmPageLoad('vm-snapshots')` | OK |
+| 11-06 · VM Snapshot · 오류 | 747:60800 | Page load error | `?demoError=vm-snapshots` | OK |
 | 11-07 · 호버 · 복원 | 225:25571 | Click restore → 11-02 | Opens the restore confirm | OK |
-| 12 · VM 설정 | 203:47928 | Entry: 설정 tab | `DetailTabs` links to `/vms/portfolio-api/settings` | OK |
+| 12 · VM 설정 | 203:47928 | Entry: 설정 tab | `DetailTabs` | OK |
 | 12-01 · 이름 변경 | 203:48150 | "변경" → inline edit | `startNameEdit` | OK |
 | 12-02 · 이름 형식이 맞지 않아요 | 203:48393 | Invalid input → format error | Inline validation | OK |
-| 12-03 · 같은 이름의 VM이 있어요 | 203:48636 | Duplicate name → error | Inline duplicate error (portfolio-worker) | OK |
-| 12-04 · 이름을 저장하는 중이에요 | 203:48879 | Enter/저장 → saving state | 350 ms; button shows "저장 중" | OK |
-| 12-05 · 이름을 바꿨어요 | 203:49118 | Save success → dialog | Inline status text instead of a dialog | PARTIAL |
-| 12-06 · 이름을 바꾸지 못했어요 | 203:49360 | Save failure → inline error | Only on storage failure | UNREACHABLE |
-| 12-07 · 디스크 늘리기 | 203:49602 | "디스크 늘리기" → resize dialog | Dialog exists, but the seed personal quota is 30/30 GB (demoVmStore.ts:209), so the button is disabled | UNREACHABLE |
-| 12-08 · 비밀번호를 재설정할까요? | 203:49858 | Reset password → confirm | No control on develop; PR #143 adds a section and confirm modal | PENDING-PR #143 |
-| 12-09 · portfolio-api를 영구 삭제할까요? | 203:50106 | "VM 삭제" → typed-name confirm | `DeleteConfirmDialog` lists resources | OK |
-| 12-10 · VM 삭제에 실패했어요 | 203:50358 | Delete failure dialog | Only on storage failure | UNREACHABLE |
-| 12-11 · VM 설정 · 로딩 | 741:54409 | Page loading skeleton | No loading rendering | MISSING |
-| 12-12 · VM 설정 · 오류 | 747:61046 | Page load error | No error rendering | MISSING |
+| 12-03 · 같은 이름의 VM이 있어요 | 203:48636 | Duplicate name → error | Inline duplicate error | OK |
+| 12-04 · 이름을 저장하는 중이에요 | 203:48879 | Enter/저장 → saving state | 350 ms, "저장 중" | OK |
+| 12-05 · 이름을 바꿨어요 | 203:49118 | Save success → dialog | `renamed` dialog | OK |
+| 12-06 · 이름을 바꾸지 못했어요 | 203:49360 | Save failure → inline error | `?demoError=vm-rename` | OK |
+| 12-07 · 디스크 늘리기 | 203:49602 | "디스크 늘리기" → resize dialog | Seed portfolio-worker now counts 10 GB, so personal SSD is 20/30 and the button is enabled (vCPU/RAM stay full, so 05-01 still shows) | OK |
+| 12-08 · 비밀번호를 재설정할까요? | 203:49858 | Reset password → confirm | Settings section + dialog | OK |
+| 12-09 · portfolio-api를 영구 삭제할까요? | 203:50106 | "VM 삭제" → typed-name confirm | `DeleteConfirmDialog` | OK |
+| 12-10 · VM 삭제에 실패했어요 | 203:50358 | Delete failure dialog | `?demoError=vm-delete` | OK |
+| 12-11 · VM 설정 · 로딩 | 741:54409 | Page loading skeleton | `useVmPageLoad('vm-settings')` | OK |
+| 12-12 · VM 설정 · 오류 | 747:61046 | Page load error | `?demoError=vm-settings` | OK |
 | 12-13 · 호버 · VM 삭제 | 226:27293 | Click "VM 삭제" → 12-09 | Opens the delete dialog | OK |
 
 #### Counts
-Product: 3 total (OK 1 / non-OK 2: PARTIAL 2). States panels: 25 total (OK 14 / non-OK 11: PARTIAL 3, PENDING-PR #143 4, UNREACHABLE 3, MISSING 1). Flows: 41 total (OK 22 / non-OK 19: PENDING-PR #143 6, UNREACHABLE 6, MISSING 5, PARTIAL 2).
+Product: 3 total (OK 3). States panels: 25 total (OK 25). Flows: 41 total (OK 41).
 
 ### Serverless
 
@@ -995,51 +989,12 @@ All gaps fixed in `codex/figma-auth-shell-docs` (re-verified after #143/#144):
 
 ### VM (part A: create, overview, monitoring, team VM)
 
-- `53:3014` VM을 만들지 못했어요 — MISSING: no creation-failure state anywhere (not in #143 either). Files: `src/pages/vm/VmCreatePage.tsx`, `src/pages/home/PersonalResourcesPage.tsx`
-- `104:1883` / `203:64527` 팀장 또는 DevOps만 — MISSING: member power buttons are only disabled with a tooltip; no dialog. Files: `src/pages/vm/VmOverviewPage.tsx`
-- `116:6963` 일반 팀원은 팀 VM을 만들 수 없어요 — MISSING: silent `<Navigate>` to team home. Files: `src/pages/vm/VmCreatePage.tsx:157`
-- `116:6991` / `203:63923` 아직 연장 기간이 아니에요 — MISSING: tooltip only, and no fixture outside the window. Files: `src/pages/vm/VmOverviewPage.tsx`, `src/entities/vm/model/demoVmStore.ts`
-- `116:7012` / `203:64219` 연장했어요 · 정지 상태 — MISSING: status hint only. Files: `src/pages/vm/VmOverviewPage.tsx`
-- `52:2638` / `203:29743` 입력 내용을 확인해 주세요 — PARTIAL: inline banner, no dialog or field errors. Files: `src/pages/vm/VmCreatePage.tsx:323`
-- All 18 `로딩`/`오류` flows (05-03/04, 06-03/04, 07-02/03, 08-11/12, 09-02/03, 34-04/05, 36-01/02, 37-01/02, 38-02/03) — MISSING: VM pages have no loading or error rendering, and there is no demo delay or failure toggle. Files: `src/pages/vm/*`
-- `52:2689` 인증 시간이 지났어요 — UNREACHABLE: only reached through the real OAuth error redirect. Files: `src/pages/auth/LoginPage.tsx:312`
-- `52:4119` VM 삭제에 실패했어요 — UNREACHABLE: only fires on a localStorage write failure. Files: `src/pages/vm/VmSettingsPage.tsx`
-- DEV-only guards (prod `?demo=1`) — PENDING-PR #143. These block the home VM list and queued work (07-04, 08 entry, personal cancel), team home VM rows and create button (34, 36 entry), VM extension (08-04, 103:1759, team extend), and Network mutations (08-02, 34-06). Files: `src/pages/home/PersonalResourcesPage.tsx:501`, `src/pages/teams/TeamsHomePage.tsx`, `src/features/vm-extension/model/useDemoVmExtension.ts:27`, `src/entities/network/api/networkApi.ts`
-- PENDING-PR #143 states. Added by #143:
-  - initializing (`53:3045`, `203:30937`)
-  - expired (`53:3114`, `203:31691`) — time-based only, so effectively unreachable even after #143
-  - rate limit (`203:33571`)
-  - not found / deleted (`203:33928`, `203:34283`, `103:2070`)
-  - stopped monitoring (`52:4250`, `203:40854`)
-  - re-login (`203:29353`)
-  - student pool shortage (`104:1803`, `203:30357`)
-  - password reset (`103:1784`)
-  - 생성이 이미 시작 (`103:1711`)
-
-  Partially added by #143 as a banner instead of a dialog: personal quota (`104:1776`, `203:28883`) and team quota (`104:1824`, `203:65612`).
+- `52:2689` 인증 시간이 지났어요 — UNREACHABLE (left): rendered by `src/pages/auth/LoginPage.tsx` only after the real OAuth state-expiry redirect (`/login?error=OAUTH_STATE_INVALID`). Auth domain file, not changed here.
+- All other part A gaps are fixed in `codex/figma-vm` (create-failure, validation dialog, quota/pool/permission dialogs, team extension states, deleted team VM lookup, loading/error frames). See the section above.
 
 ### VM (part B: Network, Snapshot, Settings)
 
-- (cross-cutting) Network mock data — PENDING-PR #143: develop gates network mock on `import.meta.env.DEV`, so in a prod-build `?demo=1` the page calls the real API and shows ErrorPanels. Files: `src/entities/network/api/networkApi.ts`, `src/pages/network/VMNetworkPage.tsx:425`
-- `52:1640` 10 · VM Network — PARTIAL: the heading is "VM Network", not the VM name and status (PENDING-PR #143). Files: `src/pages/network/VMNetworkPage.tsx:681`
-- `52:2260` 12 · VM 설정 — PARTIAL: password reset section is missing (PENDING-PR #143). Files: `src/pages/vm/VmSettingsPage.tsx`
-- `52:2896` 방화벽 규칙 삭제 panel — PARTIAL: the title is the generic "삭제할까요?" and details are missing. Files: `src/pages/network/VMNetworkPage.tsx:907`
-- `52:2960` / `203:46302` failed-Domain delete — PENDING-PR #143: develop's demo never produces `failed` domains. Files: `src/entities/network/model/demoNetworkStore.ts:120`
-- `104:1931` / `203:42125` 방화벽 켜고 규칙 추가 — PENDING-PR #143 (shown only when the firewall is off). The "지금 열린 포트 자동 허용" switch is still MISSING after the PR. Files: `src/pages/network/VMNetworkPage.tsx:832`
-- `104:1975` / `203:43175` 모든 수신 접속 막힘 — PENDING-PR #143: no banner on develop. Files: `src/pages/network/VMNetworkPage.tsx`
-- `104:2016` / `203:45619` HTTPS 다시 연결 중 — PENDING-PR #143. Files: `VMNetworkPage.tsx`, `demoNetworkStore.ts`
-- `104:2031` / `203:45958` HTTPS 연결 실패 — PENDING-PR #143. Files: same as above
-- `128:2272` / `203:41400` 방화벽 꺼져 있음 — MISSING: no empty-state banner for "firewall off, no rules" (PR #143 doesn't add it either). Files: `src/pages/network/VMNetworkPage.tsx:732-774`
-- `203:42490` 10-04 방화벽 켜는 중 — PARTIAL: it is a dialog where the design shows an inline page state. Files: `VMNetworkPage.tsx:841,863`
-- `128:2233`, `128:2252` / `203:42834`, `203:44206` firewall enable/disable failures — UNREACHABLE: they trigger only on a localStorage write failure, and there is no demo failure toggle. Files: `src/entities/network/api/networkApi.ts:121`
-- `747:60509` 10-17 Network 오류 — UNREACHABLE in mock mode: demo list calls never fail. Files: `VMNetworkPage.tsx:701,732,776`
-- `128:2167` / `203:49118` 이름을 바꿨어요 — PARTIAL: shows inline `notice` text, not the designed dialog. Files: `src/pages/vm/VmSettingsPage.tsx:309,383`
-- `128:2186` / `203:49360` 이름 바꾸지 못함 — UNREACHABLE (storage failure only). Files: `VmSettingsPage.tsx:300`
-- `203:49602` 12-07 디스크 늘리기 — UNREACHABLE: the seed personal quota is disk 30/30, so "디스크 늘리기" is disabled. Files: `src/entities/vm/model/demoVmStore.ts:209`, `VmSettingsPage.tsx:166`
-- `203:49858` 12-08 비밀번호 재설정 — PENDING-PR #143. Files: `VmSettingsPage.tsx`
-- `203:50358` 12-10 VM 삭제 실패 — UNREACHABLE (storage failure only). Files: `VmSettingsPage.tsx:332-346`
-- `741:54198`, `741:54409` 11-05 / 12-11 로딩 — MISSING: Snapshot and Settings render synchronously with no skeleton. Files: `VmSnapshotsPage.tsx`, `VmSettingsPage.tsx`
-- `747:60800`, `747:61046` 11-06 / 12-12 오류 — MISSING: no page-error rendering; an unknown VM redirects (PR #143 adds VmUnavailablePage, which shows "not found", not a load error). Files: same as above
+- None. All part B gaps are fixed in `codex/figma-vm`.
 
 ### Serverless
 

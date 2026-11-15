@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { canExtendDemoTeamVm, canManageDemoVm, canRecoverDemoVm, cancelDemoVmCreateRequest, formatDemoVmDate, getDemoVmDaysRemaining, getDemoVmGraceEnd, getDemoVmState, isDemoVmExpired, isDemoVmInitializing, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
+import { canExtendDemoTeamVm, canManageDemoVm, canRecoverDemoVm, cancelDemoVmCreateRequest, demoTeamReferenceTime, formatDemoVmDate, getDemoVmDaysRemaining, getDemoVmExpiryTime, getDemoVmGraceEnd, getDemoVmState, isDemoVmExpired, isDemoVmInitializing, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { getDemoNetworkState, restoreDefaultPortForwards } from '../../entities/network';
 import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
 import { getDemoTeam } from '../../entities/team/demo';
@@ -11,6 +11,8 @@ import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Fact, FactLabel, FactValue, Facts, Grid2, Hint, MetricCard, MetricLabel, MetricValue, Row, Surface, SurfaceTitle } from './VmDemoPrimitives';
 import { VmUnavailablePage } from './VmUnavailablePage';
+import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
+import { describeDemoVmTeamRoles, findDeletedDemoVm, formatKoreanDemoDate } from './vmDemoHelpers';
 
 const Heading = styled.div`
   display: flex;
@@ -127,6 +129,8 @@ const StateDialogActions = styled.div`
 `;
 
 type PowerDialog = 'graceful-progress' | 'force-confirm' | 'force-progress' | 'restart-progress' | null;
+type PowerActionLabel = '시작' | '정상 종료' | '재시작' | '강제 정지';
+type ExtendedStoppedNotice = { expiresAt: string; recovered: boolean };
 type PowerOperation = 'normal' | 'force' | 'restart' | null;
 
 export function VmOverviewPage() {
@@ -142,6 +146,10 @@ export function VmOverviewPage() {
   const [cancelDialog, setCancelDialog] = useState<'confirm' | 'started' | null>(null);
   const [networkVersion, setNetworkVersion] = useState(0);
   const powerTimer = useRef<number | null>(null);
+  const [permissionAction, setPermissionAction] = useState<PowerActionLabel | null>(null);
+  const [extendedStopped, setExtendedStopped] = useState<ExtendedStoppedNotice | null>(null);
+  const extensionStartedExpired = useRef(false);
+  const load = useVmPageLoad('vm', vmId);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   const initializing = vm ? isDemoVmInitializing(vm) : false;
   const networkState = useMemo(() => vm && vm.status !== 'queued' ? getDemoNetworkState(vm.grn) : null, [vm?.grn, vm?.status, networkVersion]);
@@ -156,13 +164,21 @@ export function VmOverviewPage() {
   }, [retryAt]);
   const vmExtension = useDemoVmExtension({
     onStateChange: setState,
-    onExtended: () => setNotice('사용 기간을 14일 연장했습니다.'),
+    onExtended: extended => {
+      setNotice('사용 기간을 14일 연장했습니다.');
+      if (extended.owner === 'team' && extended.status === 'stopped') {
+        setExtendedStopped({ expiresAt: extended.expiresAt, recovered: extensionStartedExpired.current });
+      }
+    },
     onError: setNotice,
   });
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
-  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (!vm) {
+    const deleted = findDeletedDemoVm(state, vmId, routeTeamId);
+    return <VmUnavailablePage teamId={routeTeamId ?? deleted?.teamId} deleted={deleted} />;
+  }
   if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
@@ -179,6 +195,11 @@ export function VmOverviewPage() {
     : vmRecord.owner === 'personal' ? Date.UTC(2026, 8, 29, 5) : undefined;
   const daysRemaining = getDemoVmDaysRemaining(vmRecord.expiresAt, referenceTime);
   const canExtendTeamVm = vmRecord.owner !== 'team' || canExtendDemoTeamVm(vmRecord);
+  const teamExpiryTime = vmRecord.owner === 'team' ? getDemoVmExpiryTime(vmRecord.expiresAt) : undefined;
+  const teamReferenceTime = vmRecord.requestedAtMs !== undefined ? Date.now() : demoTeamReferenceTime;
+  const extensionNotOpenYet = vmRecord.owner === 'team' && vmRecord.status !== 'queued' && !expired
+    && teamExpiryTime !== undefined && teamReferenceTime < teamExpiryTime - 7 * 24 * 60 * 60 * 1000;
+  const teamRoles = describeDemoVmTeamRoles(vmRecord);
   const vmRoute = vmRecord.owner === 'team' && vmRecord.teamId
     ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms/${encodeURIComponent(vmRecord.id)}`
     : `/vms/${encodeURIComponent(vmRecord.id)}`;
@@ -277,6 +298,7 @@ export function VmOverviewPage() {
 
   function requestExtension() {
     setNotice('');
+    extensionStartedExpired.current = isDemoVmExpired(vmRecord);
     void vmExtension.extend(vmRecord.id);
   }
 
@@ -326,6 +348,14 @@ export function VmOverviewPage() {
     void navigator.clipboard.writeText(text).then(() => setNotice(`${label}을(를) 복사했습니다.`)).catch(() => setNotice('클립보드에 접근할 수 없습니다.'));
   }
 
+  function guardPower(action: PowerActionLabel, run: () => void) {
+    if (memberReadOnly) {
+      setPermissionAction(action);
+      return;
+    }
+    run();
+  }
+
   const sshPort = networkState?.ports.find(port => port.kind === 'ssh')?.external_port;
   const sshCommand = sshPort ? `ssh ${vmRecord.sshUser}@ssh.gsmsv.site -p ${sshPort}` : null;
 
@@ -333,21 +363,29 @@ export function VmOverviewPage() {
     <DemoPage>
       <Breadcrumb>{vm.owner === 'team' ? 'GSM Connect / 팀 Resources' : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{title}</Title><StatusLine>{subtitle}</StatusLine></div><PowerActions>
-        <Button variant="secondary" disabled={memberReadOnly || expired || vm.status === 'queued' || vm.status === 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={startVm}>시작</Button>
-        <Button variant="secondary" disabled={memberReadOnly || expired || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
-        <Button variant="secondary" disabled={memberReadOnly || expired || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
-        <Button variant="secondary" disabled={memberReadOnly || expired || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
+        <Button variant="secondary" disabled={expired || vm.status === 'queued' || (!memberReadOnly && vm.status === 'running') || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="play" />} onClick={() => guardPower('시작', startVm)}>시작</Button>
+        <Button variant="secondary" disabled={expired || vm.status === 'queued' || (!memberReadOnly && vm.status !== 'running') || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => guardPower('정상 종료', () => beginPowerOperation('normal'))}>정상 종료</Button>
+        <Button variant="secondary" disabled={expired || vm.status === 'queued' || (!memberReadOnly && vm.status !== 'running') || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => guardPower('재시작', () => beginPowerOperation('restart'))}>재시작</Button>
+        <Button variant="secondary" disabled={expired || vm.status === 'queued' || (!memberReadOnly && vm.status !== 'running') || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => guardPower('강제 정지', () => setPowerDialog('force-confirm'))}>강제 정지</Button>
         {vm.status === 'queued' && !initializing && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
         {!memberReadOnly && !expired && vm.owner === 'personal' && <Button variant="primary" disabled={vm.status === 'queued'} icon={<Octicon name="calendar" />} onClick={() => requestExtension()}>14일 연장</Button>}
       </PowerActions></Heading>
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
-
+      {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={vm.owner === 'team' ? [[150, 150, 150], [268], [218], [212]] : [[150, 150, 150], [270, 270], [270], [218]]} /> : <>
       {memberReadOnly && <Banner><Octicon name="shield" size={20} /><BannerCopy><strong>일반 팀원으로 보고 있습니다</strong><span>조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있습니다. 전원 제어와 설정 변경은 팀장(김지민) 또는 DevOps(한도윤)가 할 수 있습니다.</span></BannerCopy></Banner>}
       {expired && graceEnd !== undefined ? <Banner $tone="warning"><Octicon name="alert" size={20} /><BannerCopy>
         <strong>만료되어 정지됐습니다</strong>
         <span>삭제 예정: {formatDemoVmDate(graceEnd)}. VM을 보관하려면 지금 연장해 주세요.</span>
         <span>· 만료 후 3일이 지나면 영구 삭제됩니다.<br />· 연장하면 삭제 예약을 취소하고 기존 만료일에 14일을 더합니다.<br />· 연장한 뒤에는 직접 VM을 시작해 주세요.</span>
       </BannerCopy><Button disabled={!canRecoverDemoVm(vmRecord)} icon={<Octicon name="calendar" />} onClick={requestExtension}>연장하고 보관</Button></Banner>
+      : extensionNotOpenYet && teamExpiryTime !== undefined ? <Surface aria-live="polite">
+        <SurfaceTitle><Octicon name="clock" size={24} />　아직 연장 기간이 아닙니다</SurfaceTitle>
+        <Hint>{vm.name}는 {formatKoreanDemoDate(teamExpiryTime)}에 만료됩니다. 연장은 {formatKoreanDemoDate(teamExpiryTime - 7 * 24 * 60 * 60 * 1000)}부터 할 수 있습니다.</Hint>
+        {daysRemaining !== undefined && <Hint>· 만료까지 {daysRemaining}일 남았습니다.</Hint>}
+        <Hint>· 팀원 모두 같은 시점부터 연장할 수 있습니다.</Hint>
+        <Row><span /><Button disabled icon={<Octicon name="calendar" />}>14일 연장</Button></Row>
+        <Hint>만료 7일 전부터 연장할 수 있습니다.</Hint>
+      </Surface>
       : <Banner $tone="primary"><Octicon name="clock"  size={20} /><BannerCopy><strong>{vm.status === 'queued' ? initializing ? '초기 설정을 진행하고 있습니다' : '생성 요청이 접수되었습니다' : daysRemaining !== undefined ? '만료까지 ' + daysRemaining + '일 남았습니다' : '사용 기간'}</strong><span>{vm.status === 'queued' ? initializing ? '접속 준비가 끝나면 SSH 접속 정보를 볼 수 있습니다.' : '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{vm.owner === 'team' && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={() => requestExtension()} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>}
       <Facts>
         <MetricCard><Row><MetricLabel><Octicon name="cpu" size={16} />　CPU</MetricLabel></Row><MetricValue>{vm.cpu} vCPU</MetricValue><Hint>{vm.nodeType}</Hint></MetricCard>
@@ -389,6 +427,7 @@ export function VmOverviewPage() {
       {vm.owner === 'team' && <Surface><SurfaceTitle>팀 정보</SurfaceTitle><KVPairs><Fact><FactLabel>소유</FactLabel><FactValue>팀 {vm.teamName} · 만든 사람 {vm.creator}</FactValue></Fact><Fact><FactLabel>내 역할</FactLabel><FactValue>일반 팀원 · 팀장이 DevOps 역할을 주면 전원과 설정을 관리할 수 있습니다</FactValue></Fact></KVPairs></Surface>}
       {notice && <Hint role="status">{notice}</Hint>}
       {powerOperation === 'normal' && !powerDialog && <Banner role="status"><Octicon name="clock" size={20} /><BannerCopy><strong>종료 요청 후 응답을 기다리고 있습니다</strong><span>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</span></BannerCopy><Button variant="secondary" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></Banner>}
+      </>}
     </DemoPage>
     {retryAt > 0 && <ModalSurface labelledBy="vm-power-retry-title" onDismiss={() => setRetryAt(0)}>
       <StateDialogPanel>
@@ -429,6 +468,28 @@ export function VmOverviewPage() {
       onConfirm={vmExtension.confirm}
       onDismiss={vmExtension.dismiss}
     />}
+    {permissionAction && <ModalSurface labelledBy="vm-permission-title" onDismiss={() => setPermissionAction(null)}>
+      <StateDialogPanel>
+        <StateDialogTitle id="vm-permission-title"><Octicon name="lock" size={24} /> 팀장 또는 DevOps만 할 수 있습니다</StateDialogTitle>
+        <StateDialogCopy>{vmRecord.name}{permissionAction === '시작' ? '을(를) 시작하려면' : permissionAction === '정상 종료' ? '을(를) 정상 종료하려면' : permissionAction === '재시작' ? '를 재시작하려면' : '을(를) 강제로 정지하려면'} 팀장 또는 DevOps 역할이 필요합니다.</StateDialogCopy>
+        <StateDialogCopy>· 내 역할 · 일반 팀원</StateDialogCopy>
+        <StateDialogCopy>· {teamRoles.summary}</StateDialogCopy>
+        <StateDialogActions><Button variant="secondary" onClick={() => setPermissionAction(null)}>닫기</Button></StateDialogActions>
+      </StateDialogPanel>
+    </ModalSurface>}
+    {extendedStopped && <ModalSurface labelledBy="vm-extended-stopped-title" onDismiss={() => setExtendedStopped(null)}>
+      <StateDialogPanel>
+        <StateDialogTitle id="vm-extended-stopped-title"><Octicon name="check-circle" size={24} /> 연장했습니다 · VM은 정지 상태입니다</StateDialogTitle>
+        <StateDialogCopy>만료일이 {formatKoreanDemoDate(getDemoVmExpiryTime(extendedStopped.expiresAt))}으로 바뀌었{extendedStopped.recovered ? '고 삭제 예약은 취소됐습니다.' : '습니다.'}</StateDialogCopy>
+        <StateDialogCopy>· 전원은 자동으로 시작하지 않습니다.</StateDialogCopy>
+        {memberReadOnly && <StateDialogCopy>· 윤채원은 일반 팀원이므로 {teamRoles.contact}에게 시작을 요청하세요.</StateDialogCopy>}
+        <StateDialogActions>
+          <Button variant="secondary" disabled={memberReadOnly || vmRecord.status !== 'stopped'} icon={<Octicon name="play" />} onClick={() => { setExtendedStopped(null); startVm(); }}>VM 시작</Button>
+          <Button variant="primary" onClick={() => setExtendedStopped(null)}>확인</Button>
+        </StateDialogActions>
+        {memberReadOnly && <Hint>전원 제어는 팀장·DevOps만 할 수 있습니다.</Hint>}
+      </StateDialogPanel>
+    </ModalSurface>}
     {cancelDialog === 'confirm' && <ModalSurface labelledBy="vm-create-cancel-title" onDismiss={() => setCancelDialog(null)}>
       <StateDialogPanel>
         <StateDialogTitle id="vm-create-cancel-title">생성을 취소하시겠습니까?</StateDialogTitle>

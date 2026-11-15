@@ -4,13 +4,15 @@ import styled from 'styled-components';
 import { canManageDemoVm, getDemoVmQuota, getDemoVmState, removeDemoVm, saveDemoVmState, useDemoVmResourceState } from '../../entities/vm';
 import { clearDemoNetworkState, getDemoNetworkState, saveDemoNetworkState } from '../../entities/network';
 import { getDemoTeam } from '../../entities/team/demo';
-import { isDemoMode } from '../../shared/demo';
+import { consumeDemoFailure, isDemoMode } from '../../shared/demo';
 import { Button, SliderField } from '../../shared/ui/controls';
 import { DeleteConfirmDialog } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Heading, Hint, Input, Row, Surface, SurfaceTitle, Textarea } from './VmDemoPrimitives';
 import { VmUnavailablePage } from './VmUnavailablePage';
+import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
+import { findDeletedDemoVm } from './vmDemoHelpers';
 
 const Title = styled.h1`
   margin: 0;
@@ -81,10 +83,6 @@ const ResizeCopy = styled.p`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const ResizeFieldLabel = styled.label`
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
-`;
 
 const ResizeActions = styled.div`
   display: flex;
@@ -149,11 +147,16 @@ export function VmSettingsPage() {
   const [resizeOpen, setResizeOpen] = useState(false);
   const [nextDisk, setNextDisk] = useState(0);
   const [resizeError, setResizeError] = useState('');
+  const [renamed, setRenamed] = useState<string | null>(null);
+  const load = useVmPageLoad('vm-settings', vmId);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
-  if (!vm) return <VmUnavailablePage teamId={routeTeamId} deleted={state.deletedVms?.find(item => item.id === vmId && item.teamId === routeTeamId)} />;
+  if (!vm) {
+    const deleted = findDeletedDemoVm(state, vmId, routeTeamId);
+    return <VmUnavailablePage teamId={routeTeamId ?? deleted?.teamId} deleted={deleted} />;
+  }
   if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
@@ -164,6 +167,7 @@ export function VmSettingsPage() {
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
   const network = getDemoNetworkState(vmRecord.grn);
+  const sshExternalPort = network.ports.find(port => port.kind === 'ssh')?.external_port;
   const readOnly = vmRecord.status === 'queued' || !canManageDemoVm(vmRecord);
   const quota = vmRecord.owner === 'team' ? getDemoVmQuota(state, vmRecord.teamId ?? 'demo-team') : state.personalQuota;
   const remainingDisk = Math.max(0, quota.diskLimit - quota.disk);
@@ -315,16 +319,16 @@ export function VmSettingsPage() {
         return;
       }
       const next = { ...latest, vms: latest.vms.map(item => item.id === vmRecord.id ? { ...item, name: value } : item) };
-      if (!saveDemoVmState(next)) {
+      if (consumeDemoFailure('vm-rename') || !saveDemoVmState(next)) {
         setNameSaving(false);
-        setNameError('이름을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        setNameError(`서버에 연결하지 못했습니다. 이름은 ${vmRecord.name} 그대로입니다.`);
         return;
       }
       setState(next);
       setNameSaving(false);
       setNameEditing(false);
       setNameDraft('');
-      setNotice(`이름을 바꿨습니다. 이제 VM 목록과 검색에서 ${value}로 보입니다. VM ID와 SSH 외부 포트, HTTPS Domain은 그대로입니다.`);
+      setRenamed(value);
     }, 350);
   }
 
@@ -334,6 +338,10 @@ export function VmSettingsPage() {
     const target = latest.vms.find(item => item.id === vmRecord.id);
     if (!target || !canManageDemoVm(target)) {
       setPasswordResetError('현재 상태에서는 비밀번호를 재설정할 수 없습니다.');
+      return;
+    }
+    if (target.status !== 'running') {
+      setPasswordResetError('VM이 실행 중일 때만 비밀번호를 재설정할 수 있습니다. 개요에서 VM을 시작해 주세요.');
       return;
     }
     const password = 'gsvm-demo-' + crypto.randomUUID().slice(0, 12);
@@ -372,6 +380,12 @@ export function VmSettingsPage() {
         navigate(vmRecord.owner === 'team' ? `/teams/${encodeURIComponent(vmRecord.teamId ?? 'demo-team')}/vms` : '/');
         return;
       }
+      if (consumeDemoFailure('vm-delete')) {
+        setDeleteSaving(false);
+        setDeleteOpen(false);
+        setDeleteError('가상화 서버에서 삭제를 완료하지 못했습니다. 삭제 전 상태로 되돌렸으니 잠시 후 다시 시도해 주세요.');
+        return;
+      }
       const networkBeforeDelete = getDemoNetworkState(vmRecord.grn);
       if (!clearDemoNetworkState(vmRecord.grn)) {
         setDeleteSaving(false);
@@ -401,6 +415,7 @@ export function VmSettingsPage() {
       <Breadcrumb>{vm.owner === 'team' ? `${teamName} / 팀 Resources` : '워크스페이스 / 내 Resources'}</Breadcrumb>
       <Heading><div><Title>{vm.name}</Title><StatusLine>{vm.owner === 'team' ? '팀 VM' : '개인 VM'} · VM 설정</StatusLine></div></Heading>
       <DetailTabs vmId={vm.id} active="설정" teamId={vm.teamId} networkVmGrn={vm.grn} />
+      {load.status !== 'ready' ? <VmPagePlaceholder status={load.status} onRetry={load.retry} rows={[[327], [520], [267]]} /> : <>
       <Surface>
         <SurfaceTitle>사용 목적</SurfaceTitle>
         <Hint>관리자가 확인하며 기준에 맞지 않으면 VM이 삭제될 수 있습니다.</Hint>
@@ -410,7 +425,7 @@ export function VmSettingsPage() {
       </Surface>
       <Surface>
         <SurfaceTitle>Resources</SurfaceTitle>
-        <Hint>{canResizeDisk ? `SSD는 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 10 GB 단위로 늘릴 수 있습니다. 남은 할당량 ${remainingDisk} GB입니다.` : readOnly ? '팀장 또는 DevOps만 VM 사양을 변경할 수 있습니다.' : `사양은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 늘릴 수 있습니다. 현재 남은 할당량이 없어 늘릴 수 없습니다.`}</Hint>
+        <Hint>{canResizeDisk ? `SSD는 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 10 GB 단위로 늘릴 수 있습니다. 남은 할당량 ${remainingDisk} GB입니다.` : readOnly ? '팀장 또는 DevOps만 VM 사양을 변경할 수 있습니다.' : `사양은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량 안에서 늘릴 수 있습니다. 지금은 ${vmRecord.owner === 'team' ? '팀' : '개인'} 할당량을 모두 사용하고 있어 늘릴 수 없습니다.`}</Hint>
         <SliderField label="vCPU" value={vm.cpu} min={1} max={vm.cpu} valueLabel={`${vm.cpu} vCPU`} minLabel="최소 1" maxLabel={`최대 ${vm.cpu} · 남은 할당량 0`} disabled />
         <SliderField label="RAM" value={vm.memory} min={1} max={vm.memory} valueLabel={`${vm.memory} GB`} minLabel="최소 1 GB" maxLabel={`최대 ${vm.memory} GB · 남은 할당량 0`} disabled />
         <SliderField label="SSD" value={vm.disk} min={vm.disk} max={vm.disk} valueLabel={`${vm.disk} GB`} minLabel={`현재 ${vm.disk} GB · 줄일 수 없습니다`} maxLabel={`최대 ${resizableDiskLimit} GB · 남은 할당량 ${remainingDisk} GB`} helper="SSD는 늘릴 수만 있습니다. 늘린 뒤에는 VM 안에서 파일 시스템을 늘려야 합니다." showHelper disabled />
@@ -427,17 +442,19 @@ export function VmSettingsPage() {
         <SurfaceTitle>SSH 초기 비밀번호</SurfaceTitle>
         <Row><Hint>초기 비밀번호를 재설정한 뒤 개요에서 확인할 수 있습니다.</Hint><Button variant="secondary" disabled={readOnly} icon={<Octicon name="key" />} onClick={() => { setPasswordResetError(''); setPasswordResetOpen(true); }}>비밀번호 재설정</Button></Row>
       </Surface>
+      </>}
       <WarningBar><span>디스크 데이터와 연결된 Snapshot, 외부 접속 포트, HTTPS Domain이 함께 삭제됩니다. 삭제한 VM은 복구할 수 없습니다.</span><Button variant="danger" icon={<Octicon name="trashcan" />} disabled={readOnly || vmRecord.status === 'queued'} onClick={openDeleteDialog}>VM 삭제</Button></WarningBar>
       {notice && <Hint role="status">{notice}</Hint>}
     </DemoPage>
     {passwordResetOpen && <ModalSurface labelledBy="vm-reset-password-title" onDismiss={() => setPasswordResetOpen(false)}>
       <ResizePanel>
         <ResizeTitle id="vm-reset-password-title">비밀번호를 재설정하시겠습니까?</ResizeTitle>
-        <ResizeCopy>새 초기 비밀번호는 VM 개요에서 확인할 수 있습니다.</ResizeCopy>
+        <ResizeCopy>새 비밀번호를 만들어 VM에 적용합니다. 재설정한 비밀번호도 개요에서 계속 볼 수 있습니다.</ResizeCopy>
+        <ResizeCopy>· VM이 실행 중이어야 합니다.<br />· 기존 비밀번호로는 더 이상 접속할 수 없습니다.</ResizeCopy>
         {passwordResetError && <NameError role="alert">{passwordResetError}</NameError>}
         <ResizeActions>
           <Button variant="secondary" onClick={() => setPasswordResetOpen(false)}>취소</Button>
-          <Button variant="primary" onClick={resetPassword}>비밀번호 재설정</Button>
+          <Button variant="primary" icon={<Octicon name="key" />} onClick={resetPassword}>재설정</Button>
         </ResizeActions>
       </ResizePanel>
     </ModalSurface>}
@@ -445,10 +462,7 @@ export function VmSettingsPage() {
       <ResizePanel>
         <ResizeTitle id="vm-resize-title">디스크 늘리기</ResizeTitle>
         <ResizeCopy>· 늘린 용량은 다시 줄일 수 없습니다.<br />· 완료 후 VM 안에서 파일 시스템을 늘려야 합니다.</ResizeCopy>
-        <FactValue>현재 {vmRecord.disk} GB · {vmRecord.owner === 'team' ? '팀' : '개인'} SSD {quota.disk}/{quota.diskLimit} GB</FactValue>
-        <ResizeFieldLabel htmlFor="vm-next-disk">새 용량</ResizeFieldLabel>
-        <Input id="vm-next-disk" type="number" min={vmRecord.disk + 10} max={resizableDiskLimit} step={10} value={nextDisk} onChange={event => { setNextDisk(Number(event.currentTarget.value)); setResizeError(''); }} />
-        <Hint>최대 {resizableDiskLimit} GB · 남은 할당량 {remainingDisk} GB</Hint>
+        <SliderField label="새 용량" value={nextDisk} min={vmRecord.disk + 10} max={Math.max(vmRecord.disk + 10, resizableDiskLimit)} step={10} valueLabel={`${nextDisk} GB`} minLabel={`현재 ${vmRecord.disk} GB`} maxLabel={`최대 ${resizableDiskLimit} GB · 남은 할당량 ${remainingDisk} GB`} onChange={value => { setNextDisk(value); setResizeError(''); }} />
         {resizeError && <NameError role="alert">{resizeError}</NameError>}
         <ResizeActions>
           <Button variant="secondary" onClick={() => setResizeOpen(false)}>취소</Button>
@@ -479,6 +493,14 @@ export function VmSettingsPage() {
         hint="VM 이름을 정확하게 입력해 주세요."
       />
     </DeleteOverlay>}
+    {renamed && <ModalSurface labelledBy="vm-renamed-title" onDismiss={() => setRenamed(null)}>
+      <ResizePanel>
+        <ResizeTitle id="vm-renamed-title"><Octicon name="check-circle" size={24} /> 이름을 바꿨습니다</ResizeTitle>
+        <ResizeCopy>이제 VM 목록과 검색에서 {renamed}로 보입니다.</ResizeCopy>
+        <ResizeCopy>· VM ID와 SSH 외부 포트{sshExternalPort ? ` ${sshExternalPort}` : ''}는 그대로입니다{network.domains[0] ? <><br />· HTTPS Domain {network.domains[0].url.replace(/^https:\/\//, '')}도 그대로입니다</> : null}</ResizeCopy>
+        <ResizeActions><Button variant="primary" onClick={() => setRenamed(null)}>확인</Button></ResizeActions>
+      </ResizePanel>
+    </ModalSurface>}
     {deleteError && <ModalSurface labelledBy="vm-delete-error-title" onDismiss={() => setDeleteError('')}>
       <DeleteFailure>
         <FailureTitle id="vm-delete-error-title">VM 삭제에 실패했습니다</FailureTitle>
