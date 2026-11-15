@@ -1006,7 +1006,7 @@ All Serverless gaps were closed on `codex/figma-serverless`; see the Serverless 
 
 ### Database
 
-- `608:7781` 48 전용형 신청 / `693:53628` 48-05 — PARTIAL (kept on purpose): Figma 49 needs the seeded GSM Connect request in 검토 중, and 48 reads the same request store, so the first visit to 48 shows 48-01 (신청 disabled). The empty form shows after the admin rejects or approves-and-deletes. Files: `src/entities/demo-workflows/model/demoData.ts`
+- `608:7781` 48 전용형 신청 / `693:53628` 48-05 — PARTIAL (kept on purpose): Figma 49 needs the seeded GSM Connect request in 검토 중, and 48 reads the same request store, so the first visit to 48 shows 48-01 (신청 disabled). After the admin rejects, the form is editable again and "고쳐서 다시 신청" submits. Files: `src/entities/demo-workflows/model/demoData.ts`
 - `741:60870` 49-01, `747:68333` 49-02 — MISSING, owned by the Admin domain (`src/pages/admin/AdminDatabaseApprovalsDemoPage.tsx`).
 - All other Database gaps fixed (codex/figma-database).
 
