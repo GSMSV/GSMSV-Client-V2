@@ -15,7 +15,7 @@ export default function DemoSessionGate() {
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
-  if (!isDemoMode()) return <Outlet />;
+  if (!import.meta.env.DEV && !isDemoMode()) return <Outlet />;
 
   const profile = getDemoProfile();
   const canVisitSignedOut = pathname === '/login'
