@@ -42,6 +42,10 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 const Breadcrumb = styled.p`
   margin: 0;
@@ -87,14 +91,32 @@ const NavRow = styled.div`
   gap: 16px;
   width: 100%;
   min-height: 42px;
+
+  @media (max-width: 760px) {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+
+    > button { margin-left: auto; }
+  }
 `;
 const Tabs = styled.nav`
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
 `;
 const Tab = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
   min-width: 45px;
   min-height: 42px;
   padding: 0 12px;
@@ -120,6 +142,8 @@ const Card = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 const CardTitle = styled.h2`
   margin: 0;
@@ -152,9 +176,17 @@ const Banner = styled.div<{ $warning?: boolean }>`
     $warning ? theme.colors.warningSoft : theme.colors.primarySoft};
   color: ${({ theme, $warning }) =>
     $warning ? theme.colors.warning : theme.colors.primary};
+
+  @media (max-width: 520px) {
+    flex-wrap: wrap;
+    padding: 16px;
+
+    > button { margin-left: auto; }
+  }
 `;
 const BannerCopy = styled.span`
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
   small {
@@ -168,11 +200,16 @@ const BannerCopy = styled.span`
   }
 `;
 const Table = styled.div`
-  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
   border-radius: ${({ theme }) => theme.radii.sm}px;
 `;
 const TableHeader = styled.div`
   display: grid;
+  min-width: 760px;
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
@@ -188,6 +225,7 @@ const TableHeader = styled.div`
 `;
 const TableRow = styled.div<{ $selected?: boolean }>`
   display: grid;
+  min-width: 760px;
   min-height: 66px;
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
   align-items: center;
@@ -237,6 +275,11 @@ const Metric = styled.div`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) {
+    min-height: 280px;
+    padding: 16px;
+  }
 `;
 const BigValue = styled.strong`
   color: ${({ theme }) => theme.colors.text};
@@ -294,6 +337,13 @@ const VariableRow = styled.div`
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 520px) {
+    flex-wrap: wrap;
+    padding: 12px 0;
+
+    > div:last-child { width: 100%; }
+  }
 `;
 const VariableText = styled.div`
   display: flex;
@@ -351,6 +401,11 @@ const Code = styled.pre`
       ${({ theme }) => theme.typography.code.lineHeight}px
       ${({ theme }) => theme.typography.code.family},
     monospace;
+
+  @media (max-width: 600px) {
+    min-height: 140px;
+    padding: 12px;
+  }
 `;
 const Alert = styled.p`
   margin: 0;
@@ -1290,6 +1345,10 @@ const PublicHeader = styled.header`
   height: 74px;
   padding: 16px 32px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 600px) { padding: 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
+
   button {
     border: 0;
     background: none;
@@ -1309,6 +1368,11 @@ const StoppedCard = styled.section`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) {
+    margin: 40px auto;
+    padding: 16px;
+  }
 `;
 const StoppedTitle = styled.h1`
   display: flex;
@@ -1322,4 +1386,10 @@ const StoppedTitle = styled.h1`
       ${({ theme }) => theme.typography.h2.lineHeight}px
       ${({ theme }) => theme.typography.h2.family},
     sans-serif;
+
+  @media (max-width: 420px) {
+    align-items: flex-start;
+    font-size: ${({ theme }) => theme.typography.title.size}px;
+    line-height: ${({ theme }) => theme.typography.title.lineHeight}px;
+  }
 `;
