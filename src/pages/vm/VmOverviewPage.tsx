@@ -15,6 +15,12 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 760px) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
 `;
 
 const Title = styled.h1`
@@ -35,11 +41,11 @@ const PowerActions = styled.div`
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+
+  @media (max-width: 760px) { justify-content: flex-start; }
 `;
 
-const TwoColumn = styled(Grid2)`
-  grid-template-columns: 1fr 1fr;
-`;
+const TwoColumn = styled(Grid2)``;
 
 const KVPairs = styled.div`
   display: flex;

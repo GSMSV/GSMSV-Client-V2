@@ -37,6 +37,9 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 760px) { gap: 20px; padding: 24px; }
+  @media (max-width: 480px) { padding: 16px; }
 `;
 
 const Breadcrumb = styled(Link)`
@@ -69,6 +72,14 @@ const Tabs = styled.nav`
   flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 600px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
 `;
 
 const Tab = styled(Link)<{ $active?: boolean }>`
@@ -83,6 +94,8 @@ const Tab = styled(Link)<{ $active?: boolean }>`
   text-decoration: none;
 
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+
+  @media (max-width: 600px) { flex: 0 0 auto; }
 `;
 
 const Banner = styled.div`
@@ -114,6 +127,8 @@ const Surface = styled.section`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const ErrorPanel = styled(ErrorCard)<{ $height: number }>`
@@ -232,6 +247,8 @@ const FirewallFoot = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding-top: 4px;
+
+  @media (max-width: 600px) { align-items: flex-start; flex-wrap: wrap; }
 `;
 
 const Muted = styled.span`
