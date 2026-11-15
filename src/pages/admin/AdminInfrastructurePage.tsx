@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, type InfraNode, type NodeVm } from '../../entities/infra-node';
@@ -8,6 +8,7 @@ import { AdminAllVmsContent } from './AdminAllVmsContent';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../shared/ui/controls/useResponsiveNavigation';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon, type OcticonName } from '../../shared/ui/icons';
 import { NotificationPanel } from '../../widgets/notification-panel';
@@ -33,7 +34,7 @@ const Sidebar = styled.aside<{ $open: boolean }>`
   padding: 28px ${({ theme }) => theme.space[16]}px ${({ theme }) => theme.space[16]}px;
   background: ${({ theme }) => theme.colors.sidebar};
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 80;
     inset: 0 auto 0 0;
@@ -132,7 +133,7 @@ const Header = styled.header`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
   @media (max-width: 1200px) { padding-inline: 24px; }
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     display: grid;
     grid-template-areas: 'menu label identity' 'search search search';
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -161,7 +162,7 @@ const HeaderStart = styled.div`
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
 
-  @media (max-width: 960px) { display: contents; }
+  @media ${mobileNavigationMedia} { display: contents; }
 `;
 
 const ConsoleLabel = styled.span`
@@ -172,7 +173,7 @@ const ConsoleLabel = styled.span`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
 
-  @media (max-width: 960px) { grid-area: label; width: auto; flex: 0 1 auto; }
+  @media ${mobileNavigationMedia} { grid-area: label; width: auto; flex: 0 1 auto; }
 `;
 
 const SearchAction = styled(Button)`
@@ -182,7 +183,7 @@ const SearchAction = styled(Button)`
   color: ${({ theme }) => theme.colors.text};
 
   @media (max-width: 1200px) { width: auto; min-width: 0; flex: 1 1 240px; }
-  @media (max-width: 960px) { grid-area: search; width: 100%; min-height: 40px; }
+  @media ${mobileNavigationMedia} { grid-area: search; width: 100%; min-height: 40px; }
 `;
 
 const HeaderActions = styled.div`
@@ -191,7 +192,7 @@ const HeaderActions = styled.div`
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
 
-  @media (max-width: 960px) { grid-area: identity; gap: 8px; }
+  @media ${mobileNavigationMedia} { grid-area: identity; gap: 8px; }
 `;
 
 const MenuToggle = styled.button`
@@ -207,7 +208,7 @@ const MenuToggle = styled.button`
   color: ${({ theme }) => theme.colors.text};
   cursor: pointer;
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
-  @media (max-width: 960px) { display: inline-flex; grid-area: menu; }
+  @media ${mobileNavigationMedia} { display: inline-flex; grid-area: menu; }
 `;
 
 const MenuGlyph = styled.span`
@@ -220,7 +221,7 @@ const MenuGlyph = styled.span`
 
 const NavigationOverlay = styled.button`
   display: none;
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 70;
     inset: 0;
@@ -270,6 +271,12 @@ const Heading = styled.div`
   justify-content: space-between;
   gap: 24px;
   width: 100%;
+
+  @media (max-width: 720px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 const TitleGroup = styled.div`
@@ -293,7 +300,7 @@ const Subtitle = styled.p`
 
 const Summary = styled.section`
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 152px), 1fr));
   gap: 16px;
   width: 100%;
 `;
@@ -352,6 +359,10 @@ const NodeGrid = styled.div`
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 224px), 1fr));
+  }
 `;
 
 const NodeCard = styled.article`
@@ -417,6 +428,7 @@ const NodeVmRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
+  overflow-wrap: anywhere;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
@@ -433,7 +445,7 @@ const CardFooter = styled.div`
 
 const TwoColumns = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 16px;
   width: 100%;
 `;
@@ -559,13 +571,7 @@ function summarizeMemory(node: InfraNode) {
 export default function AdminInfrastructurePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const navigationRef = useRef<HTMLElement>(null);
-  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
-  const closeNavigation = () => {
-    setNavigationOpen(false);
-    window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
-  };
+  const navigation = useResponsiveNavigation();
   const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
   const [demoSnapshot, setDemoSnapshot] = useState<DemoInfraSnapshot | null>(null);
@@ -578,18 +584,6 @@ export default function AdminInfrastructurePage() {
     setNotificationsOpen(false);
     window.requestAnimationFrame(() => document.getElementById('admin-notifications-trigger')?.focus());
   }, []);
-
-  useEffect(() => {
-    if (!navigationOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setNavigationOpen(false);
-      window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    window.requestAnimationFrame(() => navigationRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus());
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [navigationOpen]);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setState(current => ({ kind: 'loading', nodes: current.nodes, resources: current.resources, checkedAt: current.checkedAt }));
@@ -720,7 +714,7 @@ export default function AdminInfrastructurePage() {
 
   return (
     <Layout>
-      <Sidebar id="admin-navigation" ref={navigationRef} $open={navigationOpen} aria-label="관리자 메뉴">
+      <Sidebar id="admin-navigation" ref={navigation.sidebarRef} $open={navigation.open} onKeyDown={navigation.onKeyDown} aria-label="관리자 메뉴">
         <Brand><Logo src="/assets/gsmsv-logo.svg" alt="" /><BrandText>GSM SV</BrandText></Brand>
         <WorkspaceLabel>관리자 워크스페이스</WorkspaceLabel>
         <Navigation aria-label="관리자 메뉴">
@@ -742,7 +736,7 @@ export default function AdminInfrastructurePage() {
                 disabled={!href}
                 aria-current={active ? 'page' : undefined}
                 title={!href ? '해당 화면은 아직 연결되지 않았습니다' : undefined}
-                onClick={href ? () => { closeNavigation(); void navigate(href); } : undefined}
+                onClick={href ? () => { navigation.close(); void navigate(href); } : undefined}
               >{icon(item.icon)}{item.label}</NavigationItem>
             );
           })}
@@ -752,21 +746,21 @@ export default function AdminInfrastructurePage() {
           <NavigationItem type="button" disabled>{icon('gear')}설정</NavigationItem>
         </Navigation>
         <SidebarFooter>
-          <NavigationItem type="button" onClick={() => navigate('/status')}>{icon('pulse')}서비스 상태</NavigationItem>
+          <NavigationItem type="button" onClick={() => { navigation.close(); void navigate('/status'); }}>{icon('pulse')}서비스 상태</NavigationItem>
         </SidebarFooter>
       </Sidebar>
-      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeNavigation} />}
+      {navigation.open && <NavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
 
-      <MainColumn>
+      <MainColumn inert={navigation.open}>
         <Header>
           <HeaderContent>
             <MenuToggle
-              ref={navigationTriggerRef}
+              ref={navigation.triggerRef}
               type="button"
-              aria-label={navigationOpen ? '메뉴 닫기' : '메뉴 열기'}
-              aria-expanded={navigationOpen}
+              aria-label={navigation.open ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={navigation.open}
               aria-controls="admin-navigation"
-              onClick={() => setNavigationOpen(open => !open)}
+              onClick={navigation.toggle}
             ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></MenuToggle>
             <HeaderStart>
               <ConsoleLabel>관리자 콘솔</ConsoleLabel>

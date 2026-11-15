@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { listNotifications } from '../../../entities/notification';
 import { Button } from '../../../shared/ui/controls';
+import { mobileNavigationMedia } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { Octicon } from '../../../shared/ui/icons';
 import { ResourceSearchPanel } from '../../../features/global-resource-search';
 import { NotificationPanel } from '../../notification-panel';
@@ -22,7 +23,7 @@ const Header = styled.header<{ $showBottomBorder: boolean }>`
     padding-inline: 24px;
   }
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     min-height: 0;
     flex-basis: auto;
     padding: 12px 16px;
@@ -46,7 +47,7 @@ const HeaderContent = styled.div`
     gap: 12px;
   }
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     display: grid;
     grid-template-areas: 'menu scope actions' 'search search search';
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -62,7 +63,7 @@ const HeaderStart = styled.div`
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     display: contents;
   }
 `;
@@ -82,7 +83,7 @@ const MenuToggle = styled.button`
 
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     display: inline-flex;
     grid-area: menu;
   }
@@ -107,7 +108,7 @@ const ScopeSelector = styled.div`
   position: relative;
   flex: 0 0 220px;
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     grid-area: scope;
     min-width: 0;
     width: 100%;
@@ -134,7 +135,7 @@ const ScopeTrigger = styled.button<{ $disabled: boolean }>`
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
   opacity: ${({ $disabled }) => ($disabled ? 0.65 : 1)};
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     width: 100%;
     min-width: 0;
   }
@@ -178,8 +179,8 @@ const ScopeMenu = styled.div`
   background: ${({ theme }) => theme.colors.surface};
   box-shadow: 0 8px 24px #0005;
 
-  @media (max-width: 960px) {
-    width: min(320px, calc(100vw - 48px));
+  @media ${mobileNavigationMedia} {
+    width: min(320px, calc(100vw - 80px));
   }
 `;
 
@@ -222,7 +223,7 @@ const SearchAction = styled(Button)`
     flex: 1 1 240px;
   }
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     grid-area: search;
     width: 100%;
     min-height: 40px;
@@ -246,7 +247,7 @@ const RightActions = styled.div`
     gap: 8px;
   }
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     grid-area: actions;
   }
 

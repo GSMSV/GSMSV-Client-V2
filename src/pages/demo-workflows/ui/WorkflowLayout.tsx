@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Navigate } from 'react-router';
 import styled from 'styled-components';
 import { isDemoMode } from '../../../shared/demo';
 import type { StudentNavigationKey } from '../../../widgets/student-shell';
 import { StudentShell } from '../../../widgets/student-shell';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { Octicon } from '../../../shared/ui/icons';
 import { getSessionUser } from '../../../entities/session';
 import { listDemoTeams } from '../../../entities/team/demo';
@@ -29,7 +30,7 @@ const AdminSidebar = styled.aside<{ $open: boolean }>`
   padding: 28px 16px 16px;
   background: ${({ theme }) => theme.colors.sidebar};
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 80;
     inset: 0 auto 0 0;
@@ -105,7 +106,7 @@ const AdminHeader = styled.header`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
   @media (max-width: 1200px) { padding-inline: 24px; }
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     display: grid;
     grid-template-areas: 'menu label identity' 'search search search';
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -118,7 +119,7 @@ const AdminHeader = styled.header`
 const AdminHeaderLabel = styled.span`
   color: ${({ theme }) => theme.colors.muted};
   font: 500 12px/18px ${({ theme }) => theme.typography.label.family}, sans-serif;
-  @media (max-width: 960px) { grid-area: label; }
+  @media ${mobileNavigationMedia} { grid-area: label; }
 `;
 const AdminSearch = styled.div`
   display: flex;
@@ -131,12 +132,12 @@ const AdminSearch = styled.div`
   background: ${({ theme }) => theme.colors.field};
   color: ${({ theme }) => theme.colors.muted};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
-  @media (max-width: 960px) { grid-area: search; width: 100%; min-width: 0; }
+  @media ${mobileNavigationMedia} { grid-area: search; width: 100%; min-width: 0; }
 `;
 const AdminIdentity = styled.span`
   color: ${({ theme }) => theme.colors.text};
   font: 400 14px/22px ${({ theme }) => theme.typography.body.family}, sans-serif;
-  @media (max-width: 960px) { grid-area: identity; }
+  @media ${mobileNavigationMedia} { grid-area: identity; }
 `;
 const AdminMenuToggle = styled.button`
   display: none;
@@ -151,7 +152,7 @@ const AdminMenuToggle = styled.button`
   color: ${({ theme }) => theme.colors.text};
   cursor: pointer;
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
-  @media (max-width: 960px) { display: inline-flex; grid-area: menu; }
+  @media ${mobileNavigationMedia} { display: inline-flex; grid-area: menu; }
 `;
 const MenuGlyph = styled.span`
   display: flex;
@@ -162,7 +163,7 @@ const MenuGlyph = styled.span`
 `;
 const AdminNavigationOverlay = styled.button`
   display: none;
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 70;
     inset: 0;
@@ -178,7 +179,7 @@ const AdminHeaderActions = styled.div`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
-  @media (max-width: 960px) { grid-area: identity; gap: 4px; }
+  @media ${mobileNavigationMedia} { grid-area: identity; gap: 4px; }
   @media (max-width: 480px) { gap: 0; }
 `;
 const AdminContent = styled.main`
@@ -361,25 +362,7 @@ export const Stat = styled.div`
 
 export function WorkflowLayout({ children, admin = false, activeAdminItem = '승인', activeStudentItem = 'none', scopeLabel = '내 Resources', teamScopeId }: { children: ReactNode; admin?: boolean; activeAdminItem?: string; activeStudentItem?: StudentNavigationKey; scopeLabel?: string; teamScopeId?: string }) {
   const navigate = useNavigate();
-  const [adminNavigationOpen, setAdminNavigationOpen] = useState(false);
-  const adminSidebarRef = useRef<HTMLElement>(null);
-  const adminNavigationTriggerRef = useRef<HTMLButtonElement>(null);
-  const closeAdminNavigation = () => {
-    setAdminNavigationOpen(false);
-    window.requestAnimationFrame(() => adminNavigationTriggerRef.current?.focus());
-  };
-
-  useEffect(() => {
-    if (!admin || !adminNavigationOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setAdminNavigationOpen(false);
-      window.requestAnimationFrame(() => adminNavigationTriggerRef.current?.focus());
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    window.requestAnimationFrame(() => adminSidebarRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus());
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [admin, adminNavigationOpen]);
+  const navigation = useResponsiveNavigation();
 
   if (admin) {
     const primary = [
@@ -396,26 +379,26 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
     ] as const;
     return (
       <AdminLayout>
-        <AdminSidebar id="workflow-admin-navigation" ref={adminSidebarRef} $open={adminNavigationOpen} aria-label="관리자 메뉴">
+        <AdminSidebar id="workflow-admin-navigation" ref={navigation.sidebarRef} $open={navigation.open} onKeyDown={navigation.onKeyDown} aria-label="관리자 메뉴">
           <Brand><BrandMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Brand>
           <Workspace>관리자 워크스페이스</Workspace>
           <AdminNav>
-            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { closeAdminNavigation(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            {primary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={label === activeAdminItem} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
             <AdminDivider />
-            {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { closeAdminNavigation(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
+            {secondary.map(([label, icon, href]) => <AdminNavButton key={href} type="button" $active={false} onClick={() => { navigation.close(); void navigate(href); }}><Octicon name={icon} size={16} />{label}</AdminNavButton>)}
           </AdminNav>
           <div style={{ marginTop: 'auto', color: '#a8a2af', fontSize: 12 }}><Octicon name="pulse" size={16} /> 서비스 상태</div>
         </AdminSidebar>
-        {adminNavigationOpen && <AdminNavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeAdminNavigation} />}
-        <AdminMain>
+        {navigation.open && <AdminNavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
+        <AdminMain inert={navigation.open}>
           <AdminHeader>
             <AdminMenuToggle
-              ref={adminNavigationTriggerRef}
+              ref={navigation.triggerRef}
               type="button"
-              aria-label={adminNavigationOpen ? '메뉴 닫기' : '메뉴 열기'}
-              aria-expanded={adminNavigationOpen}
+              aria-label={navigation.open ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={navigation.open}
               aria-controls="workflow-admin-navigation"
-              onClick={() => setAdminNavigationOpen(open => !open)}
+              onClick={navigation.toggle}
             ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></AdminMenuToggle>
             <AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel>
             <AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch>

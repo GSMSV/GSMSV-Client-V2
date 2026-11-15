@@ -1,6 +1,7 @@
-import type { RefObject } from 'react';
+import type { KeyboardEventHandler, RefObject } from 'react';
 import styled from 'styled-components';
 import { Button, NavigationItem } from '../../../shared/ui/controls';
+import { mobileNavigationMedia } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { Octicon } from '../../../shared/ui/icons';
 
 export type StudentNavigationKey =
@@ -28,7 +29,7 @@ const Sidebar = styled.aside<{ $open: boolean }>`
   padding: 28px ${({ theme }) => theme.space[16]}px ${({ theme }) => theme.space[16]}px;
   background: ${({ theme }) => theme.colors.sidebar};
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 80;
     inset: 0 auto 0 0;
@@ -102,6 +103,7 @@ const SidebarActions = styled.div<{ $atBottom: boolean }>`
 interface StudentSidebarProps {
   sidebarRef?: RefObject<HTMLElement | null>;
   open?: boolean;
+  onKeyDown?: KeyboardEventHandler<HTMLElement>;
   activeItem: StudentNavigationKey;
   onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => void;
   onCreateTeam: () => void;
@@ -125,9 +127,9 @@ const secondaryNavigation = [
   { key: 'settings', label: '설정', icon: 'gear' },
 ] as const;
 
-export function StudentSidebar({ sidebarRef, open = false, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
+export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
   return (
-    <Sidebar id="student-navigation" ref={sidebarRef} $open={open} aria-label="학생 메뉴">
+    <Sidebar id="student-navigation" ref={sidebarRef} $open={open} onKeyDown={onKeyDown} aria-label="학생 메뉴">
       <Brand>
         <Logo src="/assets/gsmsv-logo.svg" alt="" />
         <BrandName>GSM SV</BrandName>

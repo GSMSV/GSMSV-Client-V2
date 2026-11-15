@@ -51,7 +51,7 @@ const BrandMark = styled.img`
 const Content = styled.section`
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: min(50%, calc(100% - 704px));
   display: flex;
   width: 480px;
   flex-direction: column;

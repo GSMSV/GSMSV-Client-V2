@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
 import { StudentTopbar } from './StudentTopbar';
 import { getDemoProfile } from '../../../entities/profile';
 import { isDemoMode } from '../../../shared/demo';
+import { mobileNavigationMedia, useResponsiveNavigation } from '../../../shared/ui/controls/useResponsiveNavigation';
 import { UnsavedChangesDialog } from '../../../shared/ui/feedback';
 
 const Layout = styled.div`
@@ -30,7 +31,7 @@ const PageContent = styled.main`
 const NavigationOverlay = styled.button`
   display: none;
 
-  @media (max-width: 960px) {
+  @media ${mobileNavigationMedia} {
     position: fixed;
     z-index: 70;
     inset: 0;
@@ -95,26 +96,7 @@ export function StudentShell({
   const navigate = useNavigate();
   const [logoutPending, setLogoutPending] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const sidebarRef = useRef<HTMLElement>(null);
-  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!navigationOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setNavigationOpen(false);
-      window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    window.requestAnimationFrame(() => sidebarRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus());
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [navigationOpen]);
-
-  const closeNavigation = () => {
-    setNavigationOpen(false);
-    window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
-  };
+  const navigation = useResponsiveNavigation();
 
   const requestNavigation = (action: () => void) => {
     if (logoutPending) return;
@@ -127,7 +109,7 @@ export function StudentShell({
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
-      closeNavigation();
+      navigation.close();
       if (item === 'serverless') {
         void navigate('/serverless');
         return;
@@ -148,20 +130,21 @@ export function StudentShell({
   return (
     <Layout>
       <StudentSidebar
-        sidebarRef={sidebarRef}
-        open={navigationOpen}
+        sidebarRef={navigation.sidebarRef}
+        open={navigation.open}
+        onKeyDown={navigation.onKeyDown}
         activeItem={activeItem}
         onNavigate={handleNavigate}
-        onCreateTeam={() => requestNavigation(() => { closeNavigation(); onCreateTeam(); })}
-        onOpenStatus={() => requestNavigation(() => { closeNavigation(); onOpenStatus(); })}
+        onCreateTeam={() => requestNavigation(() => { navigation.close(); onCreateTeam(); })}
+        onOpenStatus={() => requestNavigation(() => { navigation.close(); onOpenStatus(); })}
         disabledItems={disabledNavigationItems}
         actionsAtBottom={sidebarActionsAtBottom}
       />
-      <MainColumn>
+      <MainColumn inert={navigation.open}>
         <StudentTopbar
-          navigationOpen={navigationOpen}
-          navigationTriggerRef={navigationTriggerRef}
-          onToggleNavigation={() => setNavigationOpen(open => !open)}
+          navigationOpen={navigation.open}
+          navigationTriggerRef={navigation.triggerRef}
+          onToggleNavigation={navigation.toggle}
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
@@ -180,7 +163,7 @@ export function StudentShell({
         />
         <PageContent>{children}</PageContent>
       </MainColumn>
-      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={closeNavigation} />}
+      {navigation.open && <NavigationOverlay type="button" tabIndex={-1} aria-label="메뉴 닫기" onClick={navigation.close} />}
       {pendingNavigation && (
         <UnsavedChangesDialog
           onLeave={() => {
