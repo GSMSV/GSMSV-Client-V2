@@ -24,6 +24,12 @@ const Header = styled.header`
   gap: 16px;
   padding: 16px 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 12px 16px;
+  }
 `;
 
 const Brand = styled.a`
