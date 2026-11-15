@@ -262,7 +262,7 @@ export default function ServerlessListPage() {
 
   const loadQuota = useCallback(async (signal: AbortSignal) => {
     setQuota(current => ({ ...current, loading: true, error: false }));
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       try {
         const demo = await import('../../entities/serverless');
         await demo.loadDemoServerlessState();

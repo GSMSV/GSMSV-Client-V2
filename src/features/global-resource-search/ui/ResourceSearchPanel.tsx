@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Button } from '../../../shared/ui/controls';
 import { LoadingCard } from '../../../shared/ui/feedback';
 import { Octicon } from '../../../shared/ui/icons';
+import { isDemoMode } from '../../../shared/demo';
 import { loadResourceSearch, type SearchableResource } from '../api/loadResourceSearch';
 
 const Panel = styled.aside<{ $top: number; $right: number }>`
@@ -242,7 +243,7 @@ export function ResourceSearchPanel({ open, onClose, onOpenResource, top = 66, r
       {isEmpty ? (
         <>
           <Description>{query.trim() ? `‘${query.trim()}’와 일치하는 Resource를 찾지 못했습니다.` : '검색할 수 있는 Resource가 없습니다.'}</Description>
-          <EmptyHint>· 내 Resources와 속한 팀의 Database와 앱을 모두 찾아봤습니다. 이름이나 GRN을 다시 확인해 주세요.</EmptyHint>
+          <EmptyHint>· {isDemoMode() ? '내 Resources와 속한 팀을 모두 찾아봤습니다.' : '내 Resources와 속한 팀의 Database와 앱을 모두 찾아봤습니다.'} 이름이나 GRN을 다시 확인해 주세요.</EmptyHint>
           <SearchField>
             검색어
             <SearchInput ref={inputRef} value={query} onChange={event => setQuery(event.target.value)} aria-label="검색어" />
@@ -251,7 +252,7 @@ export function ResourceSearchPanel({ open, onClose, onOpenResource, top = 66, r
         </>
       ) : (
         <>
-          <Description>볼 수 있는 Database와 앱을 이름이나 GRN으로 찾습니다.</Description>
+          <Description>{isDemoMode() ? '볼 수 있는 VM · Database · 함수 · 앱을 이름이나 GRN으로 찾습니다.' : '볼 수 있는 Database와 앱을 이름이나 GRN으로 찾습니다.'}</Description>
           <SearchField>
             검색어
             <SearchInput
@@ -295,15 +296,23 @@ export function ResourceSearchPanel({ open, onClose, onOpenResource, top = 66, r
   );
 }
 
+const resourceTypes = {
+  app: { icon: 'upload', label: '앱' },
+  database: { icon: 'database', label: 'Database' },
+  vm: { icon: 'server', label: 'VM' },
+  function: { icon: 'zap', label: '함수' },
+} as const;
+
 function SearchResult({ resource, onOpen }: { resource: SearchableResource; onOpen: (path: string) => void }) {
+  const { icon, label } = resourceTypes[resource.kind];
   return (
     <Result>
-      <ResourceIcon aria-hidden="true"><Octicon name={resource.kind === 'database' ? 'database' : 'upload'} size={16} /></ResourceIcon>
+      <ResourceIcon aria-hidden="true"><Octicon name={icon} size={16} /></ResourceIcon>
       <ResourceCopy>
         <ResourceName title={resource.name}>{resource.name}</ResourceName>
         <ResourceStatus>{resource.status}</ResourceStatus>
       </ResourceCopy>
-      <TypeBadge>{resource.kind === 'database' ? 'Database' : '앱'}</TypeBadge>
+      <TypeBadge>{label}</TypeBadge>
       <ResultButton variant="ghost" onClick={() => onOpen(resource.path)}>열기</ResultButton>
     </Result>
   );

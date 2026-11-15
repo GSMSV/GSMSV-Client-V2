@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useBlocker, useNavigate } from 'react-router';
+import { useBlocker, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { getDemoProfile, signOutDemoProfile, updateDemoProfile, type DemoProfile } from '../../entities/profile';
 import { clearSessionUser, getSessionUser } from '../../entities/session';
@@ -135,6 +135,12 @@ const roleLabels: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps
 
 export default function DemoAccountSettingsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedReturn: unknown = (location.state as { returnTo?: unknown } | null)?.returnTo;
+  const appSourceReturn = typeof requestedReturn === 'string'
+    && /^(?:\/apps|\/teams\/[a-z0-9_-]+\/apps)\/new$/i.test(requestedReturn)
+    ? requestedReturn
+    : undefined;
   const [profile, setProfile] = useState(getDemoProfile);
   const [teams] = useState(listDemoTeams);
   const [notificationUnsaved, setNotificationUnsaved] = useState(false);
@@ -242,7 +248,9 @@ export default function DemoAccountSettingsPage() {
         <NotificationSettingsPanel onUnsavedInputChange={setNotificationUnsaved} demoDiscordConnected={profile.discordConnected} />
         <Panel aria-labelledby="linked-accounts-title">
           <PanelTitle id="linked-accounts-title">연결된 계정·기기</PanelTitle>
-          <DemoAccountConnections profile={profile} onSave={save} onLogout={goToLogin} />
+          <DemoAccountConnections profile={profile} onSave={save} onLogout={goToLogin}
+            onGitHubConnected={appSourceReturn ? () => void navigate(appSourceReturn, { replace: true }) : undefined}
+          />
         </Panel>
         <DangerPanel aria-labelledby="account-danger-title">
           <ActionRow>

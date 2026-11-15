@@ -39,13 +39,15 @@ type ConnectionDialog =
   | 'discord-connect' | 'discord-success' | 'discord-error' | 'discord-unlink'
   | 'cli-devices' | 'cli-logout';
 
-export function DemoAccountConnections({ profile, onSave, onLogout }: {
+export function DemoAccountConnections({ profile, onSave, onLogout, onGitHubConnected }: {
   profile: DemoProfile;
   onSave: (changes: Partial<DemoProfile>) => boolean;
   onLogout: () => void;
+  onGitHubConnected?: () => void;
 }) {
-  const [params] = useSearchParams();
-  const [dialog, setDialog] = useState<ConnectionDialog | null>(null);
+  const [params, setParams] = useSearchParams();
+  const openCliFromLink = params.get('tab') === 'cli';
+  const [dialog, setDialog] = useState<ConnectionDialog | null>(() => openCliFromLink ? 'cli-devices' : null);
   const [cliReturn, setCliReturn] = useState<'cli-devices' | null>(null);
   const [tryOtherGithub, setTryOtherGithub] = useState(false);
   const [tryDiscordAgain, setTryDiscordAgain] = useState(false);
@@ -56,6 +58,11 @@ export function DemoAccountConnections({ profile, onSave, onLogout }: {
   function show(next: ConnectionDialog | null) {
     setSaveFailed(false);
     setDialog(next);
+    if (!next && openCliFromLink) {
+      const remaining = new URLSearchParams(params);
+      remaining.delete('tab');
+      setParams(remaining, { replace: true });
+    }
   }
 
   function save(changes: Partial<DemoProfile>, next: ConnectionDialog | null) {
@@ -101,7 +108,7 @@ export function DemoAccountConnections({ profile, onSave, onLogout }: {
     case 'github-success':
       modal = <AccountDialog title="GitHub를 연결했습니다" icon="check-circle"
         description={`· ${profile.github}\n· 이 계정의 push로 앱을 자동 배포할 수 있습니다.`}
-        onDismiss={dismiss} actions={<Button onClick={dismiss}>확인</Button>} />;
+        onDismiss={dismiss} actions={<Button onClick={onGitHubConnected ?? dismiss}>확인</Button>} />;
       break;
     case 'github-error':
       modal = <AccountDialog title="GitHub를 연결하지 못했습니다" icon="alert"

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { getApiHealth, type ApiHealth } from '../../features/status/get-api-health';
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo/model/demoMode';
 import { Button } from '../../shared/ui/controls';
+import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 
 const AUTO_REFRESH_INTERVAL_MS = 60_000;
@@ -250,7 +252,13 @@ type HistorySegmentState = 'normal' | 'slow' | 'incident' | 'maintenance' | 'unk
 interface ComponentHistory { name: string; status: 'normal' | 'slow'; uptime: string; exceptions: Record<number, HistorySegmentState>; }
 interface Incident { title: string; description: string; date: string; icon: 'alert' | 'check-circle' | 'calendar'; ongoing?: boolean; }
 interface StatusNotice { title: string; description: string; icon: 'alert' | 'calendar'; tone: 'warning' | 'surface'; }
-interface StatusDemoData { componentHistory: readonly ComponentHistory[]; incidents: readonly Incident[]; notices: readonly StatusNotice[]; historyDescription: string; }
+interface StatusDemoData {
+  componentHistory: readonly ComponentHistory[];
+  incidents: readonly Incident[];
+  notices: readonly StatusNotice[];
+  historyDescription: string;
+  statusScenarios: typeof import('./statusDemoData').statusScenarios;
+}
 
 const componentNames = ['로그인', 'VM 생성', 'VM Network·접속', 'Serverless'];
 
@@ -277,17 +285,23 @@ function isUnhealthyError(error: unknown) {
 }
 
 export default function PublicStatusPage() {
+  const demoMode = isDemoMode();
+  const [searchParams] = useSearchParams();
+  const requestedScenario = searchParams.get('status');
+  const scenario = requestedScenario === 'network-outage' || requestedScenario === 'maintenance' || requestedScenario === 'normal'
+    ? requestedScenario
+    : undefined;
   const [health, setHealth] = useState<HealthState>(initialState);
   const [demoData, setDemoData] = useState<StatusDemoData | null>(null);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !isDemoMode()) return;
+    if (!demoMode) return;
     let active = true;
     void import('./statusDemoData').then(data => {
       if (active) setDemoData(data);
     });
     return () => { active = false; };
-  }, []);
+  }, [demoMode]);
 
   const refresh = useCallback(async (signal: AbortSignal) => {
     setHealth(current => ({ ...current, loading: true, error: false }));
@@ -305,6 +319,7 @@ export default function PublicStatusPage() {
   }, []);
 
   useEffect(() => {
+    if (demoMode) return;
     const controller = new AbortController();
     let requestInFlight = false;
     const refreshIfIdle = async () => {
@@ -323,11 +338,11 @@ export default function PublicStatusPage() {
       window.clearInterval(interval);
       controller.abort();
     };
-  }, [refresh]);
+  }, [demoMode, refresh]);
 
-  const state = health.loading ? 'unknown' : health.value?.status === 'UP' ? 'up' : health.value?.status === 'DOWN' ? 'down' : 'unknown';
+  const state = demoMode && demoData ? 'up' : health.loading ? 'unknown' : health.value?.status === 'UP' ? 'up' : health.value?.status === 'DOWN' ? 'down' : 'unknown';
   const stateLabel = state === 'up' ? '정상' : state === 'down' ? '응답하지 않음' : health.error ? '확인 실패' : '확인 중';
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoScenario = demoMode && scenario ? demoData?.statusScenarios[scenario] : undefined;
   const components = demoMode && demoData
     ? demoData.componentHistory
     : componentNames.map(name => ({ name, status: 'unknown' as const, uptime: '', exceptions: {} }));
@@ -349,11 +364,16 @@ export default function PublicStatusPage() {
           <Heading>
             <Title>GSM SV 서비스 상태</Title>
             <Subtitle>
-              {health.checkedAt ? `${formatCheckedAt(health.checkedAt)} 기준 · 1분마다 갱신됩니다` : 'API 상태를 확인합니다. · 1분마다 갱신됩니다'}
+              {demoMode ? '2026.09.30 14:32 기준 · 운영 상태 예시' : health.checkedAt ? `${formatCheckedAt(health.checkedAt)} 기준 · 1분마다 갱신됩니다` : 'API 상태를 확인합니다. · 1분마다 갱신됩니다'}
             </Subtitle>
           </Heading>
 
-          {demoMode && demoData ? demoData.notices.map(notice => <Notice key={notice.title} $tone={notice.tone}>
+          {demoScenario ? <Banner
+            title={demoScenario.title}
+            description={<>{demoScenario.description}{demoScenario.details.map(detail => <div key={detail}>{detail}</div>)}</>}
+            tone={demoScenario.tone}
+            icon={<Octicon name={demoScenario.icon} size={20} />}
+          /> : demoMode && demoData ? demoData.notices.map(notice => <Notice key={notice.title} $tone={notice.tone}>
             <NoticeIcon $tone={notice.tone} aria-hidden="true"><Octicon name={notice.icon} size={20} /></NoticeIcon>
             <NoticeCopy><NoticeTitle $tone={notice.tone}>{notice.title}</NoticeTitle><NoticeBody>{notice.description}</NoticeBody></NoticeCopy>
           </Notice>) : <Notice $tone="surface">
@@ -365,15 +385,17 @@ export default function PublicStatusPage() {
             <PanelHeading><PanelTitle id="components-title">구성요소 · 지난 90일</PanelTitle></PanelHeading>
             <ComponentRows>
               {components.map(component => {
-                const currentLoginState = component.name === '로그인' ? state : component.status === 'slow' ? 'down' : component.status === 'normal' ? 'up' : 'unknown';
-                const currentLoginLabel = component.name === '로그인' ? stateLabel : component.status === 'slow' ? '성능 저하' : component.status === 'normal' ? '정상' : '확인 불가';
+                const componentStatus = demoScenario && scenario === 'normal' ? 'normal' : component.status;
+                const currentLabel = componentStatus === 'slow' ? '성능 저하' : componentStatus === 'normal' ? '정상' : '확인 불가';
                 const uptime = component.status === 'unknown' ? '확인 불가' : component.uptime;
                 return <ComponentRow key={component.name}>
                   <ComponentHeader>
                     <ComponentName>{component.name}</ComponentName>
                     {component.name === '로그인'
-                      ? <StatusBadge $state={currentLoginState}>{currentLoginLabel}</StatusBadge>
-                      : <UptimeBadge $state={component.status}>{currentLoginLabel}</UptimeBadge>}
+                      ? <StatusBadge $state={state}>{stateLabel}</StatusBadge>
+                      : demoScenario && scenario === 'network-outage' && component.name === 'VM Network·접속'
+                        ? <StatusBadge $state="down">장애</StatusBadge>
+                        : <UptimeBadge $state={componentStatus}>{demoScenario && scenario === 'maintenance' && component.name === 'VM 생성' ? '계획 점검' : currentLabel}</UptimeBadge>}
                   </ComponentHeader>
                   <UptimeTrack role="img" aria-label={`${component.name}, 지난 90일 가용률 ${uptime}`}>
                     {Array.from({ length: 90 }, (_, day) => {

@@ -38,6 +38,7 @@ import type { ServerlessTriggerTab } from './ServerlessTriggersPage';
 import type { ServerlessTestTab } from './ServerlessTestPage';
 import type { ServerlessLogsTab } from './ServerlessLogsPage';
 import { isDemoMode } from '../../shared/demo';
+import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { ServerlessShell } from '../../widgets/serverless-shell';
 
 const CreatePage = lazy(() => import('./ServerlessCreatePage'));
@@ -70,21 +71,38 @@ function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(va
 
 function useServerlessStateRevision(functionId: string | undefined, demoMode: boolean) {
   const [revision, setRevision] = useState(0);
+  const [result, setResult] = useState<{ id: string; error: boolean }>();
+  const [retryCount, setRetryCount] = useState(0);
   useEffect(() => {
     if (!demoMode || !functionId) return;
     let active = true;
     const sync = () => {
       void loadDemoServerlessState().then(() => {
-        if (active) refresh(setRevision);
+        if (!active) return;
+        setResult({ id: functionId, error: false });
+        refresh(setRevision);
       }).catch(() => {
-        if (active) refresh(setRevision);
+        if (active) setResult({ id: functionId, error: true });
       });
     };
     const unsubscribe = subscribeDemoServerlessState(sync);
     sync();
     return () => { active = false; unsubscribe(); };
-  }, [demoMode, functionId]);
-  return [revision, setRevision] as const;
+  }, [demoMode, functionId, retryCount]);
+  return {
+    revision,
+    setRevision,
+    loading: result?.id !== functionId,
+    loadError: result?.id === functionId && Boolean(result?.error),
+    retry: () => {
+      setResult(undefined);
+      setRetryCount(value => value + 1);
+    },
+  };
+}
+
+function ServerlessLoadState({ loadError, retry }: { loadError: boolean; retry: () => void }) {
+  return <ServerlessShell>{loadError ? <ErrorCard onRetry={retry} /> : <LoadingCard height={360} />}</ServerlessShell>;
 }
 
 export function ServerlessCreateRoute() {
@@ -108,10 +126,11 @@ export function ServerlessFunctionRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
+  const { revision, setRevision, loading, loadError, retry } = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
-  void revision;
-  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  if (!demoMode) return <Navigate to="/serverless" replace />;
+  if (loading || loadError) return <ServerlessLoadState loadError={loadError} retry={retry} />;
+  if (!fn) return <Navigate to="/serverless" replace />;
   const enabledTabs: ServerlessFunctionTab[] = ['코드', '버전', 'Trigger', '환경변수', '테스트', 'Logs'];
   const changed = () => refresh(setRevision);
   return (
@@ -149,10 +168,11 @@ export function ServerlessTriggersRoute() {
   const navigate = useNavigate();
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
+  const { setRevision, loading, loadError, retry } = useServerlessStateRevision(functionId, demoMode);
   const fn = getFunction(functionId, demoMode);
-  void revision;
-  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  if (!demoMode) return <Navigate to="/serverless" replace />;
+  if (loading || loadError) return <ServerlessLoadState loadError={loadError} retry={retry} />;
+  if (!fn) return <Navigate to="/serverless" replace />;
   const changed = () => refresh(setRevision);
   const quota = getDemoServerlessQuota();
   const enabledCronTriggers = fn.triggers.filter(trigger => trigger.type === 'Cron' && trigger.enabled);
@@ -210,14 +230,15 @@ export function ServerlessTabRoute() {
   const navigate = useNavigate();
   const { functionId, tab = '' } = useParams<{ functionId: string; tab: string }>();
   const demoMode = isDemoMode();
-  const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
+  const { setRevision, loading, loadError, retry } = useServerlessStateRevision(functionId, demoMode);
   const [page, setPage] = useState(1);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState<'inactive' | 'quota' | 'missing' | 'storage' | null>(null);
   useEffect(() => { setPage(1); setSelectedRunId(null); }, [functionId, tab]);
   const fn = getFunction(functionId, demoMode);
-  void revision;
-  if (!demoMode || !fn) return <Navigate to="/serverless" replace />;
+  if (!demoMode) return <Navigate to="/serverless" replace />;
+  if (loading || loadError) return <ServerlessLoadState loadError={loadError} retry={retry} />;
+  if (!fn) return <Navigate to="/serverless" replace />;
   if (!Object.hasOwn(tabSlugs, tab) || tab === 'triggers') return <Navigate to={tabPath(fn.id, '코드')} replace />;
   const changed = () => refresh(setRevision);
   const selectTab = (nextTab: string) => void navigate(tabPath(fn.id, nextTab));

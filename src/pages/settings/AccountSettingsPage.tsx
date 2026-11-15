@@ -11,9 +11,7 @@ import { Octicon } from '../../shared/ui/icons';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
 
-const DemoAccountSettingsPage = import.meta.env.DEV
-  ? lazy(() => import('./DemoAccountSettingsPage'))
-  : null;
+const DemoAccountSettingsPage = lazy(() => import('./DemoAccountSettingsPage'));
 
 const Content = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border};
@@ -368,7 +366,7 @@ function ProductionAccountSettingsPage() {
 }
 
 export default function AccountSettingsPage() {
-  if (import.meta.env.DEV && isDemoMode() && DemoAccountSettingsPage) {
+  if (isDemoMode()) {
     return <Suspense fallback={null}><DemoAccountSettingsPage /></Suspense>;
   }
   return <ProductionAccountSettingsPage />;

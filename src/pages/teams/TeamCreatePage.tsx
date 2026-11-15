@@ -228,7 +228,7 @@ export default function TeamCreatePage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       void import('../../entities/team/demo').then(({ listDemoTeams }) => {
         if (!cancelled) setTeams(listDemoTeams());
@@ -268,7 +268,7 @@ export default function TeamCreatePage() {
     setSubmitting(true);
     setError(null);
     try {
-      const team = import.meta.env.DEV && isDemoMode()
+      const team = isDemoMode()
         ? await import('../../features/team/create-team/model/createDemoTeamRequest').then(({ createDemoTeamRequest }) => createDemoTeamRequest(normalizedName, purpose))
         : await createTeam(normalizedName);
       navigate(`/teams/${encodeURIComponent(team.id)}`, { replace: true });

@@ -355,6 +355,7 @@ const LoginLink = styled.a`
 
 export default function TeamInvitationAcceptPage() {
   const navigate = useNavigate();
+  const demoMode = isDemoMode();
   const [token] = useState(() => new URLSearchParams(window.location.search).get('token') ?? '');
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -362,12 +363,13 @@ export default function TeamInvitationAcceptPage() {
   const currentUser = getSessionUser();
 
   useLayoutEffect(() => {
+    if (demoMode) return;
     const currentUrl = new URL(window.location.href);
     if (currentUrl.searchParams.has('token')) {
       currentUrl.searchParams.delete('token');
       window.history.replaceState(window.history.state, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
     }
-  }, []);
+  }, [demoMode]);
 
   async function handleAccept() {
     if (!token || pending) return;
@@ -375,7 +377,7 @@ export default function TeamInvitationAcceptPage() {
     setErrorMessage(null);
 
     try {
-      const result = import.meta.env.DEV && isDemoMode()
+      const result = isDemoMode()
         ? await import('../../entities/team/demo').then(({ acceptDemoTeamInvitation }) => acceptDemoTeamInvitation(token))
         : await acceptInvitation(token);
       navigate(`/teams/${encodeURIComponent(result.team.id)}`, { replace: true });
@@ -385,7 +387,7 @@ export default function TeamInvitationAcceptPage() {
         setErrorMessage('학교 계정으로 로그인한 뒤 이 탭으로 돌아와 초대를 다시 수락해 주세요. 초대 정보는 이 탭에만 유지됩니다.');
         return;
       }
-      setErrorMessage(import.meta.env.DEV && isDemoMode() && error instanceof Error && error.message === 'GONE'
+      setErrorMessage(isDemoMode() && error instanceof Error && error.message === 'GONE'
         ? '이 초대는 만료되었거나 이미 사용 또는 취소되었습니다.'
         : getInvitationAcceptanceError(error));
     } finally {
@@ -394,7 +396,7 @@ export default function TeamInvitationAcceptPage() {
   }
 
   async function handleReject() {
-    if (!token || pending || !(import.meta.env.DEV && isDemoMode())) return;
+    if (!token || pending || !isDemoMode()) return;
     setPending(true);
     setErrorMessage(null);
     try {
@@ -488,7 +490,7 @@ export default function TeamInvitationAcceptPage() {
         </AccountCard>
 
         <ContractNotice>
-          {import.meta.env.DEV && isDemoMode()
+          {isDemoMode()
             ? '초대 수락과 거절은 현재 로컬 미리보기에서만 적용됩니다.'
             : '초대 상세 조회와 거절 API가 아직 없습니다. 수락 전에 팀 이름과 초대한 사람을 확인할 수 없으며, 수락은 로그인한 학교 계정으로 요청됩니다.'}
         </ContractNotice>
@@ -497,7 +499,7 @@ export default function TeamInvitationAcceptPage() {
 
         <Actions>
           {loginRequired && <LoginLink href={invitationLoginUrl()} target="_blank" rel="noreferrer">학교 계정으로 로그인</LoginLink>}
-          {import.meta.env.DEV && isDemoMode()
+          {isDemoMode()
             ? <Button variant="ghost" icon={<Octicon name="x" size={16} />} disabled={!hasToken || pending} onClick={handleReject}>거절</Button>
             : <DisabledAction variant="ghost" icon={<Octicon name="x" size={16} />} disabled title="현재 공개 API에 초대 거절 operation이 없습니다.">거절</DisabledAction>}
           <Button

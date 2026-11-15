@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
+import { getDemoInquiries, saveDemoInquiries, type Inquiry } from '../../entities/demo-workflows';
+import { getDemoProfile } from '../../entities/profile';
+import { getSessionUser } from '../../entities/session';
+import { getDemoVmDaysRemaining, getDemoVmState, type DemoVm } from '../../entities/vm';
 import { startDataGsmLogin } from '../../features/auth/start-login/model/startDataGsmLogin';
-import { Button } from '../../shared/ui/controls';
+import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
+import { isDemoMode, readDemoState, writeDemoState } from '../../shared/demo';
+import { Button, TextField, TextareaField } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon, type OcticonName } from '../../shared/ui/icons';
 
 const Screen = styled.div`
@@ -147,6 +154,12 @@ const TimelineCopy = styled.div`
 const FeedbackHead = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 16px;`;
 const FeedbackButtons = styled.div`display: flex; flex-wrap: wrap; gap: 8px;`;
 const FeedbackHint = styled.p`margin: 0; color: ${({ theme }) => theme.colors.muted}; font-size: 12px; line-height: 18px;`;
+const FeedbackDialog = styled(Card)`
+  width: min(480px, calc(100vw - 32px));
+  max-width: 100%;
+  p { margin: 0; }
+  ${FeedbackButtons} { justify-content: flex-end; }
+`;
 const Toc = styled.nav`
   position: sticky; top: 24px; display: flex; flex-direction: column; gap: 12px;
   @media (max-width: 1391px) {
@@ -180,8 +193,34 @@ const sections = [
   { id: 'feedback', label: '도움이 됐습니까?' },
 ];
 
+const articleTitle = 'VM 사용 기간과 연장';
+const articleUrl = '/docs#expiration';
+const inquiryDraftKey = 'docs.inquiryDraft';
+
+function personalVm() {
+  return getDemoVmState().vms.find(vm => vm.owner === 'personal' && vm.status !== 'queued');
+}
+
 export default function PublicDocsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const demoMode = isDemoMode();
+  const session = demoMode ? getSessionUser() : null;
+  const profile = demoMode ? getDemoProfile() : null;
+  const signedIn = Boolean(session && !profile?.signedOut);
+  const resumeInquiry = demoMode && new URLSearchParams(location.search).get('inquiry') === '1';
+  const [vm, setVm] = useState<DemoVm | undefined>(() => signedIn ? personalVm() : undefined);
+  const [extensionMessage, setExtensionMessage] = useState('');
+  const [inquiryOpen, setInquiryOpen] = useState(resumeInquiry);
+  const [inquiryDraft, setInquiryDraft] = useState(() => resumeInquiry ? readDemoState(inquiryDraftKey, '') : '');
+  const [inquiryError, setInquiryError] = useState('');
+  const daysRemaining = vm ? getDemoVmDaysRemaining(vm.expiresAt) : undefined;
+  const canExtend = daysRemaining !== undefined && daysRemaining <= 7 && daysRemaining >= -3;
+  const vmExtension = useDemoVmExtension({
+    onStateChange: state => setVm(state.vms.find(item => item.id === vm?.id)),
+    onExtended: item => setExtensionMessage(`${item.name} 사용 기간을 14일 연장했습니다.`),
+    onError: setExtensionMessage,
+  });
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<'yes' | 'no' | null>(null);
   const [activeSection, setActiveSection] = useState(() => window.location.hash.slice(1) || 'overview');
@@ -200,6 +239,49 @@ export default function PublicDocsPage() {
     items: group.items.filter(item => !query || (item.active && `${group.label} ${item.label}`.toLocaleLowerCase().includes(query))),
   })).filter(group => group.items.length > 0), [query]);
 
+  function signIn(returnTo = `/docs${location.hash}`) {
+    if (!demoMode) { startDataGsmLogin(); return; }
+    void navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+  }
+
+  function dismissInquiry() {
+    setInquiryOpen(false);
+    setInquiryError('');
+    if (resumeInquiry) void navigate('/docs#feedback', { replace: true });
+  }
+
+  function submitInquiry() {
+    const message = inquiryDraft.trim();
+    if (!message || message.length > 500) {
+      setInquiryError('문의 내용은 1~500자로 입력해 주세요.');
+      return;
+    }
+    if (!signedIn || !session) {
+      if (writeDemoState(inquiryDraftKey, message)) signIn('/docs?inquiry=1#feedback');
+      else setInquiryError('문의 초안을 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    const item: Inquiry = {
+      id: `inquiry-${crypto.randomUUID()}`,
+      title: message.length > 48 ? `${message.slice(0, 48)}…` : message,
+      author: profile?.name ?? session.name,
+      studentId: profile ? `${profile.grade}${profile.classNumber}${String(profile.studentNumber).padStart(2, '0')}` : '—',
+      createdAt: new Date().toISOString().slice(0, 16).replaceAll('-', '.').replace('T', ' '),
+      vmName: '',
+      content: message,
+      source: { title: articleTitle, url: articleUrl },
+      reply: '',
+      status: '대기 중',
+      isMine: true,
+    };
+    if (!saveDemoInquiries([item, ...getDemoInquiries()])) {
+      setInquiryError('문의를 저장하지 못했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    writeDemoState(inquiryDraftKey, '');
+    void navigate('/support/inquiries', { replace: true });
+  }
+
   return (
     <Screen>
       <Header>
@@ -210,7 +292,7 @@ export default function PublicDocsPage() {
             <HeaderLink href="/status">서비스 상태</HeaderLink>
           </HeaderNav>
         </HeaderLeft>
-        <Button variant="primary" onClick={startDataGsmLogin} icon={<Octicon name="sign-in" size={16} />}>DataGSM으로 로그인</Button>
+        <Button variant="primary" onClick={() => signedIn ? navigate('/') : signIn()} icon={<Octicon name={signedIn ? 'arrow-right' : 'sign-in'} size={16} />}>{signedIn ? 'GSM SV 열기' : 'DataGSM으로 로그인'}</Button>
       </Header>
       <Layout>
         <Sidebar>
@@ -238,11 +320,23 @@ export default function PublicDocsPage() {
                 <Title>VM 사용 기간과 연장</Title>
                 <Intro>개인 VM과 팀 VM의 첫 사용 기간, 연장 방법, 만료 후 처리를 설명합니다. 2026.09.30 수정</Intro>
               </PageHeading>
-              <LoginNotice>
+              {signedIn ? <LoginNotice>
+                <Octicon name="person" size={16} aria-hidden="true" />
+                <NoticeCopy>
+                  <NoticeTitle>내 VM 사용 기간</NoticeTitle>
+                  <p>{vm ? `· ${vm.name} · 만료 ${vm.expiresAt}` : '사용 기간을 확인할 개인 VM이 없습니다.'}</p>
+                  {canExtend && <p>· 지금 14일 연장할 수 있습니다</p>}
+                  {extensionMessage && <p role="status">{extensionMessage}</p>}
+                </NoticeCopy>
+                {vm && <FeedbackButtons>
+                  <Button variant="secondary" onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>VM 열기</Button>
+                  <Button disabled={!canExtend} onClick={() => void vmExtension.extend(vm.id)}>연장하기</Button>
+                </FeedbackButtons>}
+              </LoginNotice> : <LoginNotice>
                 <Octicon name="person" size={16} aria-hidden="true" />
                 <NoticeCopy><NoticeTitle>로그인하면 내 VM의 만료일을 여기서 바로 볼 수 있습니다</NoticeTitle><p>이 문서는 로그인 없이 볼 수 있습니다. 로그인하면 이 자리에 내 VM의 만료일과 연장 버튼이 나옵니다.</p></NoticeCopy>
-                <Button variant="primary" onClick={startDataGsmLogin} icon={<Octicon name="sign-in" size={16} />}>DataGSM으로 로그인</Button>
-              </LoginNotice>
+                <Button variant="primary" onClick={() => signIn()} icon={<Octicon name="sign-in" size={16} />}>DataGSM으로 로그인</Button>
+              </LoginNotice>}
               <Card id="overview">
                 <CardTitle>사용 기간 한눈에 보기</CardTitle>
                 <TableWrap><Table><thead><tr><th>항목</th><th>개인 VM</th><th>팀 VM</th></tr></thead>
@@ -266,18 +360,39 @@ export default function PublicDocsPage() {
                   <Button variant="secondary" aria-pressed={feedback === 'yes'} onClick={() => setFeedback('yes')} icon={<Octicon name="check" size={16} />}>예</Button>
                   <Button variant="secondary" aria-pressed={feedback === 'no'} onClick={() => {
                     setFeedback('no');
-                    if (!import.meta.env.DEV) return;
-                    const context = new URLSearchParams({ article: 'VM 사용 기간과 연장', articleUrl: '/docs#expiration' });
-                    navigate(`/support/inquiries?demo=1&${context.toString()}`);
+                    if (demoMode) setInquiryOpen(true);
                   }} icon={<Octicon name="x" size={16} />}>아니요</Button>
                 </FeedbackButtons></FeedbackHead>
-                <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : feedback === 'no' ? (import.meta.env.DEV ? '문의 작성으로 이동합니다.' : '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.') : (import.meta.env.DEV ? '「아니요」를 누르면 이 문서와 관련한 문의를 작성할 수 있습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.')}</FeedbackHint>
+                <FeedbackHint aria-live="polite">{feedback === 'yes' ? '도움이 되었다는 응답을 이 화면에 표시했습니다.' : demoMode ? '「아니요」를 누르면 이 문서 링크가 첨부된 문의를 작성할 수 있습니다. 문의는 로그인한 뒤 보낼 수 있습니다.' : feedback === 'no' ? '문의 작성 기능은 아직 제공되지 않습니다. 이 응답은 이 화면에서만 표시되며 전송되지 않았습니다.' : '「아니요」를 눌러 의견을 표시할 수 있습니다. 문의 작성 기능은 아직 제공되지 않습니다.'}</FeedbackHint>
               </Card>
             </MobileArticle>
             <Toc aria-label="이 문서에서"><TocLabel>이 문서에서</TocLabel>{sections.map(section => <TocLink key={section.id} href={`#${section.id}`} $active={activeSection === section.id} onClick={() => setActiveSection(section.id)}>{section.label}</TocLink>)}</Toc>
           </MainGrid>
         </Main>
       </Layout>
+      {demoMode && inquiryOpen && <ModalSurface labelledBy="docs-inquiry-title" onDismiss={dismissInquiry}>
+        <FeedbackDialog>
+          <CardTitle id="docs-inquiry-title">문서가 도움이 되지 않았습니까?</CardTitle>
+          <p>보던 문서 링크를 함께 보냅니다. 어떤 점이 헷갈렸는지 알려주세요.</p>
+          <TextField label="첨부된 문서" readOnly value={articleTitle} />
+          <TextareaField label="문의 내용" maxLength={500} value={inquiryDraft} error={inquiryError} onChange={event => {
+            setInquiryDraft(event.currentTarget.value);
+            setInquiryError('');
+          }} placeholder="연장 가능 시점이 헷갈립니다." />
+          <FeedbackButtons>
+            <Button variant="secondary" onClick={dismissInquiry}>취소</Button>
+            <Button onClick={submitInquiry}>문의 보내기</Button>
+          </FeedbackButtons>
+        </FeedbackDialog>
+      </ModalSurface>}
+      {demoMode && vmExtension.confirmation && <DemoVmExtensionDialog
+        key={vmExtension.confirmation.extensionCount}
+        initialPurpose={vmExtension.confirmation.purpose}
+        extensionCount={vmExtension.confirmation.extensionCount}
+        error={vmExtension.error}
+        onConfirm={vmExtension.confirm}
+        onDismiss={vmExtension.dismiss}
+      />}
     </Screen>
   );
 }

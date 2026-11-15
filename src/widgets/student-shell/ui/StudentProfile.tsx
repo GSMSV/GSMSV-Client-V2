@@ -153,10 +153,12 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequ
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       void import('../../../entities/team/demo').then(({ listDemoTeams }) => {
         if (!cancelled) setTeamsState({ status: 'ready', teams: listDemoTeams() });
+      }).catch(() => {
+        if (!cancelled) setTeamsState({ status: 'error' });
       });
       const dismissOutside = (event: PointerEvent) => {
         if (event.target instanceof Node && !profileRef.current?.contains(event.target)) setOpen(false);
@@ -236,9 +238,9 @@ export function StudentProfile({ userName, profilePhotoUrl, activeTeamId, onRequ
     onLogoutPendingChange?.(true);
     setLogoutError(false);
     try {
-      const demoMode = import.meta.env.DEV && isDemoMode();
-      if (demoMode) signOutDemoProfile();
-      else await logout();
+      if (isDemoMode()) {
+        if (!signOutDemoProfile()) throw new Error('Demo profile could not be signed out');
+      } else await logout();
       clearSessionUser();
       setOpen(false);
       void navigate('/login', { replace: true });

@@ -97,7 +97,7 @@ export function StudentShell({
   const [logoutPending, setLogoutPending] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const navigation = useResponsiveNavigation();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const selectedTeamId = teamScopeId ?? scopeOptions?.find(option => option.selected && option.id !== 'personal')?.id;
   const unavailableItems: StudentNavigationKey[] = [
     ...(!demoMode ? ['vm-create' as const, 'support' as const] : []),
@@ -116,7 +116,7 @@ export function StudentShell({
       apps: teamPath ? `${teamPath}/apps` : '/apps',
       team: teamPath ?? '/teams',
       docs: '/help',
-      support: demoMode ? '/support/inquiries?demo=1' : undefined,
+      support: demoMode ? '/support/inquiries' : undefined,
       settings: teamPath ? `${teamPath}/settings` : '/settings',
     };
     const path = paths[item];
@@ -169,7 +169,7 @@ export function StudentShell({
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
-          profilePhotoUrl={profilePhotoUrl ?? (import.meta.env.DEV && isDemoMode() ? getDemoProfile()?.photoDataUrl : undefined)}
+          profilePhotoUrl={profilePhotoUrl ?? (demoMode ? getDemoProfile()?.photoDataUrl : undefined)}
           notificationCount={notificationCount}
           scopeOptions={scopeOptions}
           scopeDisabled={scopeDisabled}
