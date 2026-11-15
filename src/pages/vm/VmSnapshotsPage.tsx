@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoVmState, saveDemoVmState, type DemoSnapshot } from '../../entities/vm';
@@ -129,7 +129,6 @@ const IconButton = styled.button`
 export function VmSnapshotsPage() {
   const { vmId, teamId: routeTeamId } = useParams<{ vmId: string; teamId?: string }>();
   const [state, setState] = useState(() => getDemoVmState());
-  const latestState = useRef(state);
   const [notice, setNotice] = useState('');
   const [dialog, setDialog] = useState<SnapshotDialog>(null);
   const [snapshotName, setSnapshotName] = useState('');
@@ -139,7 +138,7 @@ export function VmSnapshotsPage() {
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
-  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -148,16 +147,17 @@ export function VmSnapshotsPage() {
   const team = vm.owner === 'team' && vm.teamId ? getDemoTeam(vm.teamId) : undefined;
   const teamName = team?.name ?? vm.teamName ?? '팀';
   const vmRecord = vm;
-  const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
+  const memberReadOnly = vmRecord.status === 'queued' || (vmRecord.owner === 'team' && vmRecord.role === 'member');
 
   const manualCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'manual').length;
   const automaticCount = vmRecord.snapshots.filter(snapshot => snapshot.kind === 'automatic').length;
   const totalCount = vmRecord.snapshots.length;
 
   function persist(update: (current: typeof state) => typeof state) {
-    const next = update(latestState.current);
+    const latest = getDemoVmState();
+    if (!latest.vms.some(item => item.id === vmRecord.id)) return false;
+    const next = update(latest);
     if (!saveDemoVmState(next)) return false;
-    latestState.current = next;
     setState(next);
     return true;
   }

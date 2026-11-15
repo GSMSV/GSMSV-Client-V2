@@ -498,9 +498,10 @@ function databaseStatus(database: DatabaseSummary) {
 
 export default function PersonalResourcesPage() {
   const navigate = useNavigate();
-  const demoMode = import.meta.env.DEV && isDemoMode();
+  const demoMode = isDemoMode();
   const user = getSessionUser();
   const [demoHome, setDemoHome] = useState<DemoHomeState | null>(null);
+  const [initializingVms, setInitializingVms] = useState<string[]>([]);
   const [demoVms, setDemoVms] = useState<DemoVm[]>([]);
   const [expiringPersonalVmId, setExpiringPersonalVmId] = useState<string | null>(null);
   const [personalExtensionNotice, setPersonalExtensionNotice] = useState('');
@@ -522,7 +523,7 @@ export default function PersonalResourcesPage() {
   });
 
   const load = useCallback(async (signal: AbortSignal) => {
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       const [demo, vmRepository, appRepository, serverlessRepository, databaseRepository] = await Promise.all([
         import('../../entities/home'),
         import('../../entities/vm'),
@@ -537,8 +538,7 @@ export default function PersonalResourcesPage() {
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
       const personalFunctions = serverlessRepository.getDemoServerlessFunctions();
       setExpiringPersonalVmId(personalVms.find(vm => vm.id === 'portfolio-api' && vm.status !== 'queued')?.id ?? null);
-      const firstVisit = Boolean(homeState?.firstVisit && personalVms.length === 0 && personalFunctions.length === 0);
-      if (homeState?.firstVisit && !firstVisit) demo.setDemoFirstVisit(false);
+      const firstVisit = personalVms.length === 0 && personalFunctions.length === 0;
       setDemoHome(homeState ? {
         ...homeState,
         firstVisit,
@@ -551,6 +551,7 @@ export default function PersonalResourcesPage() {
         })),
       } : null);
       setDemoVms(personalVms);
+      setInitializingVms(personalVms.filter(vmRepository.isDemoVmInitializing).map(vm => vm.id));
       setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김민수' }), loading: false, error: false });
       setDatabases({ value: databaseRepository.listDemoDatabases('me'), loading: false, error: false });
       const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
@@ -584,7 +585,7 @@ export default function PersonalResourcesPage() {
   }, [load, retryKey]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !demoMode) return;
+    if (!demoMode) return;
     const refresh = () => setRetryKey(value => value + 1);
     window.addEventListener('gsmsv:demo-database-state-change', refresh);
     window.addEventListener('gsmsv:demo-serverless-state-change', refresh);
@@ -595,7 +596,7 @@ export default function PersonalResourcesPage() {
   }, [demoMode]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       let cancelled = false;
       void import('../../entities/team/demo').then(repository => {
         if (cancelled) return;
@@ -604,12 +605,6 @@ export default function PersonalResourcesPage() {
         setTeamsLoading(false);
       });
       return () => { cancelled = true; };
-    }
-    if (demoMode) {
-      setTeams([]);
-      setTeamsError(false);
-      setTeamsLoading(false);
-      return;
     }
     const controller = new AbortController();
     setTeamsLoading(true);
@@ -667,16 +662,27 @@ export default function PersonalResourcesPage() {
           : undefined;
   const personalVmCreateDisabled = !demoMode || Boolean(personalVmCreateReason);
   const queuedPersonalVms = demoVms.filter(vm => vm.status === 'queued');
+  const hasPendingDemoRequests = queuedPersonalVms.some(vm => vm.requestedAtMs !== undefined);
+  useEffect(() => {
+    if (!demoMode || !hasPendingDemoRequests) return;
+    const timer = window.setInterval(async () => {
+      const vmRepository = await import('../../entities/vm');
+      const vms = vmRepository.getDemoVmState().vms.filter(vm => vm.owner === 'personal');
+      setDemoVms(vms);
+      setInitializingVms(vms.filter(vmRepository.isDemoVmInitializing).map(vm => vm.id));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [demoMode, hasPendingDemoRequests]);
   const activePersonalVms = demoVms.filter(vm => vm.status !== 'queued');
   const expiringPersonalVm = demoVms.find(vm => vm.id === expiringPersonalVmId && vm.status !== 'queued');
   const initialExpiry = expiringPersonalVm?.expiresAt === '2026.10.03 14:00 (KST)';
 
   async function cancelQueuedVm(vmId: string) {
-    if (!(import.meta.env.DEV && demoMode)) return;
+    if (!demoMode) return;
     const repository = await import('../../entities/vm');
     const latest = repository.getDemoVmState();
     const target = latest.vms.find(vm => vm.id === vmId && vm.owner === 'personal');
-    if (target?.status === 'queued' && !repository.cancelDemoVmCreateRequest(vmId)) {
+    if (target?.status === 'queued' && !repository.isDemoVmInitializing(target) && !repository.cancelDemoVmCreateRequest(vmId)) {
       setCancelError('생성 요청을 취소하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
@@ -691,7 +697,7 @@ export default function PersonalResourcesPage() {
       },
     } : current);
     setCancelError('');
-    setCancelDialog(target && target.status !== 'queued' ? { phase: 'started' } : null);
+    setCancelDialog(target && (target.status !== 'queued' || repository.isDemoVmInitializing(target)) ? { phase: 'started' } : null);
   }
 
   return (
@@ -784,13 +790,17 @@ export default function PersonalResourcesPage() {
           {demoMode && queuedPersonalVms.length > 0 && <Section>
             <SectionTitle>진행 중인 작업 · {queuedPersonalVms.length}</SectionTitle>
             <WorkPanel>
-              {queuedPersonalVms.map(vm => <WorkRow key={vm.id} type="button" aria-label={`${vm.name} 생성 취소`} onClick={() => {
+              {queuedPersonalVms.map(vm => <WorkRow key={vm.id} type="button" aria-label={vm.name + (initializingVms.includes(vm.id) ? ' 초기 설정 확인' : ' 생성 취소')} onClick={() => {
+                if (initializingVms.includes(vm.id)) {
+                  void navigate('/vms/' + encodeURIComponent(vm.id));
+                  return;
+                }
                 setCancelError('');
                 setCancelDialog({ phase: 'confirm', id: vm.id, name: vm.name });
               }}>
                 <Octicon name="clock" size={20} aria-hidden="true" />
-                <WorkCopy><strong>{vm.name}</strong><span>앞에 2건이 있습니다. 차례가 오면 생성을 시작합니다.</span></WorkCopy>
-                <WorkDetails><span>Standard · {vm.cpu} vCPU · {vm.memory} GB · {vm.disk} GB</span><State>대기 중</State></WorkDetails>
+                <WorkCopy><strong>{vm.name}</strong><span>{initializingVms.includes(vm.id) ? '초기 설정을 진행하고 있습니다.' : '앞에 2건이 있습니다. 차례가 오면 생성을 시작합니다.'}</span></WorkCopy>
+                <WorkDetails><span>Standard · {vm.cpu} vCPU · {vm.memory} GB · {vm.disk} GB</span><State>{initializingVms.includes(vm.id) ? '설정 중' : '대기 중'}</State></WorkDetails>
               </WorkRow>)}
             </WorkPanel>
           </Section>}

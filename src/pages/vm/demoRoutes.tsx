@@ -1,4 +1,4 @@
-import type { RouteObject } from 'react-router';
+import { useParams, type RouteObject } from 'react-router';
 import VMNetworkPage from '../network/VMNetworkPage';
 import { VmCreatePage, type VmCreateStep } from './VmCreatePage';
 import { VmMonitoringPage } from './VmMonitoringPage';
@@ -8,7 +8,8 @@ import { VmSnapshotsPage } from './VmSnapshotsPage';
 import { TeamVmListPage } from './TeamVmListPage';
 
 function CreateRoute({ owner, step }: { owner: 'personal' | 'team'; step: VmCreateStep }) {
-  return <VmCreatePage owner={owner} step={step} />;
+  const { teamId } = useParams<{ teamId: string }>();
+  return <VmCreatePage key={teamId ?? owner} owner={owner} step={step} />;
 }
 
 export const demoVmRoutes: RouteObject[] = [

@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmState, saveDemoVmState } from '../../entities/vm';
+import { canExtendDemoTeamVm, cancelDemoVmCreateRequest, getDemoVmDaysRemaining, getDemoVmState, isDemoVmInitializing, saveDemoVmState } from '../../entities/vm';
 import { getDemoNetworkState, restoreDefaultPortForwards } from '../../entities/network';
 import { DemoVmExtensionDialog, useDemoVmExtension } from '../../features/vm-extension';
+import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
@@ -139,7 +140,14 @@ export function VmOverviewPage() {
   const [networkVersion, setNetworkVersion] = useState(0);
   const powerTimer = useRef<number | null>(null);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
-  const networkState = useMemo(() => vm ? getDemoNetworkState(vm.grn) : null, [vm?.grn, networkVersion]);
+  const waitingForProvisioning = vm?.status === 'queued' && vm.requestedAtMs !== undefined;
+  const initializing = vm ? isDemoVmInitializing(vm) : false;
+  const networkState = useMemo(() => vm && vm.status !== 'queued' ? getDemoNetworkState(vm.grn) : null, [vm?.grn, vm?.status, networkVersion]);
+  useEffect(() => {
+    if (!waitingForProvisioning) return;
+    const timer = window.setInterval(() => setState({ ...getDemoVmState() }), 1000);
+    return () => window.clearInterval(timer);
+  }, [waitingForProvisioning]);
   const vmExtension = useDemoVmExtension({
     onStateChange: setState,
     onExtended: () => setNotice('사용 기간을 14일 연장했습니다.'),
@@ -148,7 +156,7 @@ export function VmOverviewPage() {
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (!vm) return <Navigate to={window.location.pathname.startsWith('/teams/') ? `/teams/${encodeURIComponent(routeTeamId ?? 'demo-team')}/vms` : '/'} replace />;
-  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -157,7 +165,10 @@ export function VmOverviewPage() {
   const vmRecord = vm;
 
   const memberReadOnly = vmRecord.owner === 'team' && vmRecord.role === 'member';
-  const teamDaysRemaining = vmRecord.owner === 'team' ? getDemoVmDaysRemaining(vmRecord.expiresAt) : undefined;
+  const referenceTime = vmRecord.requestedAtMs !== undefined
+    ? Date.now()
+    : vmRecord.owner === 'personal' ? Date.UTC(2026, 8, 29, 5) : undefined;
+  const daysRemaining = getDemoVmDaysRemaining(vmRecord.expiresAt, referenceTime);
   const canExtendTeamVm = vmRecord.owner !== 'team' || canExtendDemoTeamVm(vmRecord);
   const vmRoute = vmRecord.owner === 'team' && vmRecord.teamId
     ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms/${encodeURIComponent(vmRecord.id)}`
@@ -235,7 +246,7 @@ export function VmOverviewPage() {
       setCancelDialog(null);
       return;
     }
-    if (latestVm.status !== 'queued') {
+    if (latestVm.status !== 'queued' || isDemoVmInitializing(latestVm)) {
       setState(latest);
       setCancelDialog('started');
       return;
@@ -250,6 +261,7 @@ export function VmOverviewPage() {
   }
 
   async function restoreSshPort() {
+    if (memberReadOnly) return;
     try {
       await restoreDefaultPortForwards(vmRecord.grn);
       setNetworkVersion(version => version + 1);
@@ -260,7 +272,11 @@ export function VmOverviewPage() {
   }
 
   function copy(text: string, label: string) {
-    void navigator.clipboard?.writeText(text).then(() => setNotice(`${label}을(를) 복사했습니다.`)).catch(() => setNotice('클립보드에 접근할 수 없습니다.'));
+    if (!navigator.clipboard) {
+      setNotice('클립보드에 접근할 수 없습니다.');
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(() => setNotice(`${label}을(를) 복사했습니다.`)).catch(() => setNotice('클립보드에 접근할 수 없습니다.'));
   }
 
   const sshPort = networkState?.ports.find(port => port.kind === 'ssh')?.external_port;
@@ -274,30 +290,31 @@ export function VmOverviewPage() {
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
-        {vm.status === 'queued' && vm.owner === 'team' && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
+        {vm.status === 'queued' && !initializing && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
         {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" disabled={vm.status === 'queued'} icon={<Octicon name="calendar" />} onClick={() => requestExtension()}>14일 연장</Button>}
       </PowerActions></Heading>
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
 
       {memberReadOnly && <Banner><Octicon name="shield" size={20} /><BannerCopy><strong>일반 팀원으로 보고 있습니다</strong><span>조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있습니다. 전원 제어와 설정 변경은 팀장(김지민) 또는 DevOps(한도윤)가 할 수 있습니다.</span></BannerCopy></Banner>}
-      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? '생성 요청이 접수되었습니다' : vmRecord.owner === 'team' && teamDaysRemaining !== undefined ? `만료까지 ${teamDaysRemaining}일 남았습니다` : '만료까지 4일 남았습니다'}</strong><span>{vm.status === 'queued' ? '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{memberReadOnly && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={() => requestExtension()} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
+      <Banner $tone="primary"><Octicon name="clock" size={20} /><BannerCopy><strong>{vm.status === 'queued' ? initializing ? '초기 설정을 진행하고 있습니다' : '생성 요청이 접수되었습니다' : daysRemaining !== undefined ? '만료까지 ' + daysRemaining + '일 남았습니다' : '사용 기간'}</strong><span>{vm.status === 'queued' ? initializing ? '접속 준비가 끝나면 SSH 접속 정보를 볼 수 있습니다.' : '대기 순번과 생성 단계를 홈에서 확인할 수 있습니다. VM 생성은 목데이터로 처리됩니다.' : expiryCaption}</span></BannerCopy>{vm.owner === 'team' && vm.status !== 'queued' && <Button disabled={!canExtendTeamVm} title={!canExtendTeamVm ? '만료 7일 전부터 만료 시각 전까지 연장할 수 있습니다.' : undefined} onClick={() => requestExtension()} icon={<Octicon name="calendar" />}>14일 연장</Button>}</Banner>
       <Facts>
         <MetricCard><Row><MetricLabel><Octicon name="cpu" size={16} />　CPU</MetricLabel></Row><MetricValue>{vm.cpu} vCPU</MetricValue><Hint>{vm.nodeType}</Hint></MetricCard>
         <MetricCard><MetricLabel>메모리</MetricLabel><MetricValue>{vm.memory} GB</MetricValue><Hint>할당 메모리</Hint></MetricCard>
         <MetricCard><MetricLabel><Octicon name="database" size={16} />　디스크</MetricLabel><MetricValue>{vm.disk} GB</MetricValue><Hint>{vm.os}</Hint></MetricCard>
       </Facts>
-      <Grid2>
+      {!memberReadOnly && <Grid2>
         <Surface><SurfaceTitle>운영 정보</SurfaceTitle><KVPairs>
           <Fact><FactLabel>사용 목적</FactLabel><FactValue>{vm.purpose}</FactValue></Fact>
           <Fact><FactLabel>자동 Snapshot</FactLabel><FactValue>{vm.autoSnapshots ? '켜짐 · 최신 1개 보관' : '꺼짐 · 다음 자정부터 저장하지 않음'}</FactValue></Fact>
-          <Fact><FactLabel>Network</FactLabel><FactValue>외부 포트 3/30 · HTTPS Domain 1/2</FactValue></Fact>
+          <Fact><FactLabel>Network</FactLabel><FactValue>외부 포트 {networkState?.ports.length ?? 0}/30 · HTTPS Domain {networkState?.domains.length ?? 0}/2</FactValue></Fact>
         </KVPairs><Row><Button variant="ghost" icon={<Octicon name="pencil" />} onClick={() => navigate(`${vmRoute}/settings`)}>수정</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`${vmRoute}/snapshots`)}>Snapshot 관리</Button><Button variant="ghost" icon={<Octicon name="chevron-right" />} onClick={() => navigate(`${vmRecord.owner === 'team' && vmRecord.teamId ? `/teams/${encodeURIComponent(vmRecord.teamId)}/vms` : '/vms'}/${encodeURIComponent(vm.grn)}/network`)}>Network 관리</Button></Row></Surface>
         <Surface><SurfaceTitle>사용 기간</SurfaceTitle><KVPairs>
           <Fact><FactLabel>생성일</FactLabel><FactValue>{vm.createdAt}</FactValue></Fact>
           <Fact><FactLabel>만료일</FactLabel><FactValue>{vm.expiresAt}</FactValue></Fact>
           <Fact><FactLabel>가동 시간</FactLabel><FactValue>{vm.status === 'running' ? '2일 19시간' : '정지 상태'}</FactValue></Fact>
         </KVPairs></Surface>
-      </Grid2>
+      </Grid2>}
+      {vm.status !== 'queued' && <>
       <Surface>
         <SurfaceTitle>SSH 접속 정보</SurfaceTitle>
         <KVPairs>
@@ -310,12 +327,13 @@ export function VmOverviewPage() {
         <SurfaceTitle><Octicon name="terminal" size={16} />　SSH 명령어</SurfaceTitle>
         {sshCommand ? <>
           <NumberLine><span>1</span><SSHLine>{sshCommand}</SSHLine></NumberLine>
-          <Row><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : `실제 SSH 매핑: 외부 ${sshPort} → 내부 22 · 터미널에 붙여넣어 접속하세요.`}</Hint><Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어')}>명령어 복사</Button></Row>
+          <Row><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : `실제 SSH 매핑: 외부 ${sshPort} → 내부 22 · 터미널에 붙여넣어 접속하세요.`}</Hint>{vm.owner === 'personal' && <Button variant="secondary" icon={<Octicon name="book" />} onClick={() => navigate('/help')}>SSH 키 등록 Docs</Button>}<Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어')}>명령어 복사</Button></Row>
         </> : <>
           <Banner $tone="warning"><Octicon name="alert" size={20} /><BannerCopy><strong>SSH 기본 포트가 없습니다</strong><span>SSH 접속 경로가 삭제되어 명령어를 표시할 수 없습니다. 기본 포트를 복원하면 새로 배정된 실제 외부 포트를 확인할 수 있습니다.<br />· SSH 명령어를 제공할 수 없습니다.<br />· 누락된 SSH 22·HTTP 80·SVC 10000 포트만 복원합니다.</span></BannerCopy></Banner>
-          <Row><Button variant="secondary" onClick={() => navigate('/help')}>접속 Docs</Button><Button variant="primary" icon={<Octicon name="sync" />} onClick={() => void restoreSshPort()}>기본 포트 복원</Button></Row>
+          <Row><Button variant="secondary" onClick={() => navigate('/help')}>접속 Docs</Button><Button variant="primary" disabled={memberReadOnly} icon={<Octicon name="sync" />} onClick={() => void restoreSshPort()}>기본 포트 복원</Button></Row>
         </>}
       </Surface>
+      </>}
       {vm.owner === 'team' && <Surface><SurfaceTitle>팀 정보</SurfaceTitle><KVPairs><Fact><FactLabel>소유</FactLabel><FactValue>팀 {vm.teamName} · 만든 사람 {vm.creator}</FactValue></Fact><Fact><FactLabel>내 역할</FactLabel><FactValue>일반 팀원 · 팀장이 DevOps 역할을 주면 전원과 설정을 관리할 수 있습니다</FactValue></Fact></KVPairs></Surface>}
       {notice && <Hint role="status">{notice}</Hint>}
       {powerOperation === 'normal' && !powerDialog && <Banner role="status"><Octicon name="clock" size={20} /><BannerCopy><strong>종료 요청 후 응답을 기다리고 있습니다</strong><span>아직 VM이 정지되지 않았습니다. 운영체제가 응답하지 않으면 강제로 정지할 수 있습니다.</span></BannerCopy><Button variant="secondary" onClick={() => setPowerDialog('force-confirm')}>강제 정지 확인</Button></Banner>}

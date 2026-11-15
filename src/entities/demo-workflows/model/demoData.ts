@@ -135,7 +135,7 @@ const demoAdminVms: DemoAdminVm[] = [{
   purpose: '포트폴리오 프로젝트의 API 서버 운영', createdAt: '2026.09.26 14:00', expiresAt: '2026.10.03 14:00', sshCommand: 'ssh ubuntu@ssh.gsmsv.site -p 32104',
 }];
 
-const demoCliRequest: CliLoginRequest = { code: 'WDJB-MJHT', device: 'MacBook-Air · macOS', requestedAt: '2026.09.30 14:30', expiresAt: '9분 남음', expiresAtMs: Date.now() + 9 * 60_000, status: '확인 대기' };
+const demoCliRequest: CliLoginRequest = { code: 'WDJB-MJHT', device: 'MacBook-Air · macOS', requestedAt: '2026.09.30 14:30', expiresAt: '9분 남음', status: '확인 대기' };
 
 function localState<T>(key: string, seed: T): T {
   return isDemoMode() ? readDemoState(key, seed) : seed;
@@ -215,8 +215,9 @@ export function getDemoCliRequest(): CliLoginRequest {
   if (!isDemoMode()) return demoCliRequest;
   const stored = readDemoState<CliLoginRequest | null>('auth.cliRequest', null);
   if (!stored) {
-    writeDemoState('auth.cliRequest', demoCliRequest);
-    return demoCliRequest;
+    const request = { ...demoCliRequest, expiresAtMs: Date.now() + 9 * 60_000 };
+    writeDemoState('auth.cliRequest', request);
+    return request;
   }
   if (typeof stored.expiresAtMs === 'number' && Number.isFinite(stored.expiresAtMs)) return stored;
   const remainingMinutes = Number(stored.expiresAt.match(/(\d+)\s*분/)?.[1] ?? 10);

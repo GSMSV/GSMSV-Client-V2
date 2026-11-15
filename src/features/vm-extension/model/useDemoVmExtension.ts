@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { DemoVm, DemoVmState } from '../../../entities/vm';
+import { isDemoMode } from '../../../shared/demo';
 
 interface PurposeConfirmation {
   vmId: string;
@@ -24,7 +25,7 @@ export function useDemoVmExtension({ onStateChange, onExtended, onError }: DemoV
   }
 
   async function extend(vmId: string, approval?: { previous: PurposeConfirmation; purpose?: string }) {
-    if (!import.meta.env.DEV || pending.current) return;
+    if (!isDemoMode() || pending.current) return;
     pending.current = true;
     setError('');
     const reportError = (message: string) => approval ? setError(message) : onError(message);
@@ -64,7 +65,7 @@ export function useDemoVmExtension({ onStateChange, onExtended, onError }: DemoV
       nextDate.setUTCDate(nextDate.getUTCDate() + 14);
       const updated = {
         ...vm,
-        expiresAt: `${nextDate.toISOString().slice(0, 10).replaceAll('-', '.')} 14:00 (KST)`,
+        expiresAt: repository.formatDemoVmDate(nextDate.getTime()),
         purpose: approval?.purpose ?? vm.purpose,
         extensionCount,
       };

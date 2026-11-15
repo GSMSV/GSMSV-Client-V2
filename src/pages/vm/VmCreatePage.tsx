@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { getDemoVmCreateState, getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmCreateRequest, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
+import { getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmState, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
 import { getDemoTeam } from '../../entities/team/demo';
 import { isDemoMode } from '../../shared/demo';
 import { SliderField, StepConnector, StepIndicator } from '../../shared/ui/controls';
@@ -133,8 +133,8 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   const navigate = useNavigate();
   const { teamId: routeTeamId } = useParams<{ teamId: string }>();
   const isTeam = owner === 'team';
-  const [draft, setDraft] = useState<VmDraft>(() => getDemoVmDraft(owner));
-  const [state, setState] = useState(() => isTeam ? getDemoVmState() : getDemoVmCreateState(owner));
+  const [draft, setDraft] = useState<VmDraft>(() => getDemoVmDraft(owner, routeTeamId));
+  const [state, setState] = useState(getDemoVmState);
   const [error, setError] = useState('');
   const teamId = routeTeamId || 'demo-team';
   const prefix = isTeam ? `/teams/${encodeURIComponent(teamId)}/vms/new` : '/vms/new';
@@ -143,14 +143,15 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   const creatorName = team?.members.find(member => member.role === team.my_role)?.name ?? team?.members[0]?.name ?? '김지민';
   const canCreateInTeam = Boolean(team?.status === 'approved' && (team.my_role === null || team.my_role === 'leader' || team.my_role === 'devops'));
 
-  useEffect(() => saveDemoVmDraft(owner, draft), [draft, owner]);
+  useEffect(() => saveDemoVmDraft(owner, draft, isTeam ? teamId : undefined), [draft, isTeam, owner, teamId]);
 
   const quota = isTeam ? getDemoVmQuota(state, teamId) : state.personalQuota;
   const available = useMemo(() => ({
-    cpu: quota.cpuLimit - quota.cpu,
-    memory: quota.memoryLimit - quota.memory,
-    disk: quota.diskLimit - quota.disk,
+    cpu: Math.max(0, quota.cpuLimit - quota.cpu),
+    memory: Math.max(0, quota.memoryLimit - quota.memory),
+    disk: Math.max(0, quota.diskLimit - quota.disk),
   }), [quota]);
+  const quotaExhausted = available.cpu < 1 || available.memory < 1 || available.disk < 10;
   const included = { cpu: quota.cpu + draft.cpu, memory: quota.memory + draft.memory, disk: quota.disk + draft.disk };
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
@@ -161,7 +162,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
     setError('');
   }
 
-  function validDraft() {
+  function validDraft(current: typeof state) {
     if (!draft.purpose.trim() || draft.purpose.trim().length > 100) {
       setError('사용 목적을 100자 이내로 입력해 주세요. 공백만 입력할 수 없습니다.');
       return false;
@@ -170,14 +171,15 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       setError('VM 이름은 영문·숫자로 시작하며 영문, 숫자, 하이픈, 밑줄만 사용할 수 있습니다.');
       return false;
     }
-    const duplicate = state.vms.some(vm => vm.owner === owner
-      && (isTeam ? vm.teamId === teamId && vm.teamScenario === 'leader-create' : true)
+    const duplicate = current.vms.some(vm => vm.owner === owner
+      && (!isTeam || vm.teamId === teamId)
       && vm.name.toLowerCase() === draft.name.trim().toLowerCase());
     if (draft.name.trim() && duplicate) {
       setError('같은 소유자 안에서 VM 이름을 중복해서 사용할 수 없습니다.');
       return false;
     }
-    if (draft.cpu > available.cpu || draft.memory > available.memory || draft.disk > available.disk) {
+    const currentQuota = isTeam ? getDemoVmQuota(current, teamId) : current.personalQuota;
+    if (draft.cpu > currentQuota.cpuLimit - currentQuota.cpu || draft.memory > currentQuota.memoryLimit - currentQuota.memory || draft.disk > currentQuota.diskLimit - currentQuota.disk) {
       setError('남은 할당량 안에서 사양을 선택해 주세요.');
       return false;
     }
@@ -185,8 +187,16 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   }
 
   function next() {
-    if (step === 'spec') navigate(`${prefix}/details`);
-    else if (step === 'details' && validDraft()) navigate(`${prefix}/review`);
+    if (step === 'spec') {
+      changeDraft({
+        cpu: Math.min(draft.cpu, available.cpu),
+        memory: Math.min(draft.memory, available.memory),
+        disk: Math.min(draft.disk, Math.floor(available.disk / 10) * 10),
+      });
+      navigate(`${prefix}/details`);
+    } else if (step === 'details' && validDraft(getDemoVmState())) {
+      navigate(`${prefix}/review`);
+    }
   }
 
   function back() {
@@ -194,14 +204,15 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
   }
 
   function createRequest() {
-    if (!validDraft()) return;
-    const { state: nextState, vm } = makeDemoVm(state, draft, owner, teamId, teamName, creatorName);
-    if (!saveDemoVmCreateRequest(owner, nextState, vm)) {
+    const latest = getDemoVmState();
+    setState(latest);
+    if (!validDraft(latest)) return;
+    const { state: nextState, vm } = makeDemoVm(latest, draft, owner, teamId, teamName, creatorName);
+    if (!saveDemoVmState(nextState)) {
       setError('VM 생성 요청을 저장하지 못했습니다. 다시 시도해 주세요.');
       return;
     }
-    setState(nextState);
-    resetDemoVmDraft(owner);
+    resetDemoVmDraft(owner, routeTeamId);
     navigate(isTeam ? `/teams/${encodeURIComponent(vm.teamId ?? teamId)}/vms` : '/');
   }
 
@@ -220,7 +231,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
           {step !== 'spec' && <TextButton type="button" onClick={back}><Octicon name="arrow-left" />{step === 'review' ? '이전: 이름·목적' : '이전: 사양'}</TextButton>}
           {step === 'review'
             ? <PrimaryButton onClick={createRequest} icon={<Octicon name="plus" />}>{isTeam ? '팀 VM 생성 요청' : 'VM 생성 요청'}</PrimaryButton>
-            : <PrimaryButton onClick={next} icon={<Octicon name="arrow-right" />} iconPosition="end">{step === 'spec' ? '다음: 이름·목적' : '다음: 확인'}</PrimaryButton>}
+            : <PrimaryButton disabled={step === 'spec' && quotaExhausted} onClick={next} icon={<Octicon name="arrow-right" />} iconPosition="end">{step === 'spec' ? '다음: 이름·목적' : '다음: 확인'}</PrimaryButton>}
         </TopActions>
       </StepHead>
       <Steps aria-label="VM 생성 단계">
@@ -229,13 +240,14 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
         <StepIndicator number={3} label="확인" active={step === 'review'} />
       </Steps>
 
+      {step === 'spec' && quotaExhausted && <Banner role="status"><Octicon name="alert" size={20} /><BannerCopy><strong>{isTeam ? '팀 할당량이 부족합니다' : '개인 할당량을 모두 사용하고 있습니다'}</strong><span>할당량을 확인한 뒤 다시 시도해 주세요.</span></BannerCopy><PrimaryButton onClick={back}>Resources로 돌아가기</PrimaryButton></Banner>}
       {step === 'spec' && <>
         <Surface>
           <Row><SurfaceTitle>사양</SurfaceTitle><Hint>{isTeam ? '팀 할당량 · 소형' : '개인 할당량'} vCPU {quota.cpu}/{quota.cpuLimit} · RAM {quota.memory}/{quota.memoryLimit} GB · SSD {quota.disk}/{quota.diskLimit} GB 사용 중 · 남은 할당량 vCPU {available.cpu} · RAM {available.memory} GB · SSD {available.disk} GB</Hint></Row>
           <Stack>
-            <SliderField label="vCPU" value={draft.cpu} min={1} max={Math.max(1, available.cpu)} valueLabel={`${draft.cpu} vCPU`} minLabel="최소 1" maxLabel={`최대 ${available.cpu} · 남은 할당량`} onChange={cpu => changeDraft({ cpu })} />
-            <SliderField label="RAM" value={draft.memory} min={1} max={Math.max(1, available.memory)} valueLabel={`${draft.memory} GB`} minLabel="최소 1 GB" maxLabel={`최대 ${available.memory} GB · 남은 할당량`} onChange={memory => changeDraft({ memory })} />
-            <SliderField label="SSD" value={draft.disk} min={10} max={Math.max(10, available.disk)} step={10} valueLabel={`${draft.disk} GB`} minLabel="최소 10 GB" maxLabel={`최대 ${available.disk} GB · 남은 할당량`} helper="SSD는 나중에 줄일 수 없습니다. 늘리는 것만 가능합니다." showHelper onChange={disk => changeDraft({ disk })} />
+            <SliderField label="vCPU" disabled={quotaExhausted} value={Math.min(draft.cpu, Math.max(1, available.cpu))} min={1} max={Math.max(1, available.cpu)} valueLabel={`${draft.cpu} vCPU`} minLabel="최소 1" maxLabel={`최대 ${available.cpu} · 남은 할당량`} onChange={cpu => changeDraft({ cpu })} />
+            <SliderField label="RAM" disabled={quotaExhausted} value={Math.min(draft.memory, Math.max(1, available.memory))} min={1} max={Math.max(1, available.memory)} valueLabel={`${draft.memory} GB`} minLabel="최소 1 GB" maxLabel={`최대 ${available.memory} GB · 남은 할당량`} onChange={memory => changeDraft({ memory })} />
+            <SliderField label="SSD" disabled={quotaExhausted} value={Math.min(draft.disk, Math.max(10, available.disk))} min={10} max={Math.max(10, available.disk)} step={10} valueLabel={`${draft.disk} GB`} minLabel="최소 10 GB" maxLabel={`최대 ${available.disk} GB · 남은 할당량`} helper="SSD는 나중에 줄일 수 없습니다. 늘리는 것만 가능합니다." showHelper onChange={disk => changeDraft({ disk })} />
             <Hint>최대값은 {isTeam ? '팀 남은 할당량' : '남은 할당량'}과 한 Node에 들어가는 크기 중 작은 쪽입니다.{isTeam && ' 팀 VM은 팀 할당량으로 세고, 만든 사람의 개인 할당량은 줄지 않습니다.'}</Hint>
           </Stack>
         </Surface>
@@ -278,7 +290,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
         {!isTeam && <Surface>
           <SurfaceTitle>선택한 환경</SurfaceTitle>
           <Accent>소유자　나 · 김지민　/　개인 VM</Accent>
-          <Hint>요청 후 {included.cpu}/{quota.cpuLimit} vCPU · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB · 남은 할당량 없음 · 생성 후 7일</Hint>
+          <Hint>요청 후 {included.cpu}/{quota.cpuLimit} vCPU · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB · 남은 할당량 vCPU {available.cpu - draft.cpu} · RAM {available.memory - draft.memory} GB · SSD {available.disk - draft.disk} GB · 생성 후 7일</Hint>
           <DataRows>
             <InlineFact label="사양" icon="cpu" value={`${draft.cpu} vCPU · RAM ${draft.memory} GB · SSD ${draft.disk} GB`} />
             <InlineFact label="운영체제 · Node" icon="server" value={`${draft.os} · 자원이 많이 남은 Node에 자동 배분`} />
@@ -312,7 +324,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
         <Surface>
           <SurfaceTitle>요청 전 확인</SurfaceTitle>
           <RequestMeta>
-            {!isTeam && <Fact><FactLabel>개인 할당량</FactLabel><FactValue>이 요청을 포함하면 vCPU {included.cpu}/{quota.cpuLimit} · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB · 남은 할당량 없음</FactValue></Fact>}
+            {!isTeam && <Fact><FactLabel>개인 할당량</FactLabel><FactValue>이 요청을 포함하면 vCPU {included.cpu}/{quota.cpuLimit} · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB</FactValue></Fact>}
             <Fact><FactLabel>이용 규칙</FactLabel><FactValue>만료 7일 전부터 +14일 연장 · 만료 시 정지 · 3일 유예 후 삭제</FactValue></Fact>
             {isTeam && <Fact><FactLabel>요청 후 팀 사용량</FactLabel><FactValue>vCPU {included.cpu}/{quota.cpuLimit} · RAM {included.memory}/{quota.memoryLimit} GB · SSD {included.disk}/{quota.diskLimit} GB</FactValue></Fact>}
             {isTeam && <Fact><FactLabel>사용 기간</FactLabel><FactValue>생성부터 30일 · 만료 7일 전부터 모든 팀원이 기존 만료일에 14일씩 연장할 수 있습니다.</FactValue></Fact>}

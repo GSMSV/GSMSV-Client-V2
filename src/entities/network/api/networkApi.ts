@@ -14,7 +14,7 @@ import type {
 const vmPath = (vmGrn: string) => `/api/v2/vms/${encodeURIComponent(vmGrn)}`;
 
 export async function listPortForwards(vmGrn: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoPortList(vmGrn);
   }
@@ -26,7 +26,7 @@ export async function createPortForward(
   input: { internal_port: number; protocol: 'tcp' | 'udp'; allowed_source?: string; description?: string },
   signal?: AbortSignal,
 ) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoCreatePort(vmGrn, input);
   }
@@ -36,7 +36,7 @@ export async function createPortForward(
 }
 
 export async function deletePortForward(vmGrn: string, portId: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     demo.demoDeletePort(vmGrn, portId);
     return;
@@ -45,7 +45,7 @@ export async function deletePortForward(vmGrn: string, portId: string, signal?: 
 }
 
 export async function restoreDefaultPortForwards(vmGrn: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoRestorePorts(vmGrn);
   }
@@ -55,7 +55,7 @@ export async function restoreDefaultPortForwards(vmGrn: string, signal?: AbortSi
 }
 
 export async function listDomains(vmGrn: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoDomainList(vmGrn);
   }
@@ -63,7 +63,7 @@ export async function listDomains(vmGrn: string, signal?: AbortSignal) {
 }
 
 export async function createDomain(vmGrn: string, input: { subdomain: string; internal_port: number }, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoCreateDomain(vmGrn, input);
   }
@@ -73,7 +73,7 @@ export async function createDomain(vmGrn: string, input: { subdomain: string; in
 }
 
 export async function updateDomain(vmGrn: string, domainId: string, input: { subdomain?: string; internal_port?: number }, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoUpdateDomain(vmGrn, domainId, input);
   }
@@ -83,7 +83,7 @@ export async function updateDomain(vmGrn: string, domainId: string, input: { sub
 }
 
 export async function deleteDomain(vmGrn: string, domainId: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     demo.demoDeleteDomain(vmGrn, domainId);
     return;
@@ -92,7 +92,7 @@ export async function deleteDomain(vmGrn: string, domainId: string, signal?: Abo
 }
 
 export async function listFirewallRules(vmGrn: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoFirewallList(vmGrn);
   }
@@ -119,13 +119,13 @@ export async function listFirewallRules(vmGrn: string, signal?: AbortSignal) {
 }
 
 export async function setFirewallEnabled(vmGrn: string, enabled: boolean) {
-  if (!(import.meta.env.DEV && isDemoMode())) throw new Error('방화벽 켜기/끄기 API를 사용할 수 없습니다.');
+  if (!isDemoMode()) throw new Error('방화벽 켜기/끄기 API를 사용할 수 없습니다.');
   const demo = await import('../model/demoNetworkStore');
   if (!demo.demoSetFirewallEnabled(vmGrn, enabled)) throw new Error('방화벽 상태를 저장하지 못했습니다.');
 }
 
 export async function createFirewallRule(vmGrn: string, input: CreateFirewallRuleRequest, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     return demo.demoCreateFirewallRule(vmGrn, {
       action: input.action ?? 'accept',
@@ -141,7 +141,7 @@ export async function createFirewallRule(vmGrn: string, input: CreateFirewallRul
 }
 
 export async function deleteFirewallRule(vmGrn: string, ruleId: string, signal?: AbortSignal) {
-  if (import.meta.env.DEV && isDemoMode()) {
+  if (isDemoMode()) {
     const demo = await import('../model/demoNetworkStore');
     demo.demoDeleteFirewallRule(vmGrn, ruleId);
     return;

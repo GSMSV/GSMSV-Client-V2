@@ -169,7 +169,7 @@ export function VmMonitoringPage() {
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (!vm) return <Navigate to={routeTeamId ? `/teams/${encodeURIComponent(routeTeamId)}` : '/'} replace />;
-  if (routeTeamId && (vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
+  if (routeTeamId && (!getDemoTeam(routeTeamId) || vm.owner !== 'team' || vm.teamId !== routeTeamId)) {
     return <Navigate to={`/teams/${encodeURIComponent(routeTeamId)}`} replace />;
   }
   if (!routeTeamId && vm.owner === 'team' && vm.teamId) {
@@ -187,13 +187,14 @@ export function VmMonitoringPage() {
         <Button variant="secondary" icon={<Octicon name="sync" />} onClick={() => setRefresh(value => value + 1)}>새로고침</Button>
       </RangeButtons></Heading>
       <DetailTabs vmId={vm.id} active="Monitoring" teamId={vm.teamId} networkVmGrn={vm.grn} />
-      <BannerWarning />
-      <Grid2>
+      {vm.status === 'running' && <BannerWarning />}
+      {vm.status === 'stopped' && <Banner><Octicon name="stop" size={20} /><BannerCopy><strong>지금은 정지 상태입니다</strong><span>정지되기 전의 사용 기록을 볼 수 있습니다.</span></BannerCopy></Banner>}
+      {vm.status === 'queued' ? <Banner><Octicon name="clock" size={20} /><BannerCopy><strong>아직 사용 기록이 없습니다</strong><span>VM이 실행된 뒤 사용 기록을 확인할 수 있습니다.</span></BannerCopy></Banner> : <Grid2>
         <MetricCardWide><MetricHeading>CPU 사용률</MetricHeading><ValueRow><Value>{sample.cpu + (refresh % 3)}</Value><Percent>%</Percent></ValueRow><ChartGraph range={range} variant="cpu" /><DataGrid><Hint>{sample.interval} · 최대 {sample.cpuMaximum}% · 할당 {vm.cpu} vCPU</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>메모리 사용률</MetricHeading><ValueRow><Value>{sample.memory}</Value><Percent>%</Percent></ValueRow><ChartGraph range={range} variant="memory" /><DataGrid><Hint>현재 {sample.memoryGb.toFixed(2)} GB / {vm.memory} GB · 최대 {sample.memoryMaximum}%</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>Network</MetricHeading><ValueRow><Value>{sample.network}</Value><Percent>MB/s</Percent></ValueRow><ChartGraph range={range} variant="network" /><DataGrid><Hint>수신 {sample.receive} MB/s · 송신 {sample.send} MB/s · Network 전송량</Hint></DataGrid></MetricCardWide>
         <MetricCardWide><MetricHeading>디스크 I/O</MetricHeading><ValueRow><Value>{sample.disk}</Value><Percent>MB/s</Percent></ValueRow><ChartGraph range={range} variant="disk" /><DataGrid><Hint>읽기 {sample.read} MB/s · 쓰기 {sample.write} MB/s · 디스크 처리량</Hint></DataGrid></MetricCardWide>
-      </Grid2>
+      </Grid2>}
       <Fact><FactLabel>기록 확인</FactLabel><FactValue>시간은 KST 기준입니다. VM을 정지해도 이전 사용 기록을 확인할 수 있습니다.</FactValue></Fact>
     </DemoPage>
   </DemoShell>;

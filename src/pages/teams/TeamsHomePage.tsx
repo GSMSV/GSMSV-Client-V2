@@ -475,7 +475,7 @@ function TeamDatabaseCard({ teamId }: { teamId: string }) {
   const [usage, setUsage] = useState<TeamDatabaseUsage | null>();
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       setUsage(teamId === 'demo-team' ? { count: 1, storageGb: 3.2, dedicatedCount: 0 } : { count: 0, storageGb: 0, dedicatedCount: 0 });
       return;
     }
@@ -512,7 +512,7 @@ function TeamAppsCard({ teamId }: { teamId: string }) {
   const [count, setCount] = useState<number | null>();
 
   useEffect(() => {
-    if (import.meta.env.DEV && isDemoMode()) {
+    if (isDemoMode()) {
       let cancelled = false;
       setCount(undefined);
       void import('../../entities/app/demo').then(({ getDemoAppSummaries }) => {
@@ -564,7 +564,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const demoMode = isDemoMode();
 
   useEffect(() => {
-    if (!(import.meta.env.DEV && demoMode && selectedTeamId)) {
+    if (!(demoMode && selectedTeamId)) {
       setDemoTeamVms([]);
       setDemoVmQuota(null);
       return;
@@ -584,12 +584,22 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
     return () => { cancelled = true; };
   }, [demoMode, retryKey, selectedTeamId]);
 
+  const hasPendingVmRequests = demoTeamVms.some(vm => vm.status === 'queued' && vm.requestedAtMs !== undefined);
+  useEffect(() => {
+    if (!demoMode || !selectedTeamId || !hasPendingVmRequests) return;
+    const timer = window.setInterval(async () => {
+      const { getDemoVmState, listDemoTeamVms } = await import('../../entities/vm');
+      setDemoTeamVms(listDemoTeamVms(getDemoVmState(), selectedTeamId));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [demoMode, hasPendingVmRequests, selectedTeamId]);
+
   useEffect(() => {
     setSelectedTeamId(teamId ?? null);
   }, [teamId]);
 
   useEffect(() => {
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       let cancelled = false;
       setTeams(current => ({ ...current, loading: true, error: false }));
       void import('../../entities/team/demo').then(({ listDemoTeams }) => {
@@ -617,7 +627,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       setDetail({ value: null, loading: false, error: false });
       return;
     }
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       let cancelled = false;
       setDetail(current => ({ ...current, loading: true, error: false }));
       void import('../../entities/team/demo').then(({ getDemoTeam }) => {
@@ -644,7 +654,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       return;
     }
 
-    if (import.meta.env.DEV && demoMode) {
+    if (demoMode) {
       let cancelled = false;
       setPendingInvitations(current => ({ ...current, loading: true, error: false }));
       void import('../../entities/team/demo').then(({ listDemoTeamInvitations }) => {
@@ -701,7 +711,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
   const role = currentTeam
     ? currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'
     : selectedSummary ? roleLabel[selectedSummary.my_role] : '';
-  const quota = (import.meta.env.DEV && demoMode ? demoVmQuota?.vm : undefined) ?? currentTeam?.quota?.vm;
+  const quota = (demoMode ? demoVmQuota?.vm : undefined) ?? currentTeam?.quota?.vm;
   const vcpu = quotaState(quota?.vcpu);
   const statusMessage = currentTeam ? getStatusMessage(currentTeam) : null;
   const canCreateTeamVm = Boolean(currentTeam?.status === 'approved' && (currentTeam.my_role === null || currentTeam.my_role === 'leader' || currentTeam.my_role === 'devops'));
@@ -805,7 +815,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         <VmPanel>
           <SectionHeading><SectionTitle>팀 VM</SectionTitle></SectionHeading>
           <VmTable aria-hidden="true"><span>VM</span><span>상태</span><span>Resources</span><span>만든 사람</span><span>만료</span><span>관리</span></VmTable>
-          {import.meta.env.DEV && demoMode
+          {demoMode
             ? demoTeamVms.length > 0
               ? demoTeamVms.map(vm => <VmDataRow key={vm.id}>
                 <VmCell data-label="VM"><VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton></VmCell>
