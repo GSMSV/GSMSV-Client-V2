@@ -23,6 +23,15 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) {
+    padding: 32px;
+  }
+
+  @media (max-width: 640px) {
+    gap: 20px;
+    padding: 20px 16px;
+  }
 `;
 
 const Breadcrumb = styled.p`
@@ -37,6 +46,12 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 640px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 const Title = styled.h1`
@@ -80,6 +95,10 @@ const Cards = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 
 const Card = styled.article`
@@ -187,6 +206,10 @@ const ResourceTableHeader = styled.div`
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 const ResourceTableEmpty = styled.div`
@@ -197,7 +220,7 @@ const ResourceTableEmpty = styled.div`
 
 const ResourceTableRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(100px, 1fr));
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(0, 1fr));
   gap: 16px;
   align-items: center;
   min-height: 56px;
@@ -205,6 +228,41 @@ const ResourceTableRow = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  @media (max-width: 800px) {
+    grid-template-columns: minmax(120px, 1.5fr) repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding-inline: 16px;
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 16px;
+  }
+
+  > :nth-child(3) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+`;
+
+const ResourceTableCell = styled.span`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+`;
+
+const ResourceTableLabel = styled.span`
+  display: none;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @media (max-width: 640px) {
+    display: block;
+  }
 `;
 
 const WorkPanel = styled.div`
@@ -307,6 +365,10 @@ const FirstVisitCards = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 
 const FirstVisitCard = styled(Card)`
@@ -745,10 +807,10 @@ export default function PersonalResourcesPage() {
             <ResourceTable aria-label="내 VM 목록">
               <ResourceTableHeader><span>이름</span><span>상태</span><span>자원</span><span>만료일</span></ResourceTableHeader>
               {demoMode && activePersonalVms.length ? activePersonalVms.map(vm => <ResourceTableRow key={vm.id}>
-                <ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink>
-                <State $tone={vm.status === 'running' ? 'primary' : undefined}>{vm.status === 'running' ? '실행 중' : '중지됨'}</State>
-                <span>{vm.cpu} vCPU · {vm.memory} GB RAM · {vm.disk} GB SSD</span>
-                <span>{formatDate(vm.expiresAt)}</span>
+                <ResourceTableCell><ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink></ResourceTableCell>
+                <ResourceTableCell><ResourceTableLabel>상태</ResourceTableLabel><State $tone={vm.status === 'running' ? 'primary' : undefined}>{vm.status === 'running' ? '실행 중' : '중지됨'}</State></ResourceTableCell>
+                <ResourceTableCell><ResourceTableLabel>자원</ResourceTableLabel>{vm.cpu} vCPU · {vm.memory} GB RAM · {vm.disk} GB SSD</ResourceTableCell>
+                <ResourceTableCell><ResourceTableLabel>만료일</ResourceTableLabel>{formatDate(vm.expiresAt)}</ResourceTableCell>
               </ResourceTableRow>) : demoMode ? <ResourceTableEmpty>아직 생성한 VM이 없습니다. VM 만들기를 눌러 첫 VM을 만들어 보세요.</ResourceTableEmpty> : <ResourceTableEmpty>VM 목록 계약이 공개되면 실제 상태와 만료일을 표시합니다. 현재 확인 가능한 VM 목록 API는 없습니다.</ResourceTableEmpty>}
             </ResourceTable>
           </Section>
