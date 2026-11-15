@@ -238,7 +238,13 @@ export default function PublicDocsPage() {
     if (sections.some(section => section.id === initialHash)) {
       requestAnimationFrame(() => document.getElementById(initialHash)?.scrollIntoView({ block: 'start' }));
     }
-    const updateSection = () => setActiveSection(window.location.hash.slice(1) || 'overview');
+    const updateSection = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveSection(hash || 'overview');
+      // 다른 문서의 해시로 바뀌면 본문도 함께 바꿔 목차와 본문이 같은 문서를 가리키게 한다.
+      if (sshSections.some(section => section.id === hash)) setArticle('ssh');
+      else if (sections.some(section => section.id === hash)) setArticle('policy');
+    };
     window.addEventListener('hashchange', updateSection);
     return () => window.removeEventListener('hashchange', updateSection);
   }, []);
