@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import styled from 'styled-components';
 import { Button, NavigationItem } from '../../../shared/ui/controls';
 import { Octicon } from '../../../shared/ui/icons';
@@ -14,7 +15,7 @@ export type StudentNavigationKey =
   | 'settings'
   | 'none';
 
-const Sidebar = styled.aside`
+const Sidebar = styled.aside<{ $open: boolean }>`
   position: sticky;
   top: 0;
   display: flex;
@@ -26,6 +27,25 @@ const Sidebar = styled.aside`
   gap: ${({ theme }) => theme.space[8]}px;
   padding: 28px ${({ theme }) => theme.space[16]}px ${({ theme }) => theme.space[16]}px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media (max-width: 960px) {
+    position: fixed;
+    z-index: 80;
+    inset: 0 auto 0 0;
+    width: min(280px, calc(100vw - 48px));
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+    transform: translateX(${({ $open }) => $open ? '0' : '-105%'});
+    visibility: ${({ $open }) => $open ? 'visible' : 'hidden'};
+    transition: transform 180ms ease, visibility 180ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `;
 
 const Brand = styled.div`
@@ -80,6 +100,8 @@ const SidebarActions = styled.div<{ $atBottom: boolean }>`
 `;
 
 interface StudentSidebarProps {
+  sidebarRef?: RefObject<HTMLElement | null>;
+  open?: boolean;
   activeItem: StudentNavigationKey;
   onNavigate: (item: Exclude<StudentNavigationKey, 'none'>) => void;
   onCreateTeam: () => void;
@@ -103,9 +125,9 @@ const secondaryNavigation = [
   { key: 'settings', label: '설정', icon: 'gear' },
 ] as const;
 
-export function StudentSidebar({ activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
+export function StudentSidebar({ sidebarRef, open = false, activeItem, onNavigate, onCreateTeam, onOpenStatus, disabledItems = [], actionsAtBottom = true }: StudentSidebarProps) {
   return (
-    <Sidebar aria-label="학생 메뉴">
+    <Sidebar id="student-navigation" ref={sidebarRef} $open={open} aria-label="학생 메뉴">
       <Brand>
         <Logo src="/assets/gsmsv-logo.svg" alt="" />
         <BrandName>GSM SV</BrandName>

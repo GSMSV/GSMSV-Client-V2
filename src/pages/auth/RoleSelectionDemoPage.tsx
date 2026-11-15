@@ -10,11 +10,20 @@ import { Octicon } from '../../shared/ui/icons';
 const Screen = styled.main`
   position: relative;
   width: 100%;
-  min-width: 1200px;
+  min-width: 0;
   min-height: 1080px;
   height: max(100vh, 1080px);
   overflow: hidden;
   background: ${({ theme }) => theme.colors.canvas};
+
+  @media (max-width: 1024px) {
+    display: flex;
+    min-height: 100svh;
+    height: auto;
+    overflow: visible;
+    padding: 32px 24px;
+  }
+  @media (max-width: 480px) { padding: 24px 16px; }
 `;
 
 const IntroductionPanel = styled.aside`
@@ -23,6 +32,7 @@ const IntroductionPanel = styled.aside`
   width: 320px;
   min-height: 1080px;
   background: ${({ theme }) => theme.colors.sidebar};
+  @media (max-width: 1024px) { display: none; }
 `;
 
 const BrandMark = styled.img`
@@ -33,6 +43,7 @@ const BrandMark = styled.img`
   width: 800px;
   height: 800px;
   transform: translateY(-50%);
+  @media (max-width: 1024px) { display: none; }
 `;
 
 const Authentication = styled.section`
@@ -45,6 +56,16 @@ const Authentication = styled.section`
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
   transform: translateY(-50%);
+
+  @media (max-width: 1024px) {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(480px, 100%);
+    margin: auto;
+    transform: none;
+  }
+  @media (max-width: 480px) { gap: ${({ theme }) => theme.space[24]}px; }
 `;
 
 const Heading = styled.div`
@@ -52,6 +73,7 @@ const Heading = styled.div`
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[32]}px;
+  @media (max-width: 480px) { gap: ${({ theme }) => theme.space[16]}px; }
 `;
 
 const Title = styled.h1`
@@ -59,6 +81,7 @@ const Title = styled.h1`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.h1.weight} ${({ theme }) => theme.typography.h1.size}px/${({ theme }) => theme.typography.h1.lineHeight}px ${({ theme }) => theme.typography.h1.family}, sans-serif;
+  @media (max-width: 1024px) { width: 100%; }
 `;
 
 const Subtitle = styled.p`
@@ -66,16 +89,18 @@ const Subtitle = styled.p`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
   white-space: nowrap;
+  @media (max-width: 1024px) { white-space: normal; }
 `;
 
 const RoleCard = styled.section`
   display: flex;
-  width: 480px;
+  width: 100%;
   flex-direction: column;
   gap: ${({ theme }) => theme.space[16]}px;
   padding: ${({ theme }) => theme.space[24]}px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+  @media (max-width: 480px) { padding: 20px 16px; }
 `;
 
 const CardTitle = styled.h2`
@@ -152,7 +177,7 @@ const Divider = styled.div`
 
 const ScopeNote = styled.div`
   display: flex;
-  width: 414px;
+  width: min(414px, 100%);
   flex-direction: column;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space[8]}px;

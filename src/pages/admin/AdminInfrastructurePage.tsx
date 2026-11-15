@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { listAdminResources, listInfraNodes, listNodeVms, type AdminResource, type InfraNode, type NodeVm } from '../../entities/infra-node';
@@ -14,12 +14,13 @@ import { NotificationPanel } from '../../widgets/notification-panel';
 
 const Layout = styled.div`
   display: flex;
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
 `;
 
-const Sidebar = styled.aside`
+const Sidebar = styled.aside<{ $open: boolean }>`
   position: sticky;
   top: 0;
   display: flex;
@@ -31,6 +32,23 @@ const Sidebar = styled.aside`
   gap: ${({ theme }) => theme.space[8]}px;
   padding: 28px ${({ theme }) => theme.space[16]}px ${({ theme }) => theme.space[16]}px;
   background: ${({ theme }) => theme.colors.sidebar};
+
+  @media (max-width: 960px) {
+    position: fixed;
+    z-index: 80;
+    inset: 0 auto 0 0;
+    width: min(280px, calc(100vw - 48px));
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+    transform: translateX(${({ $open }) => $open ? '0' : '-105%'});
+    visibility: ${({ $open }) => $open ? 'visible' : 'hidden'};
+    transition: transform 180ms ease, visibility 180ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 const Brand = styled.div`
@@ -112,6 +130,18 @@ const Header = styled.header`
   align-items: center;
   padding: ${({ theme }) => theme.space[16]}px 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 1200px) { padding-inline: 24px; }
+  @media (max-width: 960px) {
+    display: grid;
+    grid-template-areas: 'menu label identity' 'search search search';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    min-height: 0;
+    flex-basis: auto;
+    padding: 12px 16px;
+  }
+  @media (max-width: 480px) { padding-inline: 12px; }
 `;
 
 const HeaderContent = styled.div`
@@ -130,6 +160,8 @@ const HeaderStart = styled.div`
   flex: 1 1 auto;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 960px) { display: contents; }
 `;
 
 const ConsoleLabel = styled.span`
@@ -139,6 +171,8 @@ const ConsoleLabel = styled.span`
   align-items: center;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+
+  @media (max-width: 960px) { grid-area: label; width: auto; flex: 0 1 auto; }
 `;
 
 const SearchAction = styled(Button)`
@@ -146,6 +180,9 @@ const SearchAction = styled(Button)`
   min-width: 180px;
   justify-content: flex-start;
   color: ${({ theme }) => theme.colors.text};
+
+  @media (max-width: 1200px) { width: auto; min-width: 0; flex: 1 1 240px; }
+  @media (max-width: 960px) { grid-area: search; width: 100%; min-height: 40px; }
 `;
 
 const HeaderActions = styled.div`
@@ -153,6 +190,47 @@ const HeaderActions = styled.div`
   flex: 0 0 auto;
   align-items: center;
   gap: ${({ theme }) => theme.space[16]}px;
+
+  @media (max-width: 960px) { grid-area: identity; gap: 8px; }
+`;
+
+const MenuToggle = styled.button`
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+  @media (max-width: 960px) { display: inline-flex; grid-area: menu; }
+`;
+
+const MenuGlyph = styled.span`
+  display: flex;
+  width: 18px;
+  flex-direction: column;
+  gap: 4px;
+  i { display: block; width: 100%; height: 2px; border-radius: 2px; background: currentColor; }
+`;
+
+const NavigationOverlay = styled.button`
+  display: none;
+  @media (max-width: 960px) {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 55%);
+  }
 `;
 
 const MainColumn = styled.div`
@@ -174,6 +252,9 @@ const Page = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 1200px) { padding: 32px; }
+  @media (max-width: 720px) { padding: 24px 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -478,6 +559,9 @@ function summarizeMemory(node: InfraNode) {
 export default function AdminInfrastructurePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationRef = useRef<HTMLElement>(null);
+  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
   const isAllVmsView = Boolean(matchPath('/admin/vms', location.pathname));
   const [state, setState] = useState<LoadState>(initialState);
   const [demoSnapshot, setDemoSnapshot] = useState<DemoInfraSnapshot | null>(null);
@@ -490,6 +574,18 @@ export default function AdminInfrastructurePage() {
     setNotificationsOpen(false);
     window.requestAnimationFrame(() => document.getElementById('admin-notifications-trigger')?.focus());
   }, []);
+
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setNavigationOpen(false);
+      window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    window.requestAnimationFrame(() => navigationRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus());
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [navigationOpen]);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setState(current => ({ kind: 'loading', nodes: current.nodes, resources: current.resources, checkedAt: current.checkedAt }));
@@ -620,7 +716,7 @@ export default function AdminInfrastructurePage() {
 
   return (
     <Layout>
-      <Sidebar aria-label="관리자 메뉴">
+      <Sidebar id="admin-navigation" ref={navigationRef} $open={navigationOpen} aria-label="관리자 메뉴">
         <Brand><Logo src="/assets/gsmsv-logo.svg" alt="" /><BrandText>GSM SV</BrandText></Brand>
         <WorkspaceLabel>관리자 워크스페이스</WorkspaceLabel>
         <Navigation aria-label="관리자 메뉴">
@@ -642,7 +738,7 @@ export default function AdminInfrastructurePage() {
                 disabled={!href}
                 aria-current={active ? 'page' : undefined}
                 title={!href ? '해당 화면은 아직 연결되지 않았습니다' : undefined}
-                onClick={href ? () => navigate(href) : undefined}
+                onClick={href ? () => { setNavigationOpen(false); void navigate(href); } : undefined}
               >{icon(item.icon)}{item.label}</NavigationItem>
             );
           })}
@@ -655,10 +751,19 @@ export default function AdminInfrastructurePage() {
           <NavigationItem type="button" onClick={() => navigate('/status')}>{icon('pulse')}서비스 상태</NavigationItem>
         </SidebarFooter>
       </Sidebar>
+      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={() => setNavigationOpen(false)} />}
 
       <MainColumn>
         <Header>
           <HeaderContent>
+            <MenuToggle
+              ref={navigationTriggerRef}
+              type="button"
+              aria-label={navigationOpen ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={navigationOpen}
+              aria-controls="admin-navigation"
+              onClick={() => setNavigationOpen(open => !open)}
+            ><MenuGlyph aria-hidden="true"><i /><i /><i /></MenuGlyph></MenuToggle>
             <HeaderStart>
               <ConsoleLabel>관리자 콘솔</ConsoleLabel>
               <SearchAction variant="secondary" icon={icon('search')} disabled>이름 또는 GRN으로 검색</SearchAction>

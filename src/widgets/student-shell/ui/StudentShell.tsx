@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { StudentSidebar, type StudentNavigationKey } from './StudentSidebar';
@@ -9,7 +9,8 @@ import { UnsavedChangesDialog } from '../../../shared/ui/feedback';
 
 const Layout = styled.div`
   display: flex;
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: ${({ theme }) => theme.colors.canvas};
 `;
@@ -24,6 +25,22 @@ const MainColumn = styled.div`
 const PageContent = styled.main`
   min-width: 0;
   flex: 1;
+`;
+
+const NavigationOverlay = styled.button`
+  display: none;
+
+  @media (max-width: 960px) {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 55%);
+  }
 `;
 
 export interface StudentShellProps {
@@ -78,6 +95,21 @@ export function StudentShell({
   const navigate = useNavigate();
   const [logoutPending, setLogoutPending] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setNavigationOpen(false);
+      window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    window.requestAnimationFrame(() => sidebarRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus());
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [navigationOpen]);
 
   const requestNavigation = (action: () => void) => {
     if (logoutPending) return;
@@ -90,6 +122,7 @@ export function StudentShell({
 
   const handleNavigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
     requestNavigation(() => {
+      setNavigationOpen(false);
       if (item === 'serverless') {
         void navigate('/serverless');
         return;
@@ -110,15 +143,20 @@ export function StudentShell({
   return (
     <Layout>
       <StudentSidebar
+        sidebarRef={sidebarRef}
+        open={navigationOpen}
         activeItem={activeItem}
         onNavigate={handleNavigate}
-        onCreateTeam={() => requestNavigation(onCreateTeam)}
-        onOpenStatus={() => requestNavigation(onOpenStatus)}
+        onCreateTeam={() => requestNavigation(() => { setNavigationOpen(false); onCreateTeam(); })}
+        onOpenStatus={() => requestNavigation(() => { setNavigationOpen(false); onOpenStatus(); })}
         disabledItems={disabledNavigationItems}
         actionsAtBottom={sidebarActionsAtBottom}
       />
       <MainColumn>
         <StudentTopbar
+          navigationOpen={navigationOpen}
+          navigationTriggerRef={navigationTriggerRef}
+          onToggleNavigation={() => setNavigationOpen(open => !open)}
           scopeLabel={scopeLabel}
           teamScopeId={teamScopeId}
           userName={userName}
@@ -137,6 +175,7 @@ export function StudentShell({
         />
         <PageContent>{children}</PageContent>
       </MainColumn>
+      {navigationOpen && <NavigationOverlay type="button" aria-label="메뉴 닫기" onClick={() => setNavigationOpen(false)} />}
       {pendingNavigation && (
         <UnsavedChangesDialog
           onLeave={() => {
