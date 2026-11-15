@@ -293,7 +293,10 @@ function getCliReturnPath(value: string | null): string | null {
     const target = new URL(value, window.location.origin);
     if (target.origin !== window.location.origin) return null;
     if (target.pathname === '/cli') return '/cli';
-    if (target.pathname === '/cli/approve' && target.searchParams.has('code')) return `${target.pathname}${target.search}`;
+    if (target.pathname === '/cli/approve') {
+      if (!target.searchParams.get('code')?.trim()) return '/cli';
+      return `${target.pathname}${target.search}`;
+    }
   } catch {
     return null;
   }

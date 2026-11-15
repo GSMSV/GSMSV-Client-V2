@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoCliRequest, saveDemoCliRequest, type CliLoginRequest } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
@@ -109,6 +109,7 @@ const Actions = styled.div`
 `;
 
 export default function CliLoginApprovalDemoPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [request, setRequest] = useState(() => getDemoCliRequest());
   const [notice, setNotice] = useState('');
@@ -116,11 +117,12 @@ export default function CliLoginApprovalDemoPage() {
   const user = getSessionUser();
   const email = user?.id === 'demo-admin' ? 'admin@example.com' : 'jimin@example.com';
   const requestedCode = searchParams.get('code');
+  const hasRequestedCode = Boolean(requestedCode?.trim());
   const normalizedCode = requestedCode?.replace(/-/g, '').toUpperCase() ?? '';
   const codeIsValid = /^[A-Z0-9]{8}$/.test(normalizedCode);
   const codeMatches = codeIsValid && normalizedCode === request.code.replace(/-/g, '').toUpperCase();
   const expired = request.status === '만료됨' || (request.status === '확인 대기' && now >= (request.expiresAtMs ?? 0));
-  const consumed = request.status !== '확인 대기' && request.status !== '만료됨';
+  const consumed = request.status === '승인 완료' || request.status === '거부됨';
   const active = isDemoMode() && Boolean(user) && codeMatches && request.status === '확인 대기' && !expired;
   const expiresAtLabel = expired
     ? '만료됨'
@@ -151,10 +153,10 @@ export default function CliLoginApprovalDemoPage() {
 
   return <Page><Header><Logo><LogoMark src="/assets/gsmsv-logo.svg" alt="" /> GSM SV</Logo>{user && <SignedIn><Octicon name="person" size={16} /> {email}으로 로그인됨</SignedIn>}</Header><Center><Panel>
     {!isDemoMode() ? <><Title>로컬 미리보기 전용</Title><Description>?demo=1 모드에서만 목데이터 승인 흐름을 확인할 수 있습니다.</Description></> : <>
-      <Title>{consumed ? '이미 처리된 코드입니다' : !requestedCode ? '기기 코드가 필요합니다' : !codeIsValid || !codeMatches ? '유효하지 않은 코드입니다' : request.status === '확인 대기' ? 'CLI 로그인을 승인하시겠습니까?' : `CLI 로그인 ${request.status}`}</Title>
+      <Title>{consumed ? '이미 처리된 코드입니다' : !hasRequestedCode ? '기기 코드가 필요합니다' : !codeIsValid || !codeMatches ? '유효하지 않은 코드입니다' : request.status === '확인 대기' ? 'CLI 로그인을 승인하시겠습니까?' : `CLI 로그인 ${request.status}`}</Title>
       <Description>터미널에 표시된 코드와 같은지 확인하세요.</Description>
       <CodeCard><CodeText>{request.code}</CodeText><Description style={{ margin: 0, fontSize: 12 }}>코드는 요청 후 10분 동안 쓸 수 있습니다 · {expiresAtLabel}</Description></CodeCard>
-      {(!codeMatches || expired || consumed) && <Warning role="alert"><Octicon name="alert" size={18} />{consumed ? '이미 승인하거나 거부한 코드입니다.' : !requestedCode ? '터미널의 8자리 코드를 입력해 주세요.' : expired ? '요청이 만료되었습니다.' : '코드가 일치하지 않습니다.'} 터미널에서 새 코드를 요청하세요.</Warning>}
+      {(!codeMatches || expired || consumed) && <Warning role="alert"><Octicon name="alert" size={18} />{consumed ? '이미 승인하거나 거부한 코드입니다.' : !hasRequestedCode ? '터미널의 8자리 코드를 입력해 주세요.' : expired ? '요청이 만료되었습니다.' : '코드가 일치하지 않습니다.'} 터미널에서 새 코드를 요청하세요.</Warning>}
       {!user && <Warning role="status"><Octicon name="info" size={18} />승인하려면 먼저 로그인해야 합니다. 로그인 후 이 코드로 돌아옵니다.</Warning>}
       <Warning><Octicon name="alert" size={20} /><span><strong>직접 실행한 요청이 아니면 거부하세요</strong><br />승인하면 이 기기에서 내 계정으로 VM과 함수를 다룰 수 있고, 로그인은 30일 동안 유지됩니다. 계정 설정 · 연결된 CLI 기기에서 언제든 해제할 수 있습니다.</span></Warning>
       <InfoLine><Octicon name="terminal" size={16} /><span><Label>기기</Label><Value>{request.device}</Value></span></InfoLine>
@@ -162,7 +164,10 @@ export default function CliLoginApprovalDemoPage() {
       <InfoLine><Octicon name="person" size={16} /><span><Label>로그인 계정</Label><Value>김지민 · {email}</Value></span></InfoLine>
       <InfoLine><Octicon name="key" size={16} /><span><Label>받는 권한</Label><Value>웹과 같은 권한 · VM·함수 조회, 생성, 전원, 연장</Value></span></InfoLine>
       {notice && <Warning role="status"><Octicon name="info" size={18} />{notice}</Warning>}
-      <Actions>{!user && <Button variant="primary" onClick={() => { const target = `/cli/approve?code=${encodeURIComponent(requestedCode ?? '')}`; window.location.assign(`/login?returnTo=${encodeURIComponent(target)}`); }}>로그인</Button>}<Button variant="secondary" disabled={!active} icon={<Octicon name="x" size={16} />} onClick={() => decide('거부됨')}>거부</Button><Button disabled={!active} icon={<Octicon name="check" size={16} />} onClick={() => decide('승인 완료')}>승인</Button></Actions>
+      <Actions>{!hasRequestedCode
+        ? <Button variant="primary" onClick={() => void navigate('/cli')}>코드 입력으로 이동</Button>
+        : !user && <Button variant="primary" onClick={() => { const target = `/cli/approve?code=${encodeURIComponent(requestedCode ?? '')}`; window.location.assign(`/login?returnTo=${encodeURIComponent(target)}`); }}>로그인</Button>}
+        <Button variant="secondary" disabled={!active} icon={<Octicon name="x" size={16} />} onClick={() => decide('거부됨')}>거부</Button><Button disabled={!active} icon={<Octicon name="check" size={16} />} onClick={() => decide('승인 완료')}>승인</Button></Actions>
     </>}
   </Panel></Center></Page>;
 }
