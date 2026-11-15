@@ -31,12 +31,17 @@ import {
 } from "../../widgets/student-shell";
 
 const Page = styled.div`
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   max-width: 1224px;
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { gap: 20px; padding: 20px 16px; }
+  @media (max-width: 380px) { padding: 16px 12px; }
 `;
 const Breadcrumb = styled.p`
   margin: 0;
@@ -54,6 +59,13 @@ const Heading = styled.header`
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+
+  @media (max-width: 760px) {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 const TitleBlock = styled.div`
   display: flex;
@@ -83,9 +95,17 @@ const Subtitle = styled.p`
 `;
 const Tabs = styled.nav`
   display: flex;
+  min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 8px;
   min-height: 42px;
+
+  @media (max-width: 600px) {
+    justify-content: flex-start;
+    gap: 4px;
+  }
 `;
 const Tab = styled.button<{ $active?: boolean }>`
   min-width: 57px;
@@ -106,13 +126,17 @@ const Tab = styled.button<{ $active?: boolean }>`
   cursor: pointer;
 `;
 const Card = styled.section`
+  box-sizing: border-box;
   display: flex;
   width: 100%;
+  min-width: 0;
   flex-direction: column;
   gap: 16px;
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 const CardTitle = styled.h2`
   margin: 0;
@@ -128,13 +152,17 @@ const Summary = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
+
+  @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
   }
 `;
 const SummaryCard = styled(Card)`
   min-height: 150px;
   justify-content: space-between;
+
+  @media (max-width: 600px) { min-height: 120px; }
 `;
 const SummaryLabel = styled.span`
   color: ${({ theme }) => theme.colors.muted};
@@ -165,8 +193,10 @@ const SummaryHelp = styled.span`
 `;
 const ServicesHeading = styled.div`
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
 `;
 const ServiceGrid = styled.div`
@@ -192,6 +222,7 @@ const ServiceCard = styled.article`
 `;
 const ServiceHeader = styled.div`
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -217,8 +248,10 @@ const State = styled.span`
 `;
 const ServiceCardMeta = styled.div`
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   color: ${({ theme }) => theme.colors.muted};
   font:
@@ -239,11 +272,16 @@ const LinkText = styled.span`
     sans-serif;
 `;
 const Table = styled.div`
-  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
   border-radius: ${({ theme }) => theme.radii.sm}px;
 `;
 const TableHeader = styled.div`
   display: grid;
+  min-width: 1096px;
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
   background: ${({ theme }) => theme.colors.raised};
   color: ${({ theme }) => theme.colors.muted};
@@ -259,6 +297,7 @@ const TableHeader = styled.div`
 `;
 const TableRow = styled.div`
   display: grid;
+  min-width: 1096px;
   min-height: 66px;
   grid-template-columns: 1.1fr 1.5fr 1fr 0.9fr 1fr;
   align-items: center;
@@ -282,6 +321,8 @@ const TableRow = styled.div`
   }
 `;
 const Notice = styled.div`
+  box-sizing: border-box;
+  min-width: 0;
   margin: 0;
   padding: 20px 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
@@ -293,9 +334,18 @@ const RenewalNotice = styled(Notice)`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px;
+
+    > button { width: 100%; }
+  }
 `;
 const Field = styled.label`
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
   color: ${({ theme }) => theme.colors.muted};
@@ -307,6 +357,8 @@ const Field = styled.label`
     sans-serif;
   input,
   select {
+    box-sizing: border-box;
+    max-width: 100%;
     min-height: 42px;
     padding: 0 12px;
     border: 1px solid ${({ theme }) => theme.colors.border};
@@ -321,13 +373,28 @@ const EnvSettingsRow = styled(TableRow)`
 `;
 const Toggle = styled.div`
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
+  > span { min-width: 0; }
   small {
     display: block;
     margin-top: 4px;
     color: ${({ theme }) => theme.colors.faint};
+  }
+`;
+
+const ServiceActions = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  @media (max-width: 480px) {
+    > button { flex: 1 1 120px; }
   }
 `;
 
@@ -1017,7 +1084,7 @@ export function DemoAddServicePage() {
             </Subtitle>
           </TitleBlock>
         </Heading>
-        <Tabs>
+        <ServiceActions>
           <Button
             variant="ghost"
             onClick={() => navigate(`/apps/${encodeURIComponent(appId)}/demo`)}
@@ -1050,7 +1117,7 @@ export function DemoAddServicePage() {
           >
             서비스 추가
           </Button>
-        </Tabs>
+        </ServiceActions>
         <Card>
           <CardTitle>서비스</CardTitle>
           <Field>
