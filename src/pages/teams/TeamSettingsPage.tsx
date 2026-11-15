@@ -14,6 +14,7 @@ import type { DemoStudentAccount, DemoTeamDetail } from '../../entities/team/dem
 import type { TeamMember } from '../../entities/team';
 import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { AccountDialog, DialogCopy } from '../../features/settings/demo-account/ui/AccountDialog';
+import { getDemoDisbandResources } from '../../features/settings/demo-account/model/approveTeamDisband';
 
 const TransferDemoTeamLeader = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.TransferDemoTeamLeader })));
 const DemoTeamDisbandRequest = lazy(() => import('../../features/settings/demo-account/ui/DemoTeamWithdrawalActions').then(module => ({ default: module.DemoTeamDisbandRequest })));
@@ -143,8 +144,7 @@ const Hint = styled.p`
 `;
 const InvitationList = styled.ul`display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none;`;
 const InvitationRow = styled.li`
-  display: flex; min-width: 0; align-items: flex-start; gap: 12px; padding: 16px 0; border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  &:last-child { border-bottom: 0; }
+  display: flex; min-width: 0; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
   @container team-settings (max-width: 1040px) {
     flex-wrap: wrap;
@@ -166,7 +166,7 @@ const InvitationMeta = styled.span`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 const InviteRowActions = styled.div`
-  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px;
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; margin-top: 8px;
 
   @container team-settings (max-width: 1040px) {
     width: 100%;
@@ -190,7 +190,7 @@ const RoleCards = styled.div`display: flex; flex-direction: column; gap: 16px;`;
 const RoleCard = styled.div`display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 16px; align-items: start;`;
 const RoleIcon = styled.span`display: inline-flex; justify-content: center; color: ${({ theme }) => theme.colors.muted};`;
 const RoleCopy = styled.div`display: flex; flex-direction: column; gap: 4px;`;
-const RoleLabel = styled.strong`color: ${({ theme }) => theme.colors.faint}; font-size: 12px;`;
+const RoleLabel = styled.span`color: ${({ theme }) => theme.colors.faint}; font-size: 12px; line-height: 18px;`;
 const RoleDescription = styled.span`color: ${({ theme }) => theme.colors.text}; font-size: 14px; line-height: 22px;`;
 const DangerPanel = styled.section`
   display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: ${({ theme }) => theme.radii.base}px; background: ${({ theme }) => theme.colors.dangerSoft};
@@ -205,7 +205,7 @@ const DangerIcon = styled.span`display: inline-flex; flex: 0 0 20px; color: ${({
 const DangerCopy = styled.div`display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 8px;`;
 const DangerTitle = styled.strong`color: ${({ theme }) => theme.colors.danger}; font-size: 14px; line-height: 20px;`;
 const DangerActions = styled.div`
-  display: flex; gap: 8px;
+  display: flex; flex: 0 0 auto; gap: 8px;
 
   @container team-settings (max-width: 560px) {
     grid-column: 1 / -1;
@@ -229,6 +229,13 @@ function formatDate(value: string | null | undefined, display: 'short' | 'full' 
     }).formatToParts(date).filter(part => part.type !== 'literal').map(part => part.value).join('.');
   }
   return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date);
+}
+
+function quotaTier(vcpuLimit: number | undefined) {
+  if (vcpuLimit === 4) return '소형';
+  if (vcpuLimit === 8) return '중형';
+  if (vcpuLimit === 16) return '대형';
+  return 'VM';
 }
 
 function getQuotaLabel(value: { used: number; limit: number } | undefined) {
@@ -469,6 +476,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
     content = <Page><Breadcrumb>팀 / 설정</Breadcrumb><Heading><TitleBlock><Title>팀 설정</Title><Subtitle>팀 정보를 불러오지 못했습니다.</Subtitle></TitleBlock></Heading><ErrorCard onRetry={refresh} /><Button variant="secondary" onClick={() => navigate('/teams')}>팀 목록</Button></Page>;
   } else {
     const quota = team.quota?.vm;
+    const transferCandidate = team.members.find(member => member.role === 'devops') ?? team.members.find(member => member.role !== 'leader');
     const inviteAllowed = canInvite;
     const inlineMatch = demoMode && email.trim() ? findStudent?.find(email) : undefined;
     const permissionMessage = team.status === 'rejected'
@@ -492,34 +500,35 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
             {team.members.map(member => (
               <MemberRow key={member.member_id}>
                 <MemberIdentity>
-                  {member.profile_image_url ? <Avatar src={member.profile_image_url} alt="" /> : <AvatarFallback aria-hidden="true"><Octicon name="person" size={16} /></AvatarFallback>}
-                  <MemberLabel>{member.name}</MemberLabel>
+                  {!demoMode && (member.profile_image_url ? <Avatar src={member.profile_image_url} alt="" /> : <AvatarFallback aria-hidden="true"><Octicon name="person" size={16} /></AvatarFallback>)}
+                  <MemberLabel>{member.name}{member.role === team.my_role && member.role === 'leader' ? ' (나)' : ''}</MemberLabel>
                 </MemberIdentity>
                 <RoleText $leader={member.role === 'leader'}>{roleLabels[member.role]}</RoleText>
                 <JoinedDate><span>합류일 · </span>{formatDate(member.joined_at, 'full')}</JoinedDate>
                 <RowActions>
+                  {/* Figma 33: 내 팀장 줄에 "팀장 넘기기", 다른 팀원 줄에 DevOps 부여·회수와 제외(휴지통) 아이콘. */}
                   {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending && <>
-                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
-                    <Button variant="ghost" onClick={() => setMemberAction({ member, action: 'remove' })}>팀에서 제외</Button>
+                    <Button variant="ghost" icon={<Octicon name={member.role === 'devops' ? 'x' : 'shield'} size={16} />} onClick={() => setMemberAction({ member, action: member.role === 'devops' ? 'revoke' : 'grant' })}>{member.role === 'devops' ? 'DevOps 회수' : 'DevOps 부여'}</Button>
+                    <Button variant="ghost" aria-label={`${member.name} 팀에서 제외`} title="팀에서 제외" icon={<Octicon name="trashcan" size={16} />} onClick={() => setMemberAction({ member, action: 'remove' })} />
                   </>}
                   {member.role !== 'leader' && !demoMode && <Button variant="ghost" disabled title="팀원 역할 변경·제외 API가 없습니다.">역할 변경</Button>}
-                  {member.role === 'leader' && <Muted>팀장</Muted>}
-                  {demoMode && team.my_role === 'leader' && member.role !== 'leader' && !team.demoDisbandPending &&
-                    <Button variant="ghost" onClick={() => setSuccessor(member)}>팀장 넘기기</Button>}
+                  {member.role === 'leader' && (demoMode && team.my_role === 'leader' && !team.demoDisbandPending && transferCandidate
+                    ? <Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} onClick={() => setSuccessor(transferCandidate)}>팀장 넘기기</Button>
+                    : <Muted>팀장</Muted>)}
                 </RowActions>
               </MemberRow>
             ))}
           </MemberTable>
-          <Muted>{demoMode ? '팀장은 DevOps 권한을 부여·회수하거나 팀원을 제외할 수 있습니다.' : '팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.'}</Muted>
+          {!demoMode && <Muted>팀원 역할 변경·제외 API가 아직 공개 계약에 없어 관리 동작을 사용할 수 없습니다.</Muted>}
         </Panel>
 
         <TwoColumns>
           <Panel aria-labelledby="invite-form-title">
             <InviteHeader><PanelTitle id="invite-form-title">팀원 초대</PanelTitle><Button type="submit" form="team-invite-form" variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!inviteAllowed || busyAction === 'invite'}>{busyAction === 'invite' ? '보내는 중…' : '초대 보내기'}</Button></InviteHeader>
             <InviteForm id="team-invite-form" onSubmit={handleInvite}>
+              {demoMode && <Hint>{'초대할 학생의 학교 이메일을 정확히 입력하세요.\nGSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.'}</Hint>}
               <TextField label="학교 이메일" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.currentTarget.value); setFormError(''); }} placeholder="student@school.example" error={formError || undefined} disabled={!inviteAllowed || busyAction === 'invite'} />
               {demoMode ? <>
-                <Hint>초대할 학생의 학교 이메일을 정확히 입력하세요. GSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.</Hint>
                 {inlineMatch && <Hint>{inlineMatch.name} · {inlineMatch.classLabel} — 일반 팀원으로 초대됩니다.</Hint>}
               </> : <Hint>초대할 학생의 학교 이메일 전체를 입력하세요. 가입 여부는 공개되지 않으며 학교 도메인은 서버가 확인합니다.</Hint>}
               {!inviteAllowed && <Hint>{permissionMessage}</Hint>}
@@ -528,36 +537,37 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           </Panel>
 
           <Panel aria-labelledby="pending-invites-title">
-            <InviteHeader><PanelTitle id="pending-invites-title">대기 중인 초대 · <RoleName>{invitations.length}</RoleName></PanelTitle><Button variant="ghost" icon={<Octicon name="sync" size={16} />} onClick={refresh} disabled={loading || inviteLoadError}>새로고침</Button></InviteHeader>
+            <InviteHeader><PanelTitle id="pending-invites-title">대기 중인 초대 · <RoleName>{invitations.length}</RoleName></PanelTitle>{!demoMode && <Button variant="ghost" icon={<Octicon name="sync" size={16} />} onClick={refresh} disabled={loading || inviteLoadError}>새로고침</Button>}</InviteHeader>
             {!team.permissions.invite_member ? <Muted>초대 목록은 팀장 권한으로만 확인할 수 있습니다.</Muted> : inviteLoadError ? <ErrorCard onRetry={refresh} size="compact" /> : invitations.length === 0 ? <Muted>보낸 초대가 없습니다.</Muted> : (
               <InvitationList>
                 {invitations.map(invitation => (
                   <InvitationRow key={invitation.id}>
                     <RoleIcon aria-hidden="true"><Octicon name="clock" size={20} /></RoleIcon>
-                    <InvitationCopy><InvitationEmail>{invitation.email}</InvitationEmail><InvitationMeta>{formatDate(invitation.expires_at)} 만료 · 보낸 날짜 {formatDate(invitation.sent_at)}</InvitationMeta></InvitationCopy>
+                    <InvitationCopy><InvitationEmail>{demoMode ? findStudent?.find(invitation.email)?.name ?? invitation.email : invitation.email}</InvitationEmail><InvitationMeta>{demoMode ? `${invitation.email} · ${formatDate(invitation.expires_at)} 만료 · 1번만 사용` : `${formatDate(invitation.expires_at)} 만료 · 보낸 날짜 ${formatDate(invitation.sent_at)}`}</InvitationMeta>
                     <InviteRowActions>
                       <Button variant="ghost" icon={<Octicon name="sync" size={16} />} disabled={!inviteAllowed || busyAction === invitation.id} onClick={() => void handleResend(invitation)}>다시 보내기</Button>
                       {confirmCancel?.id === invitation.id ? <><Button variant="danger" disabled={busyAction === invitation.id} onClick={() => void handleCancel()}>{busyAction === invitation.id ? '취소 중…' : '취소 확인'}</Button><Button variant="ghost" onClick={() => setConfirmCancel(null)} disabled={busyAction === invitation.id}>닫기</Button></> : <Button variant="ghost" icon={<Octicon name="x" size={16} />} disabled={!inviteAllowed || busyAction === invitation.id} onClick={() => setConfirmCancel(invitation)}>초대 취소</Button>}
-                    </InviteRowActions>
+                    </InviteRowActions></InvitationCopy>
                   </InvitationRow>
                 ))}
               </InvitationList>
             )}
-            <Hint>다시 보내면 새 초대 링크와 7일 만료 기간이 적용되고, 이전 링크는 사용할 수 없습니다.</Hint>
+            {!demoMode && <Hint>다시 보내면 새 초대 링크와 7일 만료 기간이 적용되고, 이전 링크는 사용할 수 없습니다.</Hint>}
           </Panel>
         </TwoColumns>
 
         <Panel aria-labelledby="team-quota-title">
-          <PanelTitle id="team-quota-title">팀 할당량 · {team.status === 'approved' ? 'VM' : '승인 대기'}</PanelTitle>
+          <PanelTitle id="team-quota-title">팀 할당량 · {team.status === 'approved' ? quotaTier(quota?.vcpu.limit) : '승인 대기'}</PanelTitle>
           {!quota ? <Muted>팀이 승인되면 VM 할당량이 표시됩니다.</Muted> : <QuotaRows>
             {([['vCPU', quota.vcpu, ''], ['RAM', quota.ram_gb, ' GB'], ['SSD', quota.ssd_gb, ' GB']] as const).map(([label, usage, suffix]) => {
               const percent = quotaPercent(usage);
-              const warning = percent >= 80;
+              // Figma 33: 한도를 모두 쓴 항목(4/4)만 경고색, 83%(50/60 GB)는 기본색이다.
+              const warning = percent >= 100;
               return <QuotaRow key={label}><QuotaLabel><span>{label}</span><span>{getQuotaLabel(usage)}{suffix}</span></QuotaLabel><Meter role="meter" aria-label={`${label} 할당량`} aria-valuemin={0} aria-valuemax={usage.limit} aria-valuenow={usage.used}><MeterFill $percent={percent} $warning={warning} /></Meter></QuotaRow>;
             })}
           </QuotaRows>}
           <QuotaFooter>
-            <Muted role={quotaRequestSent ? 'status' : undefined}>{demoMode ? (quotaRequestSent ? '할당량 요청을 보냈습니다. 관리자가 승인하면 팀원 전원에게 알립니다.' : '팀 운영에 더 많은 자원이 필요하면 관리자에게 요청하세요.') : '할당량 요청 API가 아직 공개 계약에 없습니다.'}</Muted>
+            <Muted role={quotaRequestSent ? 'status' : undefined}>{demoMode ? (quotaRequestSent ? '할당량 요청을 보냈습니다. 관리자가 승인하면 팀원 전원에게 알립니다.' : '할당량 늘리기는 관리자가 승인합니다.') : '할당량 요청 API가 아직 공개 계약에 없습니다.'}</Muted>
             <Button variant="secondary" disabled={!demoMode || team.status !== 'approved' || (team.my_role !== 'leader' && team.my_role !== 'devops') || quotaRequestSent}
               title={!demoMode ? '팀 할당량 요청 API가 없습니다.' : undefined}
               onClick={() => setShowQuotaRequest(true)} icon={<Octicon name="graph" size={16} />}>
@@ -570,18 +580,18 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <PanelTitle id="role-descriptions-title">역할별 권한</PanelTitle>
           <RoleCards>
             <RoleCard><RoleIcon><Octicon name="shield" size={16} /></RoleIcon><RoleCopy><RoleLabel>팀장</RoleLabel><RoleDescription>{demoMode ? '팀원 초대·제외, DevOps 부여, 팀장 넘기기, 해체 요청과 DevOps의 모든 권한' : '초대 관리 및 팀 구성의 책임자입니다. 역할 변경·팀장 이전은 관련 API 계약이 없어 사용할 수 없습니다.'}</RoleDescription></RoleCopy></RoleCard>
-            <RoleCard><RoleIcon><Octicon name="terminal" size={16} /></RoleIcon><RoleCopy><RoleLabel>DevOps 엔지니어</RoleLabel><RoleDescription>팀 VM과 인프라 설정 권한은 API가 확인된 기능에서만 적용됩니다.</RoleDescription></RoleCopy></RoleCard>
-            <RoleCard><RoleIcon><Octicon name="person" size={16} /></RoleIcon><RoleCopy><RoleLabel>일반 팀원</RoleLabel><RoleDescription>팀 리소스 조회 권한은 서버에서 확인합니다.</RoleDescription></RoleCopy></RoleCard>
+            <RoleCard><RoleIcon><Octicon name="terminal" size={16} /></RoleIcon><RoleCopy><RoleLabel>DevOps 엔지니어</RoleLabel><RoleDescription>{demoMode ? '팀 VM 생성·삭제, 전원 제어, 사양·Snapshot·포트·방화벽·HTTPS 설정' : '팀 VM과 인프라 설정 권한은 API가 확인된 기능에서만 적용됩니다.'}</RoleDescription></RoleCopy></RoleCard>
+            <RoleCard><RoleIcon><Octicon name="person" size={16} /></RoleIcon><RoleCopy><RoleLabel>일반 팀원</RoleLabel><RoleDescription>{demoMode ? '팀 VM 조회, SSH 접속 정보 확인, 사용 기간 연장' : '팀 리소스 조회 권한은 서버에서 확인합니다.'}</RoleDescription></RoleCopy></RoleCard>
           </RoleCards>
         </Panel>
 
         <DangerPanel>
           <DangerIcon aria-hidden="true"><Octicon name="alert" size={20} /></DangerIcon>
           <DangerCopy><DangerTitle>위험 구역 · 팀 해체</DangerTitle><Muted>{demoMode
-            ? '관리자가 승인하면 팀의 VM·Database·함수·앱이 모두 삭제되고 복구할 수 없습니다. 팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴할 수 있습니다.'
+            ? `관리자가 승인하면 팀 VM ${getDemoDisbandResources(team.id).vms.length}개와 Database·함수·앱이 모두 삭제되고 복구할 수 없습니다. 팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴할 수 있습니다.`
             : '팀 탈퇴와 해체 요청 API가 아직 공개 계약에 없어 이 기능은 사용할 수 없습니다.'}</Muted></DangerCopy>
-          <DangerActions><Button variant="secondary" disabled={!demoMode || team.my_role === null || (team.my_role === 'leader' && team.members.length > 1)} title={team.my_role === 'leader' && team.members.length > 1 ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined} onClick={() => setShowLeave(true)}>팀 탈퇴</Button>{demoMode
-            ? <Button variant="danger" disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
+          <DangerActions><Button variant="ghost" icon={<Octicon name="sign-out" size={16} />} disabled={!demoMode || team.my_role === null || (team.my_role === 'leader' && team.members.length > 1)} title={team.my_role === 'leader' && team.members.length > 1 ? '팀장 권한을 넘긴 뒤 탈퇴할 수 있습니다.' : undefined} onClick={() => setShowLeave(true)}>팀 탈퇴</Button>{demoMode
+            ? <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={team.my_role !== 'leader'} onClick={() => setShowDisband(true)}>{team.demoDisbandPending ? '요청 취소' : '해체 요청'}</Button>
             : <Button variant="danger" disabled title="팀 해체 API가 없습니다.">해체 요청</Button>}</DangerActions>
         </DangerPanel>
         {demoMode && successor && <Suspense fallback={null}>

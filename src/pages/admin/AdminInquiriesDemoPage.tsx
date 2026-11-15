@@ -6,9 +6,11 @@ import { getDemoInfraSnapshot } from '../../entities/infra-node/demo';
 import { addDemoNotification } from '../../entities/notification';
 import { Button } from '../../shared/ui/controls';
 import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
-import { ModalSurface } from '../../shared/ui/feedback';
+import { Banner, ModalSurface } from '../../shared/ui/feedback';
+import { Pagination } from '../../shared/ui/data-display/Pagination';
+import { AdminCount, AdminStatusText, AdminTab, AdminTabs, AdminTabsRow } from './adminDemoUi';
 import { Octicon } from '../../shared/ui/icons';
-import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+import { Alert, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
 const OverwritePanel = styled.div`
   box-sizing: border-box;
@@ -58,63 +60,57 @@ const OverwriteActions = styled.div`
   gap: 8px;
 `;
 
-const FilterBar = styled.div`
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-
-  @media (max-width: 720px) { align-items: stretch; flex-direction: column; }
-`;
-const FilterButtons = styled.div`
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-`;
 const InquiryTable = styled(Table)`
   min-width: 680px;
   td { overflow-wrap: anywhere; }
 `;
 const PaginationFooter = styled.div`
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   margin-top: 16px;
-
-  > nav { display: flex; align-items: center; gap: 4px; }
-
-  @media (max-width: 560px) {
-    align-items: flex-start;
-    flex-direction: column;
-
-    > nav { max-width: 100%; overflow-x: auto; }
-  }
 `;
 const InquiryDetailHeader = styled(CardHeader)`
-  align-items: flex-start;
-
   > h2 { min-width: 0; overflow-wrap: anywhere; }
-
-  @media (max-width: 600px) {
-    flex-direction: column;
-    align-items: stretch;
-    > button { width: 100%; }
-  }
 `;
-const InquiryDetailGrid = styled.div`
+// Figma 29 문의 상세: 작성자·관련 VM은 아이콘이 붙은 줄, 관련 VM 줄 오른쪽에 VM 보기.
+const InquiryDetailList = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+`;
+const InquiryMetaRow = styled.div`
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
-  row-gap: 16px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  color: ${({ theme }) => theme.colors.muted};
 
-  @media (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
-
-  > div { min-width: 0; }
-  > div[style*="grid-column"] { overflow-wrap: anywhere; }
+  @media (max-width: 480px) {
+    grid-template-columns: 16px minmax(0, 1fr);
+    > button { grid-column: 2; justify-self: start; }
+  }
+`;
+const InquiryBlock = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+`;
+const InquiryLabel = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+const InquiryValue = styled.span`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  white-space: pre-line;
+`;
+const ReplyHeading = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
 `;
 const ReplyActionRow = styled.div`
   display: flex;
@@ -199,17 +195,25 @@ export default function AdminInquiriesDemoPage() {
   function cancelReply() { setReply(selected?.reply ?? ''); setShowOverwrite(false); setNotice('답변 수정을 취소했습니다.'); }
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="문의 답변"><PageStack>
-    <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 문의 답변</p>
+    <Hint style={{ margin: 0 }}>관리자 / 문의 답변</Hint>
     <Heading><TitleGroup><Title>문의 답변</Title><Muted>대기 중인 문의부터 확인하고 답변을 등록하세요.</Muted></TitleGroup></Heading>
     {notice && <Alert $tone={notice.includes('입력') || notice.includes('저장하지 못') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
-    <FilterBar><FilterButtons>{(['전체', '대기 중', '답변 완료'] as const).map((item) => <Button key={item} variant={filter === item ? 'primary' : 'ghost'} onClick={() => { setFilter(item); setPage(1); }}>{item} <Badge $tone="success">{item === '전체' ? items.length : items.filter((entry) => entry.status === item).length}</Badge></Button>)}</FilterButtons><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { if (pageLoad.status !== 'ready') { pageLoad.retry(); return; } setItems(getDemoInquiries()); setNotice('문의 목록을 새로고침했습니다.'); }}>새로고침</Button></FilterBar>
+    <AdminTabsRow><AdminTabs aria-label="문의 상태">{(['전체', '대기 중', '답변 완료'] as const).map((item) => <AdminTab key={item} type="button" $active={filter === item} aria-current={filter === item ? 'page' : undefined} onClick={() => { setFilter(item); setPage(1); }}>{item === '대기 중' ? '대기중' : item} <AdminCount>{item === '전체' ? items.length : items.filter((entry) => entry.status === item).length}</AdminCount></AdminTab>)}</AdminTabs><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { if (pageLoad.status !== 'ready') { pageLoad.retry(); return; } setItems(getDemoInquiries()); setNotice('문의 목록을 새로고침했습니다.'); }}>새로고침</Button></AdminTabsRow>
     {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[392, 330, 296]} label="문의를 불러오는 중" /> : <>
-    <Card><CardHeader><SectionTitle>최근 문의 · 대기 중 우선</SectionTitle></CardHeader><TableWrap><InquiryTable><thead><tr><th>문의</th><th>작성자</th><th>작성일</th><th>상태</th></tr></thead><tbody>{pageItems.length ? pageItems.map((item) => <tr key={item.id} aria-selected={item.id === selected?.id} onClick={() => select(item)}><td>{item.title}</td><td>{item.author} · {item.studentId}</td><td>{item.createdAt}</td><td><Badge $tone={item.status === '답변 완료' ? 'success' : 'warning'}>{item.status}</Badge></td></tr>) : <tr><td colSpan={4}><Hint>{items.length === 0 ? '아직 등록된 문의가 없습니다.' : '이 조건에 맞는 문의가 없습니다.'}</Hint></td></tr>}</tbody></InquiryTable></TableWrap><PaginationFooter><Hint>{items.length}개 중 {visible.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, visible.length)}</Hint><nav aria-label="문의 목록 페이지"><Button variant="ghost" disabled={page <= 1} aria-label="이전 페이지" icon={<Octicon name="arrow-left" size={16} />} onClick={() => setPage((value) => Math.max(1, value - 1))} />{Array.from({ length: pageCount }, (_, index) => index + 1).map((value) => <Button key={value} variant={page === value ? 'primary' : 'ghost'} onClick={() => setPage(value)}>{value}</Button>)}<Button variant="ghost" disabled={page >= pageCount} aria-label="다음 페이지" icon={<Octicon name="arrow-right" size={16} />} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} /></nav></PaginationFooter></Card>
+    <Card><CardHeader><SectionTitle>최근 문의 · 대기 중 우선</SectionTitle></CardHeader><TableWrap><InquiryTable><thead><tr><th>문의</th><th>작성자</th><th>작성일</th><th>상태</th></tr></thead><tbody>{pageItems.length ? pageItems.map((item) => <tr key={item.id} aria-selected={item.id === selected?.id} onClick={() => select(item)}><td style={{ color: 'inherit' }}>{item.title}</td><td>{item.author} · {item.studentId}</td><td>{item.createdAt}</td><td><AdminStatusText $tone={item.status === '답변 완료' ? 'success' : 'warning'}>{item.status}</AdminStatusText></td></tr>) : <tr><td colSpan={4}><Hint>{items.length === 0 ? '아직 등록된 문의가 없습니다.' : '이 조건에 맞는 문의가 없습니다.'}</Hint></td></tr>}</tbody></InquiryTable></TableWrap><PaginationFooter><Pagination page={page} pageCount={pageCount} summary={`${items.length}개 중 ${visible.length ? (page - 1) * pageSize + 1 : 0}–${Math.min(page * pageSize, visible.length)}`} onPageChange={setPage} /></PaginationFooter></Card>
     {selected && <>
-      <Card><InquiryDetailHeader><SectionTitle>{selected.title}</SectionTitle>{relatedVm && <Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(`/admin/vms/${encodeURIComponent(relatedVm.grn)}`)}>VM 보기</Button>}</InquiryDetailHeader>
-        <InquiryDetailGrid><div><Hint>작성자</Hint><Muted>{selected.author} · {selected.studentId}</Muted></div><div><Hint>관련 VM</Hint><Muted>{selected.vmName || '선택 안 함'}</Muted></div><div style={{ gridColumn: '1 / -1' }}><Hint>문의 내용</Hint><Muted>{selected.content}</Muted></div>{selected.reply && <div style={{ gridColumn: '1 / -1' }}><Hint>현재 답변</Hint><Muted>{selected.reply} · {selected.repliedAt ?? selected.createdAt}</Muted></div>}{Boolean(selected.replyHistory?.length) && <div style={{ gridColumn: '1 / -1' }}><Hint>이전 답변 · 관리자 전용</Hint><Muted>{selected.replyHistory?.join('\n')}</Muted></div>}</InquiryDetailGrid>
+      <Card><InquiryDetailHeader><SectionTitle>{selected.title}</SectionTitle></InquiryDetailHeader>
+        <InquiryDetailList>
+          <InquiryMetaRow><Octicon name="person" size={16} /><InquiryBlock><InquiryLabel>작성자</InquiryLabel><InquiryValue>{selected.author} · {selected.studentId}</InquiryValue></InquiryBlock></InquiryMetaRow>
+          <InquiryMetaRow><Octicon name="server" size={16} /><InquiryBlock><InquiryLabel>관련 VM</InquiryLabel><InquiryValue>{selected.vmName || '선택 안 함'}</InquiryValue></InquiryBlock>{relatedVm && <Button variant="ghost" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(`/admin/vms/${encodeURIComponent(relatedVm.grn)}`)}>VM 보기</Button>}</InquiryMetaRow>
+          <InquiryBlock><InquiryLabel>문의 내용</InquiryLabel><InquiryValue>{selected.content}</InquiryValue></InquiryBlock>
+          {selected.reply && <InquiryBlock><InquiryLabel>현재 답변</InquiryLabel><InquiryValue>{selected.reply} · {selected.repliedAt ?? selected.createdAt}</InquiryValue></InquiryBlock>}
+          {Boolean(selected.replyHistory?.length) && <InquiryBlock><InquiryLabel>이전 답변 · 관리자 전용</InquiryLabel><InquiryValue>{selected.replyHistory?.join('\n')}</InquiryValue></InquiryBlock>}
+        </InquiryDetailList>
       </Card>
-      <Card><CardHeader><div><SectionTitle>{selected.status === '답변 완료' ? '답변 수정' : '답변 작성'}</SectionTitle><Hint>{selected.status === '답변 완료' ? '안내를 보완할 수 있습니다. 등록하면 질문자에게 답변 알림을 보냅니다.' : '아직 답변하지 않은 문의입니다. 등록하면 질문자에게 답변 알림을 보냅니다.'}</Hint></div></CardHeader><Field>관리자 답변<Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="답변을 입력하세요" /></Field><Hint>{selected.status === '답변 완료' ? '기존 답변을 대체할 내용을 확인해 주세요.' : '등록한 답변은 나중에 수정할 수 있습니다.'}</Hint><ReplyActionRow><Button variant="secondary" onClick={cancelReply}>취소</Button><Button onClick={() => submitReply()} icon={<Octicon name="check" size={16} />}>{selected.status === '답변 완료' ? '새 답변으로 등록' : '답변 등록'}</Button></ReplyActionRow></Card>
+      <Card><CardHeader><ReplyHeading><SectionTitle>{selected.status === '답변 완료' ? '답변 수정' : '답변 작성'}</SectionTitle><Muted>{selected.status === '답변 완료' ? '안내를 보완할 수 있습니다. 등록하면 질문자에게 답변 알림을 보냅니다.' : '아직 답변하지 않은 문의입니다. 등록하면 질문자에게 답변 알림을 보냅니다.'}</Muted></ReplyHeading></CardHeader><Field>관리자 답변<Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="답변을 입력하세요" /></Field><Hint>{selected.status === '답변 완료' ? '기존 답변을 대체할 내용을 확인해 주세요.' : '등록한 답변은 나중에 수정할 수 있습니다.'}</Hint>{selected.status !== '답변 완료' && <ReplyActionRow><Button variant="secondary" onClick={cancelReply}>취소</Button><Button onClick={() => submitReply()} icon={<Octicon name="check" size={16} />}>답변 등록</Button></ReplyActionRow>}</Card>
+      {/* Figma 29: 답변한 문의는 카드 아래 경고 배너에서 취소·새 답변으로 등록을 고른다. */}
+      {selected.status === '답변 완료' && <Banner tone="warning" icon={<Octicon name="alert" size={20} />} title="기존 답변을 바꾸시겠습니까?" description="이미 답변한 문의입니다. 새 답변을 등록하면 현재 답변이 덮어써집니다." secondaryAction={<Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={cancelReply}>취소</Button>} action={<Button onClick={() => submitReply()} icon={<Octicon name="check" size={16} />}>새 답변으로 등록</Button>} />}
     </>}
     </>}
     {showOverwrite && selected?.status === '답변 완료' && <ModalSurface labelledBy="inquiry-overwrite-title" onDismiss={() => setShowOverwrite(false)}>

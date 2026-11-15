@@ -7,24 +7,10 @@ import { AccountDialog, DialogCopy, approveDemoTeamDisband, getDemoDisbandResour
 import { Button } from '../../shared/ui/controls';
 import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 import { Octicon } from '../../shared/ui/icons';
-import { Alert, Badge, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Select, Stat, Stats, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
-
-const Toolbar = styled.div`
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  @media (max-width: 560px) { align-items: stretch; flex-direction: column; }
-`;
-
-const Tabs = styled.div`
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-`;
+import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Table, TableWrap, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+import { Pagination } from '../../shared/ui/data-display/Pagination';
+import { SelectField } from '../../shared/ui/controls';
+import { AdminCount, AdminCriteria, AdminSegment, AdminSegmented, AdminStat, AdminStats, AdminStatusText, AdminTab, AdminTabs, AdminTabsRow } from './adminDemoUi';
 
 const ApprovalCard = styled(Card)`
   box-sizing: border-box;
@@ -45,14 +31,17 @@ const ApprovalHeader = styled(CardHeader)`
   }
 `;
 
-const FilterControls = styled.div`
+const ApprovalCopy = styled.div`
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.raised};
+  flex-direction: column;
+  gap: 16px;
+`;
+
+const FieldStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 `;
 
 const ApprovalTableWrap = styled(TableWrap)`
@@ -157,23 +146,25 @@ export default function AdminTeamApprovalsDemoPage() {
   }
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="승인"><PageStack>
-    <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 승인</p>
+    <Hint style={{ margin: 0 }}>관리자 / 승인</Hint>
     <Heading><TitleGroup><Title>승인</Title><Muted>팀의 사용 목적을 확인하고 할당량을 정해 승인하세요.</Muted></TitleGroup></Heading>
     {notice && <Alert $tone={notice.includes('입력') || notice.includes('저장하지 못') ? 'warning' : 'success'} role="status"><Octicon name="info" size={16} />{notice}</Alert>}
-    <Toolbar><Tabs><Button variant="primary">팀 <Badge>3</Badge></Button><Button variant="ghost" onClick={() => navigate('/admin/database-approvals')}>전용형 Database <Badge>1</Badge></Button></Tabs><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { if (pageLoad.status !== 'ready') { pageLoad.retry(); return; } setRequests(getDemoTeamRequests()); setDisbandRequests(listDemoDisbandRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button></Toolbar>
+    <AdminTabsRow><AdminTabs aria-label="승인 종류"><AdminTab type="button" $active aria-current="page">팀 <AdminCount>{requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</AdminCount></AdminTab><AdminTab type="button" onClick={() => navigate('/admin/database-approvals')}>전용형 Database <AdminCount>1</AdminCount></AdminTab></AdminTabs><Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => { if (pageLoad.status !== 'ready') { pageLoad.retry(); return; } setRequests(getDemoTeamRequests()); setDisbandRequests(listDemoDisbandRequests()); setNotice('신청 목록을 새로고침했습니다.'); }}>새로고침</Button></AdminTabsRow>
     {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[280, 392, 238, [120, 120, 120]]} label="승인 신청을 불러오는 중" /> : <>
-    <ApprovalCard><ApprovalHeader><SectionTitle>승인 대기 팀</SectionTitle><FilterControls><Button variant={filter === 'pending' ? 'primary' : 'ghost'} onClick={() => changeFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</Button><Button variant={filter === 'done' ? 'primary' : 'ghost'} onClick={() => changeFilter('done')}>처리 완료</Button></FilterControls></ApprovalHeader>
-      <ApprovalTableWrap><ApprovalTable><thead><tr><th>팀</th><th>팀장</th><th>팀원</th><th>사용 목적</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} tabIndex={0} aria-selected={item.id === selected?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedId(item.id); setRejectReason(item.rejectReason); } }}><td>{item.name}</td><td>{item.leader}</td><td>{item.members}명</td><td>{item.purpose}</td><td>{item.requestedAt}</td><td><Badge $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : 'warning'}>{item.status}</Badge></td></tr>)}</tbody></ApprovalTable></ApprovalTableWrap>
-      {visible.length ? <Hint>{visible.length}개 중 1–{visible.length}</Hint> : <EmptyState role="status">선택한 상태의 팀 신청이 없습니다.</EmptyState>}
+    <ApprovalCard><ApprovalHeader><SectionTitle>승인 대기 팀</SectionTitle><AdminSegmented role="group" aria-label="신청 상태"><AdminSegment type="button" $active={filter === 'pending'} aria-pressed={filter === 'pending'} onClick={() => changeFilter('pending')}>대기 중 {requests.filter((item) => item.status === '대기 중' || item.status === '검토 중').length}</AdminSegment><AdminSegment type="button" $active={filter === 'done'} aria-pressed={filter === 'done'} onClick={() => changeFilter('done')}>처리 완료</AdminSegment></AdminSegmented></ApprovalHeader>
+      <ApprovalTableWrap><ApprovalTable><thead><tr><th>팀</th><th>팀장</th><th>팀원</th><th>사용 목적</th><th>신청일</th><th>상태</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} tabIndex={0} aria-selected={item.id === selected?.id} onClick={() => { setSelectedId(item.id); setRejectReason(item.rejectReason); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedId(item.id); setRejectReason(item.rejectReason); } }}><td>{item.name}</td><td>{item.leader}</td><td>{item.members}명</td><td>{item.purpose}</td><td>{item.requestedAt}</td><td><AdminStatusText $tone={item.status === '승인 완료' ? 'success' : item.status === '거절' ? 'danger' : item.status === '검토 중' ? 'warning' : 'muted'}>{item.status}</AdminStatusText></td></tr>)}</tbody></ApprovalTable></ApprovalTableWrap>
+      {visible.length ? <Pagination page={1} pageCount={1} summary={`${visible.length}개 중 1–${visible.length}`} onPageChange={() => undefined} /> : <EmptyState role="status">선택한 상태의 팀 신청이 없습니다.</EmptyState>}
     </ApprovalCard>
     {selected && <>
-      <ApprovalCard><ApprovalHeader><div><SectionTitle>{selected.name} 승인</SectionTitle><Hint>승인하면서 팀 할당량을 정합니다. 팀 룸 전체 안에서만 VM을 만들 수 있습니다.</Hint></div><Button disabled={selectedIsFinal} icon={<Octicon name="check" size={16} />} onClick={approve}>승인</Button></ApprovalHeader>
-        <Field>할당량 등급<Select disabled={selectedIsFinal} value={selected.tier} onChange={(event) => patchSelected(event.target.value === '중형' ? { tier: '중형', vcpu: 8, ram: 16, ssd: 120 } : event.target.value === '대형' ? { tier: '대형', vcpu: 16, ram: 32, ssd: 240 } : { tier: '소형', vcpu: 4, ram: 8, ssd: 60 })}><option value="소형">소형 · vCPU 4 · RAM 8GB · SSD 60GB</option><option value="중형">중형 · vCPU 8 · RAM 16GB · SSD 120GB</option><option value="대형">대형 · vCPU 16 · RAM 32GB · SSD 240GB</option></Select></Field>
-        <Field style={{ marginTop: 16 }}>vCPU<Input disabled={selectedIsFinal} type="number" min={1} value={selected.vcpu} onChange={(event) => patchSelected({ vcpu: Number(event.target.value) })} /><Hint>값을 직접 바꾸면 등급 대신 적용됩니다.</Hint></Field>
-        <Field style={{ marginTop: 16 }}>RAM (GB)<Input disabled={selectedIsFinal} type="number" min={1} value={selected.ram} onChange={(event) => patchSelected({ ram: Number(event.target.value) })} /></Field>
-        <Field style={{ marginTop: 16 }}>SSD (GB)<Input disabled={selectedIsFinal} type="number" min={1} value={selected.ssd} onChange={(event) => patchSelected({ ssd: Number(event.target.value) })} /></Field>
+      <ApprovalCard><ApprovalHeader><ApprovalCopy><SectionTitle>{selected.name} 승인</SectionTitle><Muted>승인하면서 팀 할당량을 정합니다. 팀 몫 전체 안에서만 VM을 만들 수 있습니다.</Muted></ApprovalCopy><Button disabled={selectedIsFinal} icon={<Octicon name="check" size={16} />} onClick={approve}>승인</Button></ApprovalHeader>
+        <FieldStack>
+        <SelectField label="할당량 등급" disabled={selectedIsFinal} value={selected.tier} options={[{ value: '소형', label: '소형 · vCPU 4 · RAM 8GB · SSD 60GB' }, { value: '중형', label: '중형 · vCPU 8 · RAM 16GB · SSD 120GB' }, { value: '대형', label: '대형 · vCPU 16 · RAM 32GB · SSD 240GB' }]} onChange={(value) => patchSelected(value === '중형' ? { tier: '중형', vcpu: 8, ram: 16, ssd: 120 } : value === '대형' ? { tier: '대형', vcpu: 16, ram: 32, ssd: 240 } : { tier: '소형', vcpu: 4, ram: 8, ssd: 60 })} />
+        <Field>vCPU<Input disabled={selectedIsFinal} type="number" min={1} value={selected.vcpu} onChange={(event) => patchSelected({ vcpu: Number(event.target.value) })} /><Hint style={{ margin: 0 }}>값을 직접 바꾸면 등급 대신 적용됩니다.</Hint></Field>
+        <Field>RAM (GB)<Input disabled={selectedIsFinal} type="number" min={1} value={selected.ram} onChange={(event) => patchSelected({ ram: Number(event.target.value) })} /></Field>
+        <Field>SSD (GB)<Input disabled={selectedIsFinal} type="number" min={1} value={selected.ssd} onChange={(event) => patchSelected({ ssd: Number(event.target.value) })} /></Field>
+        </FieldStack>
       </ApprovalCard>
-      <ApprovalCard><ApprovalHeader><div><SectionTitle>거절</SectionTitle><Hint>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Hint></div><Button variant="secondary" disabled={!rejectReason.trim() || selectedIsFinal} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></ApprovalHeader><Field>팀장에게 전달할 사유<Textarea disabled={selectedIsFinal} placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint>거절할 때 반드시 입력해야 합니다.</Hint></Field></ApprovalCard>
+      <ApprovalCard><ApprovalHeader><ApprovalCopy><SectionTitle>거절</SectionTitle><Muted>거절하면 팀원과 보낸 초대가 해제되고, 팀은 7일 뒤 삭제됩니다.</Muted></ApprovalCopy><Button variant="secondary" disabled={!rejectReason.trim() || selectedIsFinal} icon={<Octicon name="x" size={16} />} onClick={reject}>거절</Button></ApprovalHeader><Field>팀장에게 전달할 사유<Textarea disabled={selectedIsFinal} placeholder="거절 사유를 입력하세요" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /><Hint style={{ margin: 0 }}>거절할 때 반드시 입력해야 합니다.</Hint></Field></ApprovalCard>
     </>}
     {disbandRequests.length > 0 && <ApprovalCard>
       <CardHeader><SectionTitle>해체 요청</SectionTitle></CardHeader>
@@ -195,8 +186,8 @@ export default function AdminTeamApprovalsDemoPage() {
           }).finally(() => setDisbandBusy(false));
         }}>{disbandBusy ? '처리 중…' : '해체 승인'}</Button>
       </>}>{disbandFailed && <DialogCopy role="alert">해체를 승인하지 못했습니다.</DialogCopy>}</AccountDialog>}
-    <Stats><Stat>팀 룸 사용<strong>38%</strong><Muted>vCPU 36 / 96 할당</Muted></Stat><Stat>승인된 팀<strong>9개</strong><Muted>해체 요청 {disbandRequests.length}건</Muted></Stat><Stat>할당량 늘리기 요청<strong>2건</strong><Muted>확인이 필요합니다</Muted></Stat></Stats>
+    <AdminStats><AdminStat icon="cpu" label="팀 몫 사용" value="38%" caption="vCPU 36 / 96 할당" /><AdminStat icon="people" label="승인된 팀" value="9개" caption={`해체 요청 ${disbandRequests.length}건`} /><AdminStat icon="graph" label="할당량 늘리기 요청" value="2건" caption="확인이 필요합니다" /></AdminStats>
     </>}
-    <Muted>할당량 등급 기준 · 소형 4/8/60 · 팀원 5명 이하 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</Muted>
+    <AdminCriteria><strong>할당량 등급 기준</strong><p>소형 4/8/60 · 팀원 5명 이하, 개발·실습 · 중형 8/16/120 · 팀원 6명 이상 또는 상시 운영 서비스 · 대형 16/32/240 · 교내 공식 서비스, GPU 필요 등 사유 확인</p></AdminCriteria>
   </PageStack></WorkflowLayout></DemoOnlyGate>;
 }

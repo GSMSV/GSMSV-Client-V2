@@ -321,9 +321,11 @@ const MemberPanel = styled.section`
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  padding: 16px;
+  padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @container team-home (max-width: 560px) { padding: 16px; }
 `;
 
 const MemberList = styled.ul`
@@ -341,8 +343,6 @@ const Member = styled.li`
   gap: 12px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.text};
-
-  &:last-child { border-bottom: 0; }
 `;
 
 const MemberIcon = styled.span`
@@ -435,6 +435,117 @@ const SkeletonServices = styled.div`
   @container team-home (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
+// Figma 25 승인 대기: 요약 카드 3개 + 팀원 표 + 팀 VM 만들기 안내 카드.
+const PendingStats = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+
+  @container team-home (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
+`;
+
+const PendingStat = styled.article`
+  display: flex;
+  min-width: 0;
+  min-height: 150px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+`;
+
+const PendingStatLabel = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+`;
+
+const PendingStatValue = styled.strong`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const PendingMemberTable = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
+const PendingMemberGrid = styled.div<{ $header?: boolean }>`
+  display: grid;
+  min-width: 560px;
+  grid-template-columns: 1.2fr 1fr 1.1fr 0.8fr;
+  align-items: center;
+  min-height: ${({ $header }) => $header ? '36px' : '46px'};
+  padding: 0 12px;
+  border-radius: ${({ theme, $header }) => $header ? `${theme.radii.base}px` : '0'};
+  border-bottom: ${({ theme, $header }) => $header ? '0' : `1px solid ${theme.colors.border}`};
+  background: ${({ theme, $header }) => $header ? theme.colors.raised : 'transparent'};
+  color: ${({ theme, $header }) => $header ? theme.colors.faint : theme.colors.muted};
+  font: ${({ theme, $header }) => $header
+    ? `${theme.typography.caption.weight} ${theme.typography.caption.size}px/${theme.typography.caption.lineHeight}px ${theme.typography.caption.family}`
+    : `${theme.typography.bodySmall.weight} ${theme.typography.bodySmall.size}px/${theme.typography.bodySmall.lineHeight}px ${theme.typography.bodySmall.family}`}, sans-serif;
+
+  > span:first-child { color: ${({ theme, $header }) => $header ? theme.colors.faint : theme.colors.text}; }
+`;
+
+const PendingTone = styled.span<{ $tone: 'primary' | 'warning' }>`
+  color: ${({ theme, $tone }) => $tone === 'primary' ? theme.colors.primary : theme.colors.warning};
+`;
+
+const PendingVmCard = styled.section`
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.muted};
+
+  @container team-home (max-width: 600px) {
+    grid-template-columns: 20px minmax(0, 1fr);
+    > button { grid-column: 1 / -1; justify-self: start; }
+  }
+`;
+
+const PendingVmCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+
+  strong { color: ${({ theme }) => theme.colors.text}; font: 500 14px/20px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif; }
+  span { font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif; }
+`;
+
+function formatKoreanDate(value: string | null | undefined, withTime: boolean) {
+  if (!value) return null;
+  const date = new Date(value.length === 10 ? `${value}T00:00:00+09:00` : value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? '';
+  const day = `${part('year')}년 ${part('month')}월 ${part('day')}일`;
+  return withTime && value.length > 10 ? `${day} ${part('hour')}:${part('minute')}` : day;
+}
+
+function formatDotDate(value: string | null | undefined) {
+  if (!value) return '—';
+  const date = new Date(value.length === 10 ? `${value}T00:00:00+09:00` : value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const parts = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? '';
+  return `${part('year')}.${part('month')}.${part('day')}`;
+}
+
+function formatMonthDay(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' }).format(date);
+}
+
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
@@ -447,7 +558,8 @@ const roleLabel: Record<TeamRole, string> = {
 function quotaState(quota: TeamQuotaUsage | undefined) {
   if (!quota) return { value: '—', percent: 0, tone: 'primary' as const, unavailable: true };
   const percent = quota.limit > 0 ? quota.used / quota.limit * 100 : quota.used > 0 ? 100 : 0;
-  const tone = percent >= 100 ? 'danger' as const : percent >= 80 ? 'warning' as const : 'primary' as const;
+  // Figma 32: 한도를 모두 쓴 vCPU(4/4)는 경고색, 한도를 넘었을 때만 위험색이다.
+  const tone = percent > 100 ? 'danger' as const : percent >= 100 ? 'warning' as const : 'primary' as const;
   return { value: `${quota.used} / ${quota.limit}`, percent, tone, unavailable: false };
 }
 
@@ -823,7 +935,62 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
       ? (currentTeam as DemoTeamDetail).demoDecisionNotice
       : undefined;
     const decision = pendingDecision === currentTeam.status ? pendingDecision : undefined;
-    content = (
+    const leader = currentTeam.members.find(member => member.role === 'leader');
+    const requestedAt = formatKoreanDate(leader?.joined_at, true);
+    content = currentTeam.status === 'pending' ? (
+      <Page>
+        <Breadcrumb>{currentTeam.name} / 팀 정보</Breadcrumb>
+        <Heading>
+          <TitleBlock>
+            <Title>{currentTeam.name}</Title>
+            <Subtitle>승인 대기 중 · 내 역할 {role || '확인 중'}</Subtitle>
+          </TitleBlock>
+          <Actions>
+            <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀 설정</Button>
+            {currentTeam.permissions.invite_member && <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀원 초대</Button>}
+          </Actions>
+        </Heading>
+        <Banner
+          tone="warning"
+          icon={<Octicon name="clock" size={20} />}
+          title="관리자 승인을 기다리고 있습니다"
+          description={`${requestedAt ? `${requestedAt}에 신청했습니다. ` : ''}승인되면 팀 할당량이 정해지고 VM·Database·Serverless·Apps를 만들 수 있습니다. 팀원 초대와 팀장 넘기기는 지금도 할 수 있습니다.`}
+        />
+        <PendingStats>
+          <PendingStat><PendingStatLabel><Octicon name="people" size={16} />팀원</PendingStatLabel><PendingStatValue>{currentTeam.members.length}명</PendingStatValue><MutedCaption>초대 대기 <MemberCount>{invitedMembers.length}명</MemberCount></MutedCaption></PendingStat>
+          <PendingStat><PendingStatLabel><Octicon name="server" size={16} />팀 VM</PendingStatLabel><PendingStatValue>0개</PendingStatValue><MutedCaption>승인 후 만들 수 있습니다</MutedCaption></PendingStat>
+          <PendingStat><PendingStatLabel><Octicon name="cpu" size={16} />팀 할당량</PendingStatLabel><PendingStatValue>승인 대기</PendingStatValue><MutedCaption>관리자가 승인할 때 정합니다</MutedCaption></PendingStat>
+        </PendingStats>
+        <QuotaPanel aria-label="팀원">
+          <SectionTitle>팀원</SectionTitle>
+          <PendingMemberTable>
+            <PendingMemberGrid $header aria-hidden="true"><span>이름</span><span>역할</span><span>상태</span><span>합류일</span></PendingMemberGrid>
+            {currentTeam.members.map(member => (
+              <PendingMemberGrid key={member.member_id}>
+                <span>{member.name}{member.role === currentTeam.my_role ? ' (나)' : ''}</span>
+                <span>{member.role === 'leader' ? <PendingTone $tone="primary">{roleLabel[member.role]}</PendingTone> : roleLabel[member.role]}</span>
+                <span>합류</span>
+                <span>{formatDotDate(member.joined_at)}</span>
+              </PendingMemberGrid>
+            ))}
+            {invitedMembers.map(invitation => (
+              <PendingMemberGrid key={invitation.id}>
+                <span>{invitation.email}</span>
+                <span>{roleLabel.member}</span>
+                <span><PendingTone $tone="warning">초대 대기{formatMonthDay(invitation.expires_at) ? ` · ${formatMonthDay(invitation.expires_at)} 만료` : ''}</PendingTone></span>
+                <span>—</span>
+              </PendingMemberGrid>
+            ))}
+          </PendingMemberTable>
+          {pendingInvitations.error && currentTeam.permissions.invite_member && <TeamWarning role="alert">초대 중인 팀원을 불러오지 못했습니다. <Button variant="ghost" onClick={retry}>다시 시도</Button></TeamWarning>}
+        </QuotaPanel>
+        <PendingVmCard>
+          <Octicon name="server" size={20} />
+          <PendingVmCopy><strong>팀 VM 만들기</strong><span>승인 대기 중인 팀은 VM을 만들 수 없습니다. 승인 알림을 받으면 이 화면에서 바로 만들 수 있습니다.</span></PendingVmCopy>
+          <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled>팀 VM 만들기</Button>
+        </PendingVmCard>
+      </Page>
+    ) : (
       <Page>
         <Breadcrumb>{currentTeam.name} / 팀 Resources</Breadcrumb>
         <Heading>
@@ -834,9 +1001,6 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
           </TitleBlock>
           <Actions>
             <Button variant="secondary" icon={<Octicon name="gear" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀 설정</Button>
-            {currentTeam.status === 'pending' && currentTeam.permissions.invite_member && (
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate(teamSettingsPath)}>팀원 초대</Button>
-            )}
             {canCreateTeamVm && <Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={teamVmCreateDisabled} title={createQuotaReason} onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/new`)}>팀 VM 만들기</Button>}
           </Actions>
         </Heading>
@@ -844,7 +1008,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         {statusMessage && <Banner title={statusMessage.title} description={statusMessage.description} tone={statusMessage.tone} icon={<Octicon name="alert" size={20} />} />}
 
         <QuotaPanel aria-label="팀 할당량">
-          <SectionTitle>팀 할당량</SectionTitle>
+          <SectionTitle>팀 할당량{currentTeam.quota?.vm.vcpu.limit ? ` · ${quotaTierLabel(currentTeam.quota.vm.vcpu.limit)}` : ''}</SectionTitle>
           <QuotaRows>
             <QuotaLine label="vCPU" usage={quota?.vcpu} />
             <QuotaLine label="RAM" usage={quota?.ram_gb} suffix=" GB" />
@@ -862,13 +1026,13 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
         </QuotaPanel>
 
         <VmPanel>
-          <SectionHeading><SectionTitle>팀 VM</SectionTitle></SectionHeading>
+          <SectionHeading><SectionTitle>팀 VM{demoMode ? <> · <MemberCount>{demoTeamVms.length}개</MemberCount></> : null}</SectionTitle></SectionHeading>
           <VmTable aria-hidden="true"><span>VM</span><span>상태</span><span>Resources</span><span>만든 사람</span><span>만료</span><span>관리</span></VmTable>
           {demoMode
             ? demoTeamVms.length > 0
               ? demoTeamVms.map(vm => <VmDataRow key={vm.id}>
                 <VmCell data-label="VM"><VmNameButton onClick={() => navigate(`/teams/${encodeURIComponent(currentTeam.id)}/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</VmNameButton></VmCell>
-                <VmCell data-label="상태">{vm.status === 'running' ? '실행 중' : vm.status === 'stopped' ? '정지됨' : '대기 중'}</VmCell>
+                <VmCell data-label="상태">{vm.status === 'running' ? <MemberCount as="span" style={{ fontWeight: 400 }}>실행 중</MemberCount> : vm.status === 'stopped' ? '정지됨' : '대기 중'}</VmCell>
                 <VmCell data-label="리소스">{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</VmCell>
                 <VmCell data-label="만든 사람">{vm.creator}</VmCell>
                 <VmCell data-label="만료">{vm.expiresAt.split(' ')[0]}</VmCell>
@@ -928,7 +1092,7 @@ export default function TeamsHomePage({ teamId }: TeamsHomePageProps) {
 
   return (
     <StudentShell
-      activeItem="home"
+      activeItem={currentTeam?.status === 'pending' ? 'team' : 'home'}
       scopeLabel={scopeLabel}
       scopeOptions={scopeOptions}
       userName={user?.name ?? '사용자'}

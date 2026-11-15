@@ -86,10 +86,12 @@ const WorkspaceLabel = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+// Figma 관리자 Sidebar(89:6997): 워크스페이스 아래 16px Space 뒤에 메뉴가 시작한다(y=120).
 const Navigation = styled.nav`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space[8]}px;
+  margin-top: ${({ theme }) => theme.space[16]}px;
 `;
 
 const NavigationItem = styled.button<{ $active?: boolean }>`
@@ -114,7 +116,7 @@ const NavigationItem = styled.button<{ $active?: boolean }>`
 const Divider = styled.div`
   width: 184px;
   height: 1px;
-  margin: ${({ theme }) => theme.space[8]}px 0;
+  margin: 0;
   background: ${({ theme }) => theme.colors.border};
 `;
 
@@ -123,6 +125,23 @@ const SidebarFooter = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.space[8]}px;
   margin-top: auto;
+`;
+
+// Figma Global topbar: 알림 수는 초록색, "관리자"는 배경 없는 글자 표시다.
+const UnreadCount = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
+const Identity = styled.span`
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
+  white-space: nowrap;
+  @media (max-width: 480px) { padding: 0 8px; }
 `;
 
 const Header = styled.header`
@@ -155,6 +174,9 @@ const HeaderContent = styled.div`
   justify-content: space-between;
   gap: ${({ theme }) => theme.space[16]}px;
   margin: 0 auto;
+
+  /* 좁은 화면에서는 Header의 grid 영역(메뉴·라벨·계정 / 검색)에 바로 놓이게 한다. 390px 가로 넘침 방지. */
+  @media ${mobileNavigationMedia} { display: contents; }
 `;
 
 const HeaderStart = styled.div`
@@ -378,11 +400,12 @@ const NodeCard = styled.article`
   background: ${({ theme }) => theme.colors.surface};
 `;
 
+// Figma 26 Node 카드: 아이콘 아래에 상태 문구가 왼쪽 정렬로 놓인다.
 const NodeCardTop = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
 `;
 
 const IconBox = styled.span`
@@ -397,8 +420,8 @@ const IconBox = styled.span`
   color: ${({ theme }) => theme.colors.text};
 `;
 
-const NodeState = styled.span<{ $online: boolean }>`
-  color: ${({ theme, $online }) => $online ? theme.colors.faint : theme.colors.warning};
+const NodeState = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
@@ -448,6 +471,7 @@ const CardFooter = styled.div`
 const TwoColumns = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  align-items: start;
   gap: 16px;
   width: 100%;
 `;
@@ -479,21 +503,21 @@ const GapMessage = styled.div`
 const PanelRows = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 `;
 
+// Figma 26 오늘의 만료 요약: 이름(캡션) 아래에 수량을 쌓는다.
 const PanelRow = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 4px;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
 const PanelValue = styled.strong`
   color: ${({ theme }) => theme.colors.text};
-  font-weight: ${({ theme }) => theme.typography.bodySmall.weight};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
 const FailureList = styled.div`
@@ -501,14 +525,20 @@ const FailureList = styled.div`
   flex-direction: column;
 `;
 
+// Figma 26 최근 생성 실패: 아이콘은 세로 가운데, 이동 버튼은 내용 아래 오른쪽, 마지막 항목 뒤에도 구분선.
 const FailureItem = styled.article`
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding: 12px 0;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 0 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  &:last-child { border-bottom: 0; }
+  & + & { padding-top: 16px; }
+`;
+
+const FailureActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
 `;
 
 const FailureIcon = styled.span`
@@ -520,16 +550,21 @@ const FailureCopy = styled.div`
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 `;
 
 const FailureName = styled.strong`
   color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  font: 500 14px/20px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
 const FailureDetail = styled.span`
   color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const FailureMeta = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
@@ -779,8 +814,8 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
               <SearchAction variant="secondary" icon={icon('search')} disabled>이름 또는 GRN으로 검색</SearchAction>
             </HeaderStart>
             <HeaderActions>
-              <Button id="admin-notifications-trigger" variant="ghost" icon={icon('bell')} aria-expanded={notificationsOpen} aria-controls="notification-panel" onClick={() => setNotificationsOpen(value => !value)}>알림{unreadCount > 0 ? ` ${unreadCount}` : ''}</Button>
-              <Button variant="ghost" icon={icon('person')} disabled>관리자</Button>
+              <Button id="admin-notifications-trigger" variant="ghost" icon={icon('bell')} aria-expanded={notificationsOpen} aria-controls="notification-panel" onClick={() => setNotificationsOpen(value => !value)}><span>알림{unreadCount > 0 && <> <UnreadCount>{unreadCount}</UnreadCount></>}</span></Button>
+              <Identity>{icon('person')}관리자</Identity>
             </HeaderActions>
           </HeaderContent>
         </Header>
@@ -838,7 +873,7 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
                     />
                   </>
                 ) : stateContent()}
-                <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>
+                {/* Figma 26·28에는 조회 시각 문구가 없다. 실제 API 모드에서만 남긴다. */}{!demoSnapshot && <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>}
               </>
             ) : (
               <>
@@ -904,17 +939,17 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
                         <NodeCard key={node.node}>
                           <NodeCardTop>
                             <IconBox>{icon('server')}</IconBox>
-                            <NodeState $online={node.online}>{node.online ? `온라인${demoSnapshot?.nodeKinds[node.node] ? ` · ${demoSnapshot.nodeKinds[node.node]}` : ''}` : '오프라인 · 조회 실패'}</NodeState>
+                            <NodeState>{node.online ? `온라인${demoSnapshot?.nodeKinds[node.node] ? ` · ${demoSnapshot.nodeKinds[node.node]}` : ''}` : '오프라인 · 조회 실패'}</NodeState>
                           </NodeCardTop>
                           <NodeName>{node.node}</NodeName>
                           {node.online ? (
                             <>
                               <NodeMeta>CPU {formatPercent(node.usage.cpu_percent)} · 메모리 {summarizeMemory(node)}</NodeMeta>
                               <NodeMeta>{formatUptime(node.usage.uptime_sec)}</NodeMeta>
-                              <NodeMeta>VM {nodeVmStates[node.node]?.items.length ?? 0}개</NodeMeta>
+                              <NodeMeta>VM <SummaryEmphasis>{nodeVmStates[node.node]?.items.length ?? 0}개</SummaryEmphasis></NodeMeta>
                               <CardFooter>
                                 <span />
-                                <Button variant="ghost" onClick={() => toggleNodeVms(node.node)} aria-expanded={expandedNode === node.node}>{demoSnapshot ? `VM ${nodeVmStates[node.node]?.items.length ?? 0}개 보기` : 'VM 목록 보기'}</Button>
+                                <Button variant="secondary" icon={icon('arrow-right')} onClick={() => toggleNodeVms(node.node)} aria-expanded={expandedNode === node.node}>{demoSnapshot ? `VM ${nodeVmStates[node.node]?.items.length ?? 0}개 보기` : 'VM 목록 보기'}</Button>
                               </CardFooter>
                             </>
                           ) : (
@@ -949,8 +984,10 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
                     {demoSnapshot ? <FailureList>{demoSnapshot.recentFailures.map((failure, index) => (
                       <FailureItem key={`${failure.name}-${failure.occurredAt}`}>
                         <FailureIcon>{icon('alert')}</FailureIcon>
-                        <FailureCopy><FailureName>{failure.name}</FailureName><FailureDetail>{failure.reason}</FailureDetail><FailureDetail>{failure.occurredAt}</FailureDetail></FailureCopy>
-                        {index === 0 && <Button variant="ghost" icon={icon('arrow-right')} onClick={() => navigate('/admin/vms')}>전체 VM 보기</Button>}
+                        <FailureCopy>
+                          <FailureName>{failure.name}</FailureName><FailureDetail>{failure.reason}</FailureDetail><FailureMeta>{failure.occurredAt}</FailureMeta>
+                          {index === 0 && <FailureActions><Button variant="secondary" icon={icon('arrow-right')} onClick={() => navigate('/admin/vms')}>전체 VM 보기</Button></FailureActions>}
+                        </FailureCopy>
                       </FailureItem>
                     ))}</FailureList> : <GapMessage>실패 이력 조회 API가 없어 최근 생성 실패 정보를 표시할 수 없습니다.</GapMessage>}
                   </Panel>
@@ -964,7 +1001,7 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
                     {demoSnapshot ? <CardFooter><span /><Button variant="secondary" icon={icon('calendar')} onClick={() => navigate('/admin/vms?expires=soon')}>만료 임박 VM 보기</Button></CardFooter> : <GapMessage>자원 만료 집계 API가 없어 수량을 표시할 수 없습니다.</GapMessage>}
                   </Panel>
                 </TwoColumns>
-                <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>
+                {/* Figma 26·28에는 조회 시각 문구가 없다. 실제 API 모드에서만 남긴다. */}{!demoSnapshot && <Breadcrumb aria-live="polite">최근 조회 {state.checkedAt ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(state.checkedAt) : '—'}</Breadcrumb>}
               </>
             ) : stateContent()}
               </>

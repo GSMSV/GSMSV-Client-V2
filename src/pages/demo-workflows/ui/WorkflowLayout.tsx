@@ -48,13 +48,15 @@ const AdminSidebar = styled.aside<{ $open: boolean }>`
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
+// Figma 관리자 Sidebar(89:6997): Brand 34px → 8 → 워크스페이스 → 8 + 16 + 8 → 메뉴(y=120), 메뉴 사이 8px.
 const Brand = styled.div`
   display: flex;
+  min-height: 34px;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
+  padding: 0 12px;
   color: ${({ theme }) => theme.colors.text};
-  font: 700 22px/28px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
 `;
 const BrandMark = styled.img`
   display: block;
@@ -62,7 +64,7 @@ const BrandMark = styled.img`
   height: 24px;
 `;
 const Workspace = styled.span`
-  margin: 0 8px 12px;
+  margin: 0 12px 16px;
   color: ${({ theme }) => theme.colors.faint};
   font: 400 12px/18px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
@@ -76,12 +78,12 @@ const AdminNavButton = styled.button<{ $active: boolean }>`
   min-height: 42px;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 16px;
   border: 0;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
   color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
-  font: 500 14px/20px ${({ theme }) => theme.typography.body.family}, sans-serif;
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
   text-align: left;
   cursor: pointer;
 
@@ -89,7 +91,7 @@ const AdminNavButton = styled.button<{ $active: boolean }>`
 `;
 const AdminDivider = styled.div`
   height: 1px;
-  margin: 4px 0;
+  margin: 0;
   background: ${({ theme }) => theme.colors.border};
 `;
 const AdminMain = styled.div`
@@ -178,6 +180,21 @@ const AdminHeaderActions = styled.div`
   gap: ${({ theme }) => theme.space[16]}px;
   @media ${mobileNavigationMedia} { grid-area: identity; gap: 4px; }
   @media (max-width: 480px) { gap: 0; }
+`;
+// Figma Global topbar: 알림 수는 초록색, "관리자"는 배경 없는 글자 표시다.
+const AdminUnread = styled.span`
+  color: ${({ theme }) => theme.colors.primary};
+`;
+const AdminIdentity = styled.span`
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
+  white-space: nowrap;
+  @media (max-width: 480px) { padding: 0 8px; }
 `;
 const AdminContent = styled.main`
   width: 100%;
@@ -438,8 +455,8 @@ export function WorkflowLayout({ children, admin = false, activeAdminItem = '승
             <AdminHeaderLabel>관리자 콘솔</AdminHeaderLabel>
             <AdminSearch><Octicon name="search" size={16} />이름 또는 GRN으로 검색</AdminSearch>
             <AdminHeaderActions>
-              <Button id="workflow-admin-notifications-trigger" variant="ghost" icon={<Octicon name="bell" size={16} />} aria-expanded={notificationsOpen} aria-controls="notification-panel" onClick={() => setNotificationsOpen(value => !value)}>알림{unreadCount > 0 ? ` ${unreadCount}` : ''}</Button>
-              <Button variant="ghost" icon={<Octicon name="person" size={16} />} disabled>관리자</Button>
+              <Button id="workflow-admin-notifications-trigger" variant="ghost" icon={<Octicon name="bell" size={16} />} aria-expanded={notificationsOpen} aria-controls="notification-panel" onClick={() => setNotificationsOpen(value => !value)}><span>알림{unreadCount > 0 && <> <AdminUnread>{unreadCount}</AdminUnread></>}</span></Button>
+              <AdminIdentity><Octicon name="person" size={16} />관리자</AdminIdentity>
             </AdminHeaderActions>
           </AdminHeader>
           <AdminContent>{children}</AdminContent>
