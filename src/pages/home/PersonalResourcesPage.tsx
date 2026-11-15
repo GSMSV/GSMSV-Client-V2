@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import styled from 'styled-components';
-import { listPersonalApps, type AppSummary } from '../../entities/app';
+import { listPersonalApps, type AppListItem, type AppSummary } from '../../entities/app';
 import { listDatabases, type DatabaseSummary } from '../../entities/database';
 import { getMyQuota, type MyQuota, type QuotaAmount, type VmQuotaAmount } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
@@ -154,6 +154,10 @@ const CardFooter = styled.div`
   margin-top: auto;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  > span:first-child {
+    font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  }
 `;
 
 const State = styled.span<{ $tone?: 'primary' | 'warning' | 'danger' }>`
@@ -218,59 +222,15 @@ const ResourceTableEmpty = styled.div`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const ResourceTableRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  align-items: center;
-  min-height: 56px;
-  padding: 8px 20px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  color: ${({ theme }) => theme.colors.text};
-  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 
-  @media (max-width: 800px) {
-    grid-template-columns: minmax(120px, 1.5fr) repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    padding-inline: 16px;
-  }
 
-  @media (max-width: 640px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 16px;
-    padding: 16px;
-  }
 
-  > :nth-child(3) {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-`;
-
-const ResourceTableCell = styled.span`
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  overflow-wrap: anywhere;
-`;
-
-const ResourceTableLabel = styled.span`
-  display: none;
-  color: ${({ theme }) => theme.colors.faint};
-  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
-
-  @media (max-width: 640px) {
-    display: block;
-  }
-`;
-
-const WorkPanel = styled.div`
+const WorkPanel = styled.section`
   display: flex;
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  padding: 16px;
+  padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
 `;
@@ -290,6 +250,9 @@ const WorkRow = styled.button`
   font: inherit;
   text-align: left;
   cursor: pointer;
+
+  &:first-of-type { border-top: 0; }
+  > svg { flex: none; color: ${({ theme }) => theme.colors.primary}; }
 
   &:hover strong { text-decoration: underline; }
 
@@ -489,6 +452,82 @@ const FailureActions = styled.div`
   gap: 8px;
 `;
 
+const VmPanel = styled(Card)`
+  min-height: 0;
+`;
+
+const VmTable = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const vmColumns = 'minmax(0, 241fr) minmax(0, 142fr) minmax(0, 252fr) minmax(0, 142fr) minmax(0, 142fr) minmax(0, 175fr)';
+
+const VmTableHeader = styled.div`
+  display: grid;
+  grid-template-columns: ${vmColumns};
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  > span { padding: 12px; }
+
+  @media (max-width: 800px) { display: none; }
+`;
+
+const VmTableRow = styled.div`
+  display: grid;
+  min-height: 66px;
+  grid-template-columns: ${vmColumns};
+  align-items: center;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  > * { min-width: 0; padding: 0 12px; overflow-wrap: anywhere; }
+
+  @media (max-width: 800px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 0;
+    padding: 16px 0;
+  }
+`;
+
+const VmNameCell = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  svg { flex: none; color: ${({ theme }) => theme.colors.primary}; }
+
+  @media (max-width: 800px) { grid-column: 1 / -1; }
+`;
+
+const VmCellLabel = styled.span`
+  display: none;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+
+  @media (max-width: 800px) { display: block; }
+`;
+
+const VmCell = styled.span<{ $tone?: 'primary' }>`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: ${({ theme, $tone }) => $tone === 'primary' ? theme.colors.primary : theme.colors.text};
+`;
+
+const VmActions = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  @media (max-width: 800px) { grid-column: 1 / -1; }
+`;
+
 const GraduationCount = styled.span`
   color: ${({ theme }) => theme.colors.primary};
 `;
@@ -541,6 +580,44 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeZone: 'Asia/Seoul' }).format(date);
 }
 
+/** Figma 03(48:16) 날짜 표기: 2026. 10. 06. */
+function formatPaddedDate(value: string) {
+  const plain = /^(\d{4})[.-]\s?(\d{2})[.-]\s?(\d{2})\.?$/.exec(value.trim());
+  if (plain) return `${plain[1]}. ${plain[2]}. ${plain[3]}.`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Seoul' }).formatToParts(date);
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? '';
+  return `${part('year')}. ${part('month')}. ${part('day')}.`;
+}
+
+/** 개인 VM 데모 기준 시각(2026-09-29 14:00 KST). 홈 만료 배너의 "만료까지 4일"과 같은 기준이다. */
+const personalVmReferenceTime = Date.UTC(2026, 8, 29, 5);
+
+function formatVmDaysRemaining(expiresAt: string) {
+  const match = /^(\d{4})\.(\d{2})\.(\d{2})(?: (\d{2}):(\d{2}))?/.exec(expiresAt);
+  if (!match) return { label: '—', soon: false };
+  const expiry = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4] ?? 14) - 9, Number(match[5] ?? 0));
+  const days = Math.max(0, Math.ceil((expiry - personalVmReferenceTime) / 86_400_000));
+  return { label: `${days}일`, soon: days <= 7 };
+}
+
+function formatVmQuotaSummary(vm: MyQuota['vm']) {
+  const amount = (value: VmQuotaAmount, unit = '') => `${value.used}/${value.limit ?? '∞'}${unit}`;
+  const left = (value: VmQuotaAmount) => value.limit === null ? 0 : Math.max(0, value.limit - value.used);
+  const remaining = [
+    left(vm.vcpu) > 0 ? `vCPU ${left(vm.vcpu)}` : '',
+    left(vm.ram_gb) > 0 ? `RAM ${left(vm.ram_gb)}GB` : '',
+    left(vm.ssd_gb) > 0 ? `SSD ${left(vm.ssd_gb)}GB` : '',
+  ].filter(Boolean);
+  const exhausted = left(vm.vcpu) === 0 || left(vm.ram_gb) === 0;
+  return `개인 할당량 vCPU ${amount(vm.vcpu)} · RAM ${amount(vm.ram_gb, 'GB')} · SSD ${amount(vm.ssd_gb, 'GB')} · ${exhausted || remaining.length === 0 ? '남은 할당량 없음' : `남은 할당량 ${remaining.join(' · ')}`}`;
+}
+
+function formatCount(value: QuotaAmount) {
+  return `${value.used}/${value.limit}`;
+}
+
 function formatQuota(value: QuotaAmount | VmQuotaAmount) {
   return `${value.used} / ${value.limit === null ? '개인 한도 없음' : value.limit}`;
 }
@@ -580,6 +657,7 @@ export default function PersonalResourcesPage() {
   const [cancelError, setCancelError] = useState('');
   const [apps, setApps] = useState<Loadable<AppSummary[]>>(initialLoadable);
   const [databases, setDatabases] = useState<Loadable<DatabaseSummary[]>>(initialLoadable);
+  const [databaseFunctions, setDatabaseFunctions] = useState<Record<string, string[]>>({});
   const [quota, setQuota] = useState<Loadable<MyQuota>>(initialLoadable);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(true);
@@ -636,15 +714,19 @@ export default function PersonalResourcesPage() {
         functions: personalFunctions.map(fn => ({
           id: fn.id,
           name: fn.name,
-          runtime: fn.runtime === 'javascript' ? 'Node.js' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
+          runtime: fn.runtime === 'javascript' ? 'JavaScript' : fn.runtime === 'typescript' ? 'TypeScript' : 'Python',
           status: fn.active ? 'active' : 'paused',
           executionsToday: fn.runs.length,
+          description: fn.description,
+          expiresAt: fn.expiresAt,
         })),
       } : null);
       setDemoVms(personalVms);
       setInitializingVms(personalVms.filter(vmRepository.isDemoVmInitializing).map(vm => vm.id));
       setApps({ value: appRepository.getDemoAppSummaries({ type: 'user', id: 'demo-student', name: '김지민' }), loading: false, error: false });
-      setDatabases({ value: databaseRepository.listDemoDatabases('me'), loading: false, error: false });
+      const personalDatabases = databaseRepository.listDemoDatabases('me');
+      setDatabaseFunctions(Object.fromEntries(personalDatabases.map(database => [database.grn, databaseRepository.getDemoDatabaseConnectedFunctions(database.grn)])));
+      setDatabases({ value: personalDatabases, loading: false, error: false });
       const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
       setQuota({
         value: {
@@ -920,7 +1002,7 @@ export default function PersonalResourcesPage() {
               : `${expiringPersonalVm.expiresAt}에 만료됩니다. 지금 연장하면 14일 더 사용할 수 있습니다.`}
           tone="primary"
           icon={<Octicon name="clock" size={20} />}
-          secondaryAction={<Button variant="secondary" onClick={() => navigate(`/vms/${encodeURIComponent(expiringPersonalVm.id)}`)}>VM 관리</Button>}
+          secondaryAction={<Button variant="ghost" icon={<Octicon name="chevron-right" size={16} />} onClick={() => navigate(`/vms/${encodeURIComponent(expiringPersonalVm.id)}`)}>VM 관리</Button>}
           action={<Button variant="primary" disabled={Boolean(personalExtensionNotice)} onClick={() => {
             setPersonalExtensionError('');
             void vmExtension.extend(expiringPersonalVm.id);
@@ -963,9 +1045,8 @@ export default function PersonalResourcesPage() {
             </DocsRow>
           </DocsPanel>
         </> : <Sections>
-          {demoMode && queuedPersonalVms.length > 0 && <Section>
-            <SectionTitle>진행 중인 작업 · {queuedPersonalVms.length}</SectionTitle>
-            <WorkPanel>
+          {demoMode && queuedPersonalVms.length > 0 && <WorkPanel aria-labelledby="home-work-title">
+            <SectionTitle id="home-work-title">진행 중인 작업 · <GraduationCount>{queuedPersonalVms.length}</GraduationCount></SectionTitle>
               {queuedPersonalVms.map(vm => <WorkRow key={vm.id} type="button" aria-label={vm.name + (initializingVms.includes(vm.id) ? ' 초기 설정 확인' : ' 생성 취소')} onClick={() => {
                 if (initializingVms.includes(vm.id)) {
                   void navigate('/vms/' + encodeURIComponent(vm.id));
@@ -976,11 +1057,29 @@ export default function PersonalResourcesPage() {
               }}>
                 <Octicon name="clock" size={20} aria-hidden="true" />
                 <WorkCopy><strong>{vm.name}</strong><span>{initializingVms.includes(vm.id) ? '초기 설정을 진행하고 있습니다.' : '앞에 2건이 있습니다. 차례가 오면 생성을 시작합니다.'}</span></WorkCopy>
-                <WorkDetails><span>Standard · {vm.cpu} vCPU · {vm.memory} GB · {vm.disk} GB</span><State>{initializingVms.includes(vm.id) ? '설정 중' : '대기 중'}</State></WorkDetails>
+                <WorkDetails><span>{vm.cpu} vCPU · RAM {vm.memory} GB · SSD {vm.disk} GB</span><State>{initializingVms.includes(vm.id) ? '설정 중' : '대기 중'}</State></WorkDetails>
               </WorkRow>)}
-            </WorkPanel>
-          </Section>}
-          <Section>
+          </WorkPanel>}
+          {demoMode ? <VmPanel as="section" aria-labelledby="home-vm-title">
+            <SectionTitle id="home-vm-title">내 VM{quota.value ? ` · ${formatVmQuotaSummary(quota.value.vm)}` : ''}</SectionTitle>
+            {activePersonalVms.length ? <VmTable role="table" aria-label="내 VM 목록">
+              <VmTableHeader role="row"><span role="columnheader">VM</span><span role="columnheader">상태</span><span role="columnheader">Resources</span><span role="columnheader">가동 시간</span><span role="columnheader">남은 기간</span><span role="columnheader">관리</span></VmTableHeader>
+              {activePersonalVms.map(vm => {
+                const remaining = formatVmDaysRemaining(vm.expiresAt);
+                return <VmTableRow key={vm.id} role="row">
+                  <VmNameCell role="cell"><Octicon name="server" size={16} aria-hidden="true" /><ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink></VmNameCell>
+                  <VmCell role="cell" $tone={vm.status === 'running' ? 'primary' : undefined}><VmCellLabel>상태</VmCellLabel>{vm.status === 'running' ? '실행 중' : '중지됨'}</VmCell>
+                  <VmCell role="cell"><VmCellLabel>Resources</VmCellLabel>{vm.cpu} vCPU · {vm.memory} GB · {vm.disk} GB</VmCell>
+                  <VmCell role="cell"><VmCellLabel>가동 시간</VmCellLabel>{vm.status === 'running' ? '2일 19시간' : '정지 상태'}</VmCell>
+                  <VmCell role="cell" $tone={remaining.soon ? 'primary' : undefined}><VmCellLabel>남은 기간</VmCellLabel>{remaining.label}</VmCell>
+                  <VmActions role="cell">
+                    <Button variant="ghost" aria-label={`${vm.name} 관리`} icon={<Octicon name="chevron-right" size={16} />} onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)} />
+                    <Button variant="ghost" aria-label={`${vm.name} 전원`} onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>전원</Button>
+                  </VmActions>
+                </VmTableRow>;
+              })}
+            </VmTable> : <ResourceTableEmpty>아직 생성한 VM이 없습니다. VM 만들기를 눌러 첫 VM을 만들어 보세요.</ResourceTableEmpty>}
+          </VmPanel> : <Section>
             <SectionTitle>VM</SectionTitle>
             <QuotaPanel>
               <CardActions>
@@ -995,32 +1094,30 @@ export default function PersonalResourcesPage() {
             </QuotaPanel>
             <ResourceTable aria-label="내 VM 목록">
               <ResourceTableHeader><span>이름</span><span>상태</span><span>자원</span><span>만료일</span></ResourceTableHeader>
-              {demoMode && activePersonalVms.length ? activePersonalVms.map(vm => <ResourceTableRow key={vm.id}>
-                <ResourceTableCell><ResourceLink onClick={() => navigate(`/vms/${encodeURIComponent(vm.id)}`)}>{vm.name}</ResourceLink></ResourceTableCell>
-                <ResourceTableCell><ResourceTableLabel>상태</ResourceTableLabel><State $tone={vm.status === 'running' ? 'primary' : undefined}>{vm.status === 'running' ? '실행 중' : '중지됨'}</State></ResourceTableCell>
-                <ResourceTableCell><ResourceTableLabel>자원</ResourceTableLabel>{vm.cpu} vCPU · {vm.memory} GB RAM · {vm.disk} GB SSD</ResourceTableCell>
-                <ResourceTableCell><ResourceTableLabel>만료일</ResourceTableLabel>{formatDate(vm.expiresAt)}</ResourceTableCell>
-              </ResourceTableRow>) : demoMode ? <ResourceTableEmpty>아직 생성한 VM이 없습니다. VM 만들기를 눌러 첫 VM을 만들어 보세요.</ResourceTableEmpty> : <ResourceTableEmpty>VM 목록 계약이 공개되면 실제 상태와 만료일을 표시합니다. 현재 확인 가능한 VM 목록 API는 없습니다.</ResourceTableEmpty>}
+              <ResourceTableEmpty>VM 목록 계약이 공개되면 실제 상태와 만료일을 표시합니다. 현재 확인 가능한 VM 목록 API는 없습니다.</ResourceTableEmpty>
             </ResourceTable>
-          </Section>
+          </Section>}
 
           <Section>
             <SectionTitle>
-              {quota.value
+              {quota.value && demoMode
+                ? `Serverless · 함수 ${formatCount(quota.value.fn.count)}`
+                : quota.value
                 ? `Serverless · 함수 ${formatQuota(quota.value.fn.count)} · 오늘 실행 ${formatQuota(quota.value.fn.daily_executions)}`
                 : quota.error ? 'Serverless · 할당량을 불러오지 못했습니다' : 'Serverless · 할당량 불러오는 중'}
             </SectionTitle>
             <Cards>
               {demoMode && demoHome?.functions.map(fn => <Card key={fn.id}>
-                <CardActions><IconBox><Octicon name="code" size={20} /></IconBox><Button variant="secondary" onClick={() => navigate(`/serverless/${encodeURIComponent(fn.id)}`)}>함수 관리</Button></CardActions>
+                <CardActions><IconBox><Octicon name="code" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="chevron-right" size={16} />} onClick={() => navigate(`/serverless/${encodeURIComponent(fn.id)}`)}>함수 관리</Button></CardActions>
                 <CardName>{fn.name}</CardName>
-                <CardDescription>{fn.runtime} · 오늘 실행 {fn.executionsToday.toLocaleString('ko-KR')}회</CardDescription>
-                <CardFooter><span>{fn.status === 'active' ? '활성' : '중지됨'}</span><State $tone={fn.status === 'active' ? 'primary' : undefined}>{fn.status === 'active' ? '실행 가능' : '일시 중지'}</State></CardFooter>
+                <CardDescription>{fn.description || `${fn.runtime} · 오늘 실행 ${fn.executionsToday.toLocaleString('ko-KR')}회`}</CardDescription>
+                <CardFooter><span>{fn.expiresAt ? `만료 ${formatPaddedDate(fn.expiresAt)}` : fn.status === 'active' ? '활성' : '중지됨'}</span><State $tone={fn.status === 'active' ? 'primary' : undefined}>{fn.status === 'active' ? '활성' : '중지됨'} · {fn.runtime}</State></CardFooter>
               </Card>)}
               <EmptyCard>
-                <CardActions><IconBox><Octicon name="plus" size={20} /></IconBox><Button variant="primary" disabled={!demoMode} title={demoMode ? undefined : 'Serverless 함수 생성 API가 아직 없습니다'} onClick={() => navigate('/serverless/new')}>함수 만들기</Button></CardActions>
+                <CardActions><IconBox><Octicon name="plus" size={20} /></IconBox><Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!demoMode} title={demoMode ? undefined : 'Serverless 함수 생성 API가 아직 없습니다'} onClick={() => navigate('/serverless/new')}>함수 만들기</Button></CardActions>
                 <CardName>{demoMode ? '새 함수를 추가하세요' : '함수 목록을 표시할 수 없습니다'}</CardName>
-                <CardDescription>{demoMode ? 'HTTP 요청이나 정해진 시간에 함수를 실행할 수 있습니다.' : 'Serverless 함수 목록 API 계약이 공개되면 실제 함수를 연결합니다.'}</CardDescription>
+                <CardDescription>{demoMode ? '서버를 관리하지 않고 필요한 코드를 실행합니다.' : 'Serverless 함수 목록 API 계약이 공개되면 실제 함수를 연결합니다.'}</CardDescription>
+                {demoMode && quota.value && <CardDescription>{quota.value.fn.count.limit > quota.value.fn.count.used ? `함수 ${quota.value.fn.count.limit - quota.value.fn.count.used}개를 더 만들 수 있습니다.` : '함수를 더 만들 수 없습니다.'}</CardDescription>}
               </EmptyCard>
               {!demoMode && <EmptyCard>
                 <CardActions><IconBox><Octicon name="plus" size={20} /></IconBox><Button variant="primary" disabled title="Serverless 함수 생성 API가 아직 없습니다">함수 만들기</Button></CardActions>
@@ -1032,23 +1129,31 @@ export default function PersonalResourcesPage() {
           </Section>
 
           <Section>
-            <SectionTitle>Database{quota.value ? ` · ${formatQuota(quota.value.db.count)} · ${formatQuota(quota.value.db.shared_storage_gb)} GB` : ''}</SectionTitle>
+            <SectionTitle>Database{quota.value ? ` · ${demoMode ? formatCount(quota.value.db.count) : formatQuota(quota.value.db.count)} · ${formatQuota(quota.value.db.shared_storage_gb)} GB` : ''}</SectionTitle>
             {databases.loading ? <Cards><LoadingCard height={196} /><LoadingCard height={196} /></Cards> : databases.error ? <ErrorCard onRetry={() => setRetryKey(value => value + 1)} /> : (
               <Cards>
                 {databases.value?.map(database => {
                   const status = databaseStatus(database);
                   return <Card key={database.grn}>
-                    <CardActions><IconBox><Octicon name="database" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(database.grn)}`)}>Database 관리</Button></CardActions>
+                    <CardActions><IconBox><Octicon name="database" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="chevron-right" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(database.grn)}`)}>Database 관리</Button></CardActions>
                     <CardName>{database.name}</CardName>
-                    <CardDescription>{database.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {database.isolation === 'shared' ? '공유형' : '전용형'} · {database.storage.used_gb} GB 사용</CardDescription>
-                    <CardFooter><span>만료 {formatDate(database.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
+                    {demoMode ? <>
+                      <CardDescription>{databaseFunctions[database.grn]?.length ? `${databaseFunctions[database.grn].join(', ')} 함수가 연결해 쓰는 Database입니다.` : `${database.storage.used_gb} GB를 사용하고 있습니다.`}</CardDescription>
+                      <CardFooter><span>{database.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {database.isolation === 'shared' ? '공유형' : '전용형'} · 만료 {formatPaddedDate(database.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
+                    </> : <>
+                      <CardDescription>{database.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {database.isolation === 'shared' ? '공유형' : '전용형'} · {database.storage.used_gb} GB 사용</CardDescription>
+                      <CardFooter><span>만료 {formatDate(database.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
+                    </>}
                   </Card>;
                 })}
                 <EmptyCard>
                   <CardActions><IconBox><Octicon name="plus" size={20} /></IconBox><Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>Database 발급</Button></CardActions>
                   <CardName>새 Database를 발급하세요</CardName>
-                  <CardDescription>발급 가능한 수량은 Database quota에서 확인할 수 있습니다.</CardDescription>
-                  {quota.loading ? <LoadingCard height={18} /> : quota.error ? <CardFooter><span>사용량을 불러오지 못했습니다.</span><Button variant="ghost" onClick={() => setRetryKey(value => value + 1)}>다시 시도</Button></CardFooter> : quota.value ? <CardFooter><span>남은 Database {Math.max(0, quota.value.db.count.limit - quota.value.db.count.used)}개</span><span>{quota.value.db.shared_storage_gb.used} / {quota.value.db.shared_storage_gb.limit} GB</span></CardFooter> : null}
+                  {demoMode && quota.value ? <>
+                    <CardDescription>VM에 설치하지 않고 바로 쓰는 MySQL입니다.</CardDescription>
+                    <CardDescription>{quota.value.db.count.limit > quota.value.db.count.used ? `Database ${quota.value.db.count.limit - quota.value.db.count.used}개를 더 발급할 수 있습니다.` : 'Database를 더 발급할 수 없습니다.'}</CardDescription>
+                  </> : <CardDescription>발급 가능한 수량은 Database quota에서 확인할 수 있습니다.</CardDescription>}
+                  {demoMode && quota.value ? null : quota.loading ? <LoadingCard height={18} /> : quota.error ? <CardFooter><span>사용량을 불러오지 못했습니다.</span><Button variant="ghost" onClick={() => setRetryKey(value => value + 1)}>다시 시도</Button></CardFooter> : quota.value ? <CardFooter><span>남은 Database {Math.max(0, quota.value.db.count.limit - quota.value.db.count.used)}개</span><span>{quota.value.db.shared_storage_gb.used} / {quota.value.db.shared_storage_gb.limit} GB</span></CardFooter> : null}
                 </EmptyCard>
               </Cards>
             )}
@@ -1057,7 +1162,7 @@ export default function PersonalResourcesPage() {
           <Section>
             <SectionTitle>
               Apps{quota.value
-                ? ` · 앱 ${formatQuota(quota.value.app.count)} · 메모리 ${(quota.value.app.memory_mb.used / 1024).toLocaleString('ko-KR')} / ${(quota.value.app.memory_mb.limit / 1024).toLocaleString('ko-KR')} GB`
+                ? ` · 앱 ${demoMode ? formatCount(quota.value.app.count) : formatQuota(quota.value.app.count)} · 메모리 ${(quota.value.app.memory_mb.used / 1024).toLocaleString('ko-KR')} / ${(quota.value.app.memory_mb.limit / 1024).toLocaleString('ko-KR')} GB`
                 : apps.value ? ` · ${apps.value.length}개` : ''}
             </SectionTitle>
             {apps.loading ? <Cards><LoadingCard height={196} /><LoadingCard height={196} /></Cards> : apps.error ? <ErrorCard onRetry={() => setRetryKey(value => value + 1)} /> : (
@@ -1065,17 +1170,25 @@ export default function PersonalResourcesPage() {
                 {apps.value?.map(app => {
                   const status = appStatus(app.status);
                   return <Card key={app.grn}>
-                    <CardActions><IconBox><Octicon name="upload" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="arrow-right" size={16} />} onClick={() => navigate(demoMode ? `/apps/${encodeURIComponent(app.id)}/demo` : `/apps/${encodeURIComponent(app.grn)}`)}>앱 관리</Button></CardActions>
+                    <CardActions><IconBox><Octicon name="upload" size={20} /></IconBox><Button variant="secondary" icon={<Octicon name="chevron-right" size={16} />} onClick={() => navigate(demoMode ? `/apps/${encodeURIComponent(app.id)}/demo` : `/apps/${encodeURIComponent(app.grn)}`)}>앱 관리</Button></CardActions>
                     <CardName>{app.name}</CardName>
-                    <CardDescription>앱 서비스 상세 정보는 별도 API 계약을 확인할 수 없습니다.</CardDescription>
-                    <CardFooter><span>만료 {formatDate(app.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
+                    {demoMode ? <>
+                      <CardDescription>GitHub에 push하면 자동으로 다시 배포됩니다.</CardDescription>
+                      <CardFooter><span>{(app as AppListItem).demoDetails ? `웹 서비스 ${(app as AppListItem).demoDetails?.serviceCount}개 · ` : ''}만료 {formatPaddedDate(app.expires_at)}</span><State $tone={app.status === 'active' ? 'primary' : 'danger'}>{app.status === 'active' ? '실행 중 · production' : '정지됨'}</State></CardFooter>
+                    </> : <>
+                      <CardDescription>앱 서비스 상세 정보는 별도 API 계약을 확인할 수 없습니다.</CardDescription>
+                      <CardFooter><span>만료 {formatDate(app.expires_at)}</span><State $tone={status.tone}>{status.label}</State></CardFooter>
+                    </>}
                   </Card>;
                 })}
                 <EmptyCard>
                   <CardActions><IconBox><Octicon name="plus" size={20} /></IconBox><Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/apps/new')}>앱 만들기</Button></CardActions>
                   <CardName>새 앱을 배포하세요</CardName>
-                  <CardDescription>앱 생성 API에서 지원하는 이름만 전송할 수 있습니다.</CardDescription>
-                  {quota.value && <CardFooter><span>남은 앱 {Math.max(0, quota.value.app.count.limit - quota.value.app.count.used)}개</span><span>상시 실행 {formatQuota(quota.value.app.always_on)}</span></CardFooter>}
+                  {demoMode && quota.value ? <>
+                    <CardDescription>GitHub 저장소를 연결하면 빌드해서 띄워 줍니다.</CardDescription>
+                    <CardDescription>{quota.value.app.count.limit > quota.value.app.count.used ? `앱 ${quota.value.app.count.limit - quota.value.app.count.used}개를 더 만들 수 있습니다.` : '앱을 더 만들 수 없습니다.'}</CardDescription>
+                  </> : <CardDescription>앱 생성 API에서 지원하는 이름만 전송할 수 있습니다.</CardDescription>}
+                  {!demoMode && quota.value && <CardFooter><span>남은 앱 {Math.max(0, quota.value.app.count.limit - quota.value.app.count.used)}개</span><span>상시 실행 {formatQuota(quota.value.app.always_on)}</span></CardFooter>}
                 </EmptyCard>
               </Cards>
             )}

@@ -6,7 +6,17 @@ import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { ErrorCard, LoadingCard, ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
-import { Alert, Badge, Breadcrumb, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+import { Alert, Badge, Breadcrumb as WorkflowBreadcrumb, Card, CardHeader, Field, Heading, Hint, Muted, PageStack, SectionTitle, Select, Subtitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+
+const Breadcrumb = styled(WorkflowBreadcrumb)`
+  margin-bottom: 0;
+`;
+
+// Figma 53:3544 표기: 2026. 09. 28. 16:10
+function formatInquiryDate(value: string) {
+  const match = /^(\d{4})\.(\d{2})\.(\d{2}) (\d{2}:\d{2})$/.exec(value);
+  return match ? `${match[1]}. ${match[2]}. ${match[3]}. ${match[4]}` : value;
+}
 
 const InquiryCard = styled(Card)`
   box-sizing: border-box;
@@ -46,8 +56,11 @@ const InquiryRow = styled.div`
   grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 20px 0;
+  padding: 16px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  &:first-child { padding-top: 0; }
+  > button { align-self: start; }
 
   @media (max-width: 600px) {
     grid-template-columns: 20px minmax(0, 1fr);
@@ -209,7 +222,7 @@ export default function InquiryDemoPage() {
         <strong>아직 등록한 질문이 없습니다</strong>
         <Muted>Docs를 확인해도 해결되지 않는 문제가 있다면 문의를 남겨주세요. 답변이 등록되면 알림으로 알려드립니다.</Muted>
         <Hint>· 관련 VM을 선택하면 상황을 설명하기 쉽습니다.<br />· 문의 내용은 1~500자까지 입력할 수 있습니다.</Hint>
-      </EmptyInquiryState> : <InquiryList>{myItems.map((item) => <InquiryRow key={item.id}><InquiryIndicator aria-hidden="true"><Octicon name={item.status === '답변 완료' ? 'check-circle' : 'clock'} size={20} /></InquiryIndicator><InquiryCopy><InquiryTitle>{item.title}</InquiryTitle><InquiryDate>{item.createdAt} 등록</InquiryDate><Hint>{item.status === '답변 완료' ? `답변 완료 · ${item.repliedAt ?? '관리자가 답변했습니다.'}` : '검토가 끝나면 알림으로 안내해 드립니다.'}</Hint><InquiryStatus>{item.status}</InquiryStatus></InquiryCopy><Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} onClick={() => setPendingDelete(item)}>질문 삭제</Button></InquiryRow>)}</InquiryList>}
+      </EmptyInquiryState> : <InquiryList>{myItems.map((item) => <InquiryRow key={item.id}><InquiryIndicator aria-hidden="true"><Octicon name={item.status === '답변 완료' ? 'check-circle' : 'clock'} size={20} /></InquiryIndicator><InquiryCopy><InquiryTitle>{item.title}</InquiryTitle><InquiryDate>{formatInquiryDate(item.createdAt)} 등록</InquiryDate><Hint>{item.status === '답변 완료' ? `답변 완료 · ${item.repliedAt ? formatInquiryDate(item.repliedAt) : '관리자가 답변했습니다.'}` : '검토가 끝나면 알림으로 안내해 드립니다.'}</Hint><InquiryStatus>{item.status}</InquiryStatus></InquiryCopy><Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} onClick={() => setPendingDelete(item)}>질문 삭제</Button></InquiryRow>)}</InquiryList>}
     </InquiryCard>
     </>}
     {answers.map(item => <Answer key={item.id} aria-label={`${item.title} · 관리자 답변`}>

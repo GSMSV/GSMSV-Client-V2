@@ -170,7 +170,8 @@ export function SliderField({
   ...props
 }: SliderFieldProps) {
   const inputId = id ?? `slider-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-  const percent = max <= min ? 0 : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+  // min === max(예: 줄일 수 없는 SSD)는 Figma 12처럼 가득 찬 상태로 그린다.
+  const percent = max <= min ? (value >= max ? 100 : 0) : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
   const offset = 10 - (percent * 0.2);
 
   return (

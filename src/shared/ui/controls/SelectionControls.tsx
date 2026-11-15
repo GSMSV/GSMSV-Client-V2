@@ -8,6 +8,8 @@ export interface SwitchProps {
   defaultChecked?: boolean;
   disabled?: boolean;
   onChange?: (checked: boolean) => void;
+  /** 켜짐/꺼짐 대신 보여 줄 상태 문구(예: 켜짐 · 필수). */
+  statusText?: string;
 }
 
 const SwitchRow = styled.label<{ $disabled: boolean }>`
@@ -67,7 +69,7 @@ const SwitchText = styled.span`
   line-height: ${({ theme }) => theme.typography.caption.lineHeight}px;
 `;
 
-export function Switch({ label, ariaLabel, checked, defaultChecked, disabled = false, onChange }: SwitchProps) {
+export function Switch({ label, ariaLabel, checked, defaultChecked, disabled = false, onChange, statusText }: SwitchProps) {
   const id = useId();
   const [internalChecked, setInternalChecked] = useState(Boolean(defaultChecked));
   const isChecked = checked ?? internalChecked;
@@ -90,8 +92,8 @@ export function Switch({ label, ariaLabel, checked, defaultChecked, disabled = f
         aria-label={ariaLabel}
       />
       <SwitchTrack $checked={isChecked} $disabled={disabled} aria-hidden="true" />
-      <span>{label}</span>
-      <SwitchText aria-live="polite">{isChecked ? '켜짐' : '꺼짐'}</SwitchText>
+      {label && <span>{label}</span>}
+      <SwitchText aria-live="polite">{statusText ?? (isChecked ? '켜짐' : '꺼짐')}</SwitchText>
     </SwitchRow>
   );
 }

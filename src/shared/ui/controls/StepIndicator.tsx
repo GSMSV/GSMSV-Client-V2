@@ -52,11 +52,12 @@ export function StepIndicator({ number, label, active = false }: StepIndicatorPr
   );
 }
 
+/** Figma Navigation / step line(138:7305): 단계 사이의 가로 1px 선. */
 const Connector = styled.span<{ $length: 18 | 36 }>`
   display: inline-block;
-  width: 1px;
-  height: ${({ $length }) => $length}px;
-  flex: 0 0 1px;
+  width: ${({ $length }) => $length}px;
+  height: 1px;
+  flex: 0 0 ${({ $length }) => $length}px;
   background: ${({ theme }) => theme.colors.border};
 `;
 

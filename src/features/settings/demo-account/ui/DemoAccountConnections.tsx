@@ -181,20 +181,20 @@ export function DemoAccountConnections({ profile, onSave, onLogout, onGitHubConn
       <ConnectionRow>
         <Octicon name="link" aria-hidden="true" />
         <ConnectionCopy><span>GitHub</span><span>{profile.github ? `${profile.github} · 연결됨` : '연결되지 않음'}</span></ConnectionCopy>
-        <Button variant="secondary" onClick={() => { setTryOtherGithub(false); show(profile.github ? 'github-unlink' : 'github-progress'); }}>{profile.github ? '해제' : '연결'}</Button>
+        <Button variant="ghost" icon={<Octicon name={profile.github ? 'x' : 'link'} size={16} />} onClick={() => { setTryOtherGithub(false); show(profile.github ? 'github-unlink' : 'github-progress'); }}>{profile.github ? '해제' : '연결'}</Button>
       </ConnectionRow>
       <ConnectionRow>
         <Octicon name="link" aria-hidden="true" />
         <ConnectionCopy><span>Discord</span><span>{profile.discordConnected ? '@jimin_2107 · 연결됨' : '연결되지 않음 · 현재는 이메일로 알림을 받습니다.'}</span></ConnectionCopy>
-        <Button variant="secondary" onClick={() => { setTryDiscordAgain(false); show(profile.discordConnected ? 'discord-unlink' : 'discord-connect'); }}>{profile.discordConnected ? '해제' : '연결'}</Button>
+        <Button variant="ghost" icon={<Octicon name={profile.discordConnected ? 'x' : 'link'} size={16} />} onClick={() => { setTryDiscordAgain(false); show(profile.discordConnected ? 'discord-unlink' : 'discord-connect'); }}>{profile.discordConnected ? '해제' : '연결'}</Button>
       </ConnectionRow>
       <ConnectionRow>
         <Octicon name="terminal" aria-hidden="true" />
         <ConnectionCopy><span>CLI 기기</span><span>{deviceSummary}</span></ConnectionCopy>
-        <Button variant="secondary" onClick={() => show('cli-devices')}>관리</Button>
+        <Button variant="ghost" icon={<Octicon name="gear" size={16} />} onClick={() => show('cli-devices')}>관리</Button>
       </ConnectionRow>
       <AllDevicesAction>
-        <Button variant="secondary" onClick={() => { setCliReturn(null); show('cli-logout'); }}>모든 기기에서 로그아웃</Button>
+        <Button variant="danger" icon={<Octicon name="sign-out" size={16} />} onClick={() => { setCliReturn(null); show('cli-logout'); }}>모든 기기에서 로그아웃</Button>
       </AllDevicesAction>
       {modal}
     </>

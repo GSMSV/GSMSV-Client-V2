@@ -122,7 +122,7 @@ const LoginNotice = styled.section`
   background: ${({ theme }) => theme.colors.surface}; color: ${({ theme }) => theme.colors.muted};
   @media (max-width: 600px) { flex-wrap: wrap; }
 `;
-const NoticeCopy = styled.div`flex: 1; min-width: 0; p { margin: 4px 0 0; font-size: 12px; line-height: 18px; }`;
+const NoticeCopy = styled.div`flex: 1; min-width: 0; p { margin: 4px 0 0; font-size: 14px; line-height: 22px; }`;
 const NoticeTitle = styled.strong`
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
