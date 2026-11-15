@@ -606,7 +606,7 @@ export default function PersonalResourcesPage() {
         {demoMode && demoHome?.firstVisit ? <>
           <Notice role="note">
             <Octicon name="info" size={16} aria-hidden="true" />
-            <span><strong>일반 팀원으로 보고 있어요</strong><br />조회, SSH 접속 정보 확인, 사용 기간 연장을 할 수 있어요. 전원 제어와 설정 변경은 팀장에게 요청해 주세요.</span>
+            <span><strong>시작하기 전에 알아두세요</strong><br />일반 사용자 VM은 생성 7일 뒤 만료되며, 만료 7일 전부터 14일씩 연장할 수 있습니다. 관리자가 사용 목적을 확인합니다.</span>
           </Notice>
           <FirstVisitCards>
             <FirstVisitCard>
