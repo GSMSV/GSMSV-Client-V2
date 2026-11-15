@@ -304,7 +304,7 @@ export default function ServerlessCreatePage({ onCancel, onCreate, existingNames
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const lineCount = useMemo(() => code.split('\n').length, [code]);
-  const duplicateName = existingNames.some(existingName => existingName.trim().toLocaleLowerCase('ko-KR') === name.trim().toLocaleLowerCase('ko-KR'));
+  const duplicateName = existingNames.some(existingName => existingName.trim().toLowerCase() === name.trim().toLowerCase());
 
   const handleRuntimeChange = (value: string) => {
     const selectedRuntime = value as ServerlessRuntime;

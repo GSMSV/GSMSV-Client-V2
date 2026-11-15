@@ -160,7 +160,7 @@ export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promis
   const id = crypto.randomUUID();
   const fn: DemoServerlessFunction = { id, name: draft.name, description: draft.description, runtime: draft.runtime, timeoutSeconds: draft.timeoutSeconds, memoryMb: draft.memoryMb, code: draft.code, active: false, expiresAt: '생성 후 7일', variables: [], triggers: [], versions: [], runs: [], testResult: null };
   return transactDemoServerlessState(seed, normalizeState, state => {
-    if (state.functions.some(existing => !existing.teamId && existing.name.trim().toLocaleLowerCase('ko-KR') === draft.name.trim().toLocaleLowerCase('ko-KR'))) {
+    if (state.functions.some(existing => !existing.teamId && existing.name.trim().toLowerCase() === draft.name.trim().toLowerCase())) {
       return { duplicate: true as const };
     }
     version(fn, state, '함수 생성');

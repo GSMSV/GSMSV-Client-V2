@@ -340,9 +340,16 @@ export function ServerlessTestPage({
   const responseLineCount = Math.max(1, result?.responseJson.split('\n').length ?? 1);
   const outputLines = result?.logs ? result.logs.split('\n') : [];
   const jsonErrorLine = useMemo(() => {
-    const trailingComma = /,\s*[}\]]/.exec(requestPayload);
-    if (!trailingComma || trailingComma.index === undefined) return undefined;
-    return requestPayload.slice(0, trailingComma.index).split('\n').length;
+    const trailingCommas = [...requestPayload.matchAll(/,(\s*[}\]])/g)];
+    if (!trailingCommas.length) return undefined;
+    const normalizedPayload = requestPayload.replace(/,(\s*[}\]])/g, '$1');
+    try {
+      JSON.parse(normalizedPayload);
+      const index = trailingCommas[0].index;
+      return index === undefined ? undefined : requestPayload.slice(0, index).split('\n').length;
+    } catch {
+      return undefined;
+    }
   }, [requestPayload]);
   const execute = async () => {
     if (!onExecute || isExecuting) return;
