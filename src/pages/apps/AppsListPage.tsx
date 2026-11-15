@@ -8,18 +8,10 @@ import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/tea
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
-import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
+import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { ResourceListCards, ResourceListHeading, ResourceListPage, ResourceListSummary, ResourceListGuide } from '../../shared/ui/layout/ResourceListLayout';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-
-const Page = styled.div`
-  display: flex;
-  width: 100%;
-  max-width: 1224px;
-  flex-direction: column;
-  gap: 24px;
-  padding: 40px;
-`;
 
 const Breadcrumb = styled.p`
   width: 100%;
@@ -33,14 +25,6 @@ const HeadingGroup = styled.section`
   width: 100%;
   flex-direction: column;
   gap: 8px;
-`;
-
-const HeadingRow = styled.div`
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  width: 100%;
 `;
 
 const TitleBlock = styled.div`
@@ -60,13 +44,6 @@ const Description = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
-
-const SummaryRow = styled.section`
-  display: flex;
-  align-items: stretch;
-  gap: 16px;
-  width: 100%;
 `;
 
 const FlexibleUsageCard = styled(UsageCard)`
@@ -91,14 +68,6 @@ const SectionTitle = styled.h2`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
-`;
-
-const CardsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-  width: 100%;
 `;
 
 const EmptySurface = styled.div`
@@ -335,19 +304,19 @@ export default function AppsListPage() {
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
     >
-      <Page>
+      <ResourceListPage>
         <Breadcrumb>Apps</Breadcrumb>
         <HeadingGroup>
-          <HeadingRow>
+          <ResourceListHeading>
             <TitleBlock>
               <Title>Apps</Title>
               <Description>GitHub 저장소를 연결하면 빌드해서 띄워 주는 웹 앱입니다.</Description>
             </TitleBlock>
             <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={openCreateApp}>새 앱</Button>
-          </HeadingRow>
+          </ResourceListHeading>
         </HeadingGroup>
 
-        <SummaryRow aria-label="Apps 사용량">
+        <ResourceListSummary aria-label="Apps 사용량">
           {quota.loading ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
           ) : (
@@ -373,19 +342,19 @@ export default function AppsListPage() {
               />
             </>
           )}
-        </SummaryRow>
+        </ResourceListSummary>
         {quota.error && <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />}
 
         <Section>
           <SectionTitle>내 앱</SectionTitle>
           {apps.loading ? (
-            <CardsRow><LoadingCard width="calc((100% - 32px) / 3)" height={180} /></CardsRow>
+            <ResourceListCards><LoadingCard width="calc((100% - 32px) / 3)" height={180} /></ResourceListCards>
           ) : apps.error ? (
             <ErrorCard onRetry={() => setRetryKey(value => value + 1)} />
           ) : apps.value?.length ? (
-            <CardsRow>
+            <ResourceListCards>
               {apps.value.map(app => <AppResourceCard key={app.grn} app={app} onOpen={() => openApp(app)} />)}
-            </CardsRow>
+            </ResourceListCards>
           ) : (
             <EmptySurface>
               <EmptyTitle>아직 앱이 없습니다</EmptyTitle>
@@ -395,14 +364,14 @@ export default function AppsListPage() {
           )}
         </Section>
 
-        <Banner
+        <ResourceListGuide
           title="요청이 없으면 10분 뒤 잠듭니다"
           description="첫 요청이 오면 깨어나서 응답합니다. 컨테이너 안 파일은 재시작하면 사라지니, 남길 데이터는 Database에 저장하세요."
           tone="neutral"
           icon={<Octicon name="info" size={20} />}
           action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/docs')}>배포 방법 Docs</Button>}
         />
-      </Page>
+      </ResourceListPage>
 
       {quotaOpen && (
         <DialogBackdrop onClick={() => setQuotaOpen(false)}>
