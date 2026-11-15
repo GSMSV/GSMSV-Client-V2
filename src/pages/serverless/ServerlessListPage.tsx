@@ -10,12 +10,16 @@ import { ServerlessShell } from '../../widgets/serverless-shell';
 import { isDemoMode } from '../../shared/demo';
 
 const Page = styled.div`
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   max-width: 1224px;
   flex-direction: column;
   gap: 24px;
   padding: 40px;
+
+  @media (max-width: 960px) { padding: 24px; }
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const Breadcrumb = styled.p`
@@ -31,6 +35,11 @@ const Heading = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 `;
 
 const TitleGroup = styled.div`
@@ -53,10 +62,13 @@ const Description = styled.p`
 `;
 
 const SummaryRow = styled.section`
-  display: flex;
+  display: grid;
   width: 100%;
-  align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+
+  @media (max-width: 960px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const SummaryCard = styled(UsageCard)`
@@ -100,6 +112,11 @@ const FunctionCard = styled.article`
   padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) {
+    width: 100%;
+    min-width: 0;
+  }
 `;
 
 const CardActions = styled.div`
@@ -185,6 +202,11 @@ const Guide = styled.aside`
   padding: 16px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 `;
 
 const GuideText = styled.div`
