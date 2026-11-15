@@ -51,7 +51,7 @@ const Scrim = styled.div`
   display: grid;
   place-items: center;
   padding: 24px;
-  background: ${({ theme }) => theme.colors.sidebar};
+  background: ${({ theme }) => `${theme.colors.sidebar}99`};
 `;
 
 const Dialog = styled.section`
