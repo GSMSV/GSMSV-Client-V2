@@ -380,9 +380,14 @@ export default function DatabaseCreatePage() {
         setSubmitting(false);
         return;
       }
+      // ?demoError=database-issue: 아무것도 만들기 전에 실패시킨다. 다시 시도하면 성공한다.
+      if (consumeDemoFailure('database-issue')) {
+        setDialog('failure');
+        setSubmitting(false);
+        return;
+      }
       let createdGrn: string;
       try {
-        if (consumeDemoFailure('database-issue')) throw new Error('DEMO_DATABASE_CREATE_FAILED');
         const { createDemoDatabase, getDemoDatabaseCredentials, listDemoDatabases } = await import('../../entities/database/demo');
         if (teamId && listDemoDatabases(teamId).length >= 4) {
           setDialog('teamLimit');
@@ -459,7 +464,7 @@ export default function DatabaseCreatePage() {
   const dialogContent: Record<Exclude<DialogState, null>, { title: string; copy: string; lines?: string[] }> = {
     count: { title: 'Database를 더 발급할 수 없습니다', copy: `내 Database ${count ? formatNumber(count.limit) : ''}개를 모두 쓰고 있습니다.${count ? ` 개인 ${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}`, lines: ['쓰지 않는 Database를 지우면 다시 발급할 수 있습니다.', '더 필요하면 팀을 만들어 팀 Database를 쓰세요.'] },
     teamLimit: { title: '팀 Database를 더 발급할 수 없습니다', copy: '현재 팀의 Database 발급 한도에 도달했습니다. 기존 Database를 확인한 뒤 다시 시도해 주세요.' },
-    storage: { title: '용량을 먼저 줄여 주세요', copy: '쓰기 금지 중인 Database가 있어서 새 Database를 발급할 수 없습니다.', lines: [...(!teamId && storage ? [`사용 용량 ${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB`] : []), `${teamId ? '용량을' : storageLimit} 아래로 줄이면 쓰기 금지가 풀리고 다시 발급할 수 있습니다.`] },
+    storage: { title: '용량을 먼저 줄여 주세요', copy: '쓰기 금지 중인 Database가 있어서 새 Database를 발급할 수 없습니다.', lines: [...(!teamId && storage ? [`사용 용량 ${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB`] : []), `${teamId ? '팀 용량을 한도' : storageLimit} 아래로 줄이면 쓰기 금지가 풀리고 다시 발급할 수 있습니다.`] },
     postgres: { title: 'PostgreSQL은 준비 중입니다', copy: '지금은 MySQL만 발급할 수 있습니다.' },
     permission: { title: 'Database를 발급할 권한이 없습니다', copy: '팀장 또는 DevOps만 팀 Database를 발급할 수 있습니다.' },
     notApproved: { title: '팀이 승인되면 발급할 수 있습니다', copy: '승인을 기다리는 팀은 Database를 만들 수 없습니다.', lines: ['팀원 초대와 팀장 넘기기는 지금도 할 수 있습니다.'] },

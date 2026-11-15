@@ -300,7 +300,10 @@ export function getDemoDatabaseCurrentConnections(grn: string): number {
   return database ? demoCurrentConnections[database.grn] ?? 0 : 0;
 }
 
-/** 정지된 Database는 정지 3일 뒤 삭제된다(정책). 목데이터 시점은 정지 당일로 고정한다. */
+/**
+ * 정지된 Database는 정지 3일 뒤 삭제된다(정책). 목데이터에서 정지는 만료 시각에 일어나므로
+ * expires_at이 곧 정지 시각이다(connect-legacy-db: 10월 6일 14:00 KST 만료·정지 → 10월 9일 14:00 삭제, Figma 44-04와 같음).
+ */
 export function getDemoDatabaseSuspensionInfo(grn: string): { deleteInDays: number; deleteAt: string } | null {
   const database = getDemoDatabase(grn);
   if (!database || database.status !== 'suspended') return null;
@@ -408,9 +411,10 @@ export function createDemoDatabase(
     expires_at: new Date(Date.now() + (dedicated ? 31 : 7) * 86_400_000).toISOString(),
     permissions: { ...fullPermissions },
   };
-  if (state.databases.some(item => ownerKey(item.owner) === ownerKey(ownerInfo) && item.write_locked)) database.write_locked = true;
   state.databases.unshift(database);
   syncDemoOwnerTotals(state);
+  // 쓰기 금지는 소유자 전체 사용량이 실제로 한도를 넘을 때만 새 Database에도 걸린다.
+  database.write_locked = database.storage.owner_total_used_gb > database.storage.owner_limit_gb;
   state.backups[database.grn] = [];
   state.passwords[database.grn] = `demo-${crypto.randomUUID().slice(0, 18)}`;
   if (!saveDemoDatabaseState(state)) throw new Error('DEMO_DATABASE_SAVE_FAILED');

@@ -91,6 +91,7 @@ const HelpText = styled.p`
 `;
 const FieldValueRow = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;`;
 const ActionRow = styled.div`display: flex; justify-content: flex-end;`;
+const TallErrorCard = styled(ErrorCard)`height: 276px;`;
 const CopyButton = styled.button`
   flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: ${({ theme }) => theme.colors.primary};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
@@ -361,6 +362,8 @@ export default function DatabaseDetailPage() {
               <ErrorCard onRetry={() => setRetry(value => value + 1)} />
               <ErrorCard onRetry={() => setRetry(value => value + 1)} />
             </Summary>
+            <TallErrorCard onRetry={() => setRetry(value => value + 1)} />
+            <ErrorCard onRetry={() => setRetry(value => value + 1)} />
             <ErrorCard onRetry={() => setRetry(value => value + 1)} />
           </>
         ) : detail.error && !detail.value ? (

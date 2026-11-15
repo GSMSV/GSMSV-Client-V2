@@ -239,6 +239,7 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
     }
     if (growing || shrinking) {
       // 목데이터: 쓰기 쿼리는 용량에 반영된다. 늘면 80% 경고·쓰기 금지, 줄면 쓰기 금지 해제가 상세에 나타난다.
+      setExecuting(true);
       void import('../../entities/database/demo').then(demo => {
         const updated = demo.applyDemoDatabaseWrite(databaseId, growing ? 'grow' : 'shrink');
         audit(Boolean(updated));
@@ -251,7 +252,7 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
         setResultColumns([]);
         setResultCount(0);
         setRan(true);
-      });
+      }).finally(() => setExecuting(false));
       return;
     }
     if (/--\s*demo:timeout\b/i.test(query)) {
