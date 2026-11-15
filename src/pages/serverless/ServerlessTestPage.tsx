@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Button, NavigationItem } from '../../shared/ui/controls';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 
 export type ServerlessTestTab = 'code' | 'versions' | 'triggers' | 'environment' | 'test' | 'logs';
@@ -15,6 +16,7 @@ export interface ServerlessTestResult {
   durationCaption?: string;
   logs: string;
   timestampLabel?: string;
+  dailyExecutionsUsed?: number;
 }
 
 export interface ServerlessTestPageProps {
@@ -22,7 +24,12 @@ export interface ServerlessTestPageProps {
   requestPayload?: string;
   result?: ServerlessTestResult | null;
   enabledTabs?: readonly ServerlessTestTab[];
-  onExecute?: (requestPayload: string) => void;
+  onExecute?: (requestPayload: string) => void | Promise<void>;
+  active?: boolean;
+  dailyExecutions?: { used: number; limit: number };
+  executionError?: 'inactive' | 'quota' | 'missing' | null;
+  onDismissExecutionError: () => void;
+  onActivate: () => void;
   onCopyResponse?: (responseJson: string) => void;
   onViewLogs?: () => void;
   onSelectTab?: (tab: ServerlessTestTab) => void;
@@ -251,6 +258,33 @@ const EmptyLog = styled.div`
   background: ${({ theme }) => theme.colors.sidebar};
 `;
 
+const ExecutionDialog = styled.div`
+  box-sizing: border-box;
+  display: flex;
+  width: min(480px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+`;
+
+const ExecutionDialogTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const ExecutionDialogCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const ExecutionDialogActions = styled.footer`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.faint};
 `;
@@ -260,6 +294,11 @@ export function ServerlessTestPage({
   requestPayload: initialPayload = '{\n  "name": "지민"\n}',
   result = null,
   enabledTabs = ['test'],
+  active = true,
+  dailyExecutions,
+  executionError = null,
+  onDismissExecutionError,
+  onActivate,
   onExecute,
   onCopyResponse,
   onViewLogs,
@@ -349,7 +388,9 @@ export function ServerlessTestPage({
         <SummaryCard data-node-id="53:2152">
           <SummaryLabel><Octicon name="play" size={16} />실행 경로</SummaryLabel>
           <SummaryValue>{result?.pathLabel ?? '—'}</SummaryValue>
-          <Caption>{result?.pathCaption ?? <Placeholder />}</Caption>
+          <Caption>{result?.dailyExecutionsUsed !== undefined && dailyExecutions
+            ? `오늘 실행 ${result.dailyExecutionsUsed.toLocaleString('ko-KR')} / ${dailyExecutions.limit.toLocaleString('ko-KR')}회에 포함됩니다`
+            : result?.pathCaption ?? <Placeholder />}</Caption>
         </SummaryCard>
         <SummaryCard data-node-id="593:6207">
           <SummaryLabel><Octicon name="clock" size={16} />걸린 시간</SummaryLabel>
@@ -367,6 +408,27 @@ export function ServerlessTestPage({
         )) : <EmptyLog aria-label="실행 Log 없음" />}
         <Caption>{result?.timestampLabel ? `${result.timestampLabel} · console.log` : <Placeholder />}</Caption>
       </LogsPanel>
+      {executionError && <ModalSurface labelledBy="serverless-test-error-title" onDismiss={onDismissExecutionError}>
+        <ExecutionDialog>
+          {executionError === 'inactive' ? <>
+            <ExecutionDialogTitle id="serverless-test-error-title">비활성 함수는 실행할 수 없습니다</ExecutionDialogTitle>
+            <ExecutionDialogCopy>{functionName}를 활성화하면 수동 테스트와 공개 URL 호출을 사용할 수 있습니다. 먼저 함수 상태를 변경해주세요.<br />현재 함수 상태<br />{active ? '활성' : '비활성'}</ExecutionDialogCopy>
+            <ExecutionDialogActions>
+              <Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button>
+              <Button type="button" variant="primary" onClick={onActivate}>함수 활성화</Button>
+            </ExecutionDialogActions>
+          </> : executionError === 'quota' ? <>
+            <ExecutionDialogTitle id="serverless-test-error-title">한도에 닿아서 실행하지 않았습니다</ExecutionDialogTitle>
+            <ExecutionDialogCopy>수동 실행도 하루 실행 한도에 포함됩니다. 다음 날 다시 실행해 주세요.<br />오늘 실행 {dailyExecutions?.used.toLocaleString('ko-KR') ?? '—'} / {dailyExecutions?.limit.toLocaleString('ko-KR') ?? '—'}회</ExecutionDialogCopy>
+            <ExecutionDialogActions>
+              <Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button>
+            </ExecutionDialogActions>
+          </> : <>
+            <ExecutionDialogTitle id="serverless-test-error-title">함수를 찾을 수 없습니다</ExecutionDialogTitle>
+            <ExecutionDialogActions><Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button></ExecutionDialogActions>
+          </>}
+        </ExecutionDialog>
+      </ModalSurface>}
     </Page>
   );
 }

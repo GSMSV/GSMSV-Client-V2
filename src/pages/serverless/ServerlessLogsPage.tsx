@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Button } from '../../shared/ui/controls';
 import { Pagination } from '../../shared/ui/data-display/Pagination';
 import { Banner } from '../../shared/ui/feedback';
+import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
 
 export type ServerlessLogsTab = 'code' | 'versions' | 'triggers' | 'environment' | 'test' | 'logs';
@@ -156,6 +157,12 @@ const Table = styled.div`
   overflow: hidden;
 `;
 
+const RunRows = styled.div`
+  overflow: auto;
+  max-height: 220px;
+  scrollbar-color: ${({ theme }) => `${theme.colors.faint} ${theme.colors.sidebar}`};
+`;
+
 const Row = styled.div`
   display: grid;
   grid-template-columns: 219px 300px 200px 180px minmax(120px, 1fr);
@@ -264,6 +271,32 @@ const Footnote = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+const DeleteDialogContent = styled.div`
+  box-sizing: border-box;
+  display: flex;
+  width: min(480px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+`;
+
+const DeleteDialogTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const DeleteDialogCopy = styled.div`
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const DeleteDialogActions = styled.footer`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
 function getResultLabel(result: ServerlessRunResult) {
   if (result === 'success') return '성공';
   return result === 'timeout' ? '시간 초과' : '실패';
@@ -285,6 +318,7 @@ export function ServerlessLogsPage({
   onDeleteAll,
 }: ServerlessLogsPageProps) {
   const [localSelection, setLocalSelection] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const currentSelection = selectedRunId ?? localSelection;
   const selectedRun = runs.find(run => run.id === currentSelection);
   const pageCount = Math.ceil(totalCount / pageSize);
@@ -321,7 +355,7 @@ export function ServerlessLogsPage({
         </Tabs>
         <Actions>
           <Button variant="secondary" icon={<Octicon name="sync" size={16} />} disabled={!onRefresh} onClick={onRefresh}>새로고침</Button>
-          <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!onDeleteAll} onClick={onDeleteAll}>전체 삭제</Button>
+          <Button variant="danger" icon={<Octicon name="trashcan" size={16} />} disabled={!onDeleteAll || totalCount === 0} onClick={() => setDeleteDialogOpen(true)}>전체 삭제</Button>
         </Actions>
       </TabsAndActions>
 
@@ -342,6 +376,7 @@ export function ServerlessLogsPage({
             <HeaderCell role="columnheader">걸린 시간</HeaderCell>
             <HeaderCell role="columnheader">상세</HeaderCell>
           </TableHeader>
+          <RunRows role="rowgroup">
           {runs.length === 0 ? (
             <EmptyRow role="row">{emptyMessage}</EmptyRow>
           ) : runs.map(run => {
@@ -365,6 +400,7 @@ export function ServerlessLogsPage({
               </DataRow>
             );
           })}
+          </RunRows>
         </Table>
         {pageCount > 1 && onPageChange && (
           <PaginationRow>
@@ -390,6 +426,20 @@ export function ServerlessLogsPage({
         )}
         <Footnote>출력은 1건당 8 KB까지 남고, 넘는 부분은 잘립니다. 비밀 변수 값은 가려서 보입니다.</Footnote>
       </Surface>
+      {deleteDialogOpen && <ModalSurface labelledBy="serverless-delete-runs-title" onDismiss={() => setDeleteDialogOpen(false)}>
+        <DeleteDialogContent>
+          <DeleteDialogTitle id="serverless-delete-runs-title">실행 Log를 모두 삭제하시겠습니까?</DeleteDialogTitle>
+          <DeleteDialogCopy>
+            {functionName}의 모든 실행 기록을 삭제합니다. 함수 코드와 Trigger는 유지됩니다.
+            <br />· 출력 Log · 요청 · 응답을 함께 삭제합니다.
+            <br />· 삭제한 Log는 복구할 수 없습니다.
+          </DeleteDialogCopy>
+          <DeleteDialogActions>
+            <Button type="button" variant="secondary" onClick={() => setDeleteDialogOpen(false)}>취소</Button>
+            <Button type="button" variant="danger" icon={<Octicon name="trashcan" size={16} />} onClick={() => { onDeleteAll?.(); setDeleteDialogOpen(false); }}>전체 삭제</Button>
+          </DeleteDialogActions>
+        </DeleteDialogContent>
+      </ModalSurface>}
     </Page>
   );
 }

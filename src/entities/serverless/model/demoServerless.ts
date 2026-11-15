@@ -8,7 +8,10 @@ export interface DemoServerlessVariable { name: string; secret: boolean; value?:
 export interface DemoServerlessTrigger { id: string; type: 'HTTP' | 'Cron'; schedule: string; enabled: boolean; }
 export interface DemoServerlessVersion { id: string; label: string; savedAt: string; author: string; changeSummary: string; current: boolean; code: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256; }
 export interface DemoServerlessRun { id: string; result: 'success' | 'failure' | 'timeout'; startedAt: string; path: string; duration: string; outputLines?: string[]; }
-export interface DemoServerlessTestResult { responseJson: string; statusLabel: string; statusMessage: string; pathLabel: string; pathCaption: string; durationLabel: string; durationCaption: string; logs: string; timestampLabel: string; }
+export interface DemoServerlessTestResult { responseJson: string; statusLabel: string; statusMessage: string; pathLabel: string; pathCaption: string; durationLabel: string; durationCaption: string; logs: string; timestampLabel: string; dailyExecutionsUsed?: number; }
+export type DemoServerlessTestExecution =
+  | { kind: 'executed'; result: DemoServerlessTestResult }
+  | { kind: 'inactive' | 'quota' | 'missing' };
 export interface DemoServerlessFunction {
   id: string; name: string; description: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256;
   code: string; active: boolean; expiresAt: string; publicUrl?: string; domain?: string | null; databaseId?: string; teamId?: string; variables: DemoServerlessVariable[]; triggers: DemoServerlessTrigger[];
@@ -17,8 +20,25 @@ export interface DemoServerlessFunction {
 export interface DemoServerlessState { functions: DemoServerlessFunction[]; dailyLimit: number; executionsToday: number; sequence: number; }
 
 const key = 'serverless.functions';
+const defaultWelcomePublicUrl = 'https://q8w2n5r7t1vz.example.com';
 const jsCode = `export default async function handler(request, env) {\n  const body = request?.method === "POST" ? await request.json().catch(() => ({})) : {};\n  const name = body.name || "지민";\n  const greeting = env.GREETING || "안녕하세요";\n  console.log("Greeting sent", name);\n  return Response.json({ message: greeting + ", " + name + "!" });\n}`;
 const pyCode = `def handler(request, env):\n    return {\n        "status": "ok",\n        "service": "health-check"\n    }`;
+const initialRuns: DemoServerlessRun[] = [
+  { id: 'run-1', result: 'success', startedAt: '2026. 09. 29. 14:34:12', path: '수동', duration: '182ms', outputLines: ['Greeting sent 지민', 'Using API_KEY ••••••••'] },
+  { id: 'run-2', result: 'success', startedAt: '2026. 09. 29. 13:08:27', path: 'HTTP POST', duration: '95ms' },
+  { id: 'run-3', result: 'success', startedAt: '2026. 09. 29. 09:00:00', path: '예약', duration: '1.2초' },
+  { id: 'run-4', result: 'timeout', startedAt: '2026. 09. 28. 17:23:41', path: 'HTTP POST', duration: '30초' },
+];
+const initialLogHistory: DemoServerlessRun[] = [
+  ...initialRuns,
+  ...Array.from({ length: 244 }, (_, index) => ({
+    id: `run-seed-${index + 5}`,
+    result: index % 13 === 0 ? 'failure' as const : 'success' as const,
+    startedAt: '2026. 09. 28. 16:00:00',
+    path: index % 2 === 0 ? 'HTTP POST' : '예약',
+    duration: index % 13 === 0 ? '실패' : '120ms',
+  })),
+];
 const seed: DemoServerlessState = {
   dailyLimit: 10_000,
   executionsToday: 1284,
@@ -26,7 +46,7 @@ const seed: DemoServerlessState = {
   functions: [
     {
       id: 'welcome-api', name: 'welcome-api', description: '서비스 첫 방문자를 위한 환영 메시지를 반환합니다.', runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128,
-      code: jsCode, active: true, expiresAt: '2026. 10. 06.', publicUrl: 'https://q8w2n5r7t1vz.example.com', databaseId: 'welcome-db',
+      code: jsCode, active: true, expiresAt: '2026. 10. 06.', publicUrl: defaultWelcomePublicUrl, databaseId: 'welcome-db',
       variables: [{ name: 'GREETING', secret: false, value: '안녕하세요' }, { name: 'API_KEY', secret: true }],
       triggers: [{ id: 'http', type: 'HTTP', schedule: 'POST', enabled: true }, { id: 'cron', type: 'Cron', schedule: '0 9 * * *', enabled: true }],
       versions: [
@@ -34,13 +54,8 @@ const seed: DemoServerlessState = {
         { id: '6', label: '버전 6', savedAt: '2026. 09. 29. 11:05', author: '김지민', changeSummary: '실행 제한', current: false, code: jsCode, runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128 },
         { id: '5', label: '버전 5', savedAt: '2026. 09. 28. 17:20', author: '김지민', changeSummary: '코드 · Runtime', current: false, code: jsCode, runtime: 'javascript', timeoutSeconds: 30, memoryMb: 128 },
       ],
-      runs: [
-        { id: 'run-1', result: 'success', startedAt: '2026. 09. 29. 14:34:12', path: '수동', duration: '182ms', outputLines: ['Greeting sent 지민', 'Using API_KEY ••••••••'] },
-        { id: 'run-2', result: 'success', startedAt: '2026. 09. 29. 13:08:27', path: 'HTTP POST', duration: '95ms' },
-        { id: 'run-3', result: 'success', startedAt: '2026. 09. 29. 09:00:00', path: '예약', duration: '1.2초' },
-        { id: 'run-4', result: 'timeout', startedAt: '2026. 09. 28. 17:23:41', path: 'HTTP POST', duration: '30초' },
-      ],
-      testResult: { responseJson: '{\n  "message": "안녕하세요, 지민!"\n}', statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: '오늘 실행 횟수에 포함됩니다', durationLabel: '182ms', durationCaption: '메모리 46MB', logs: 'Greeting sent 지민', timestampLabel: '2026. 09. 29. 14:34:12' },
+      runs: initialLogHistory,
+      testResult: { responseJson: '{\n  "message": "안녕하세요, 지민!"\n}', statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: '오늘 실행 1,285 / 10,000회에 포함됩니다', durationLabel: '182ms', durationCaption: '메모리 46MB', logs: 'Greeting sent 지민', timestampLabel: '2026. 09. 29. 14:34:12', dailyExecutionsUsed: 1285 },
     },
     {
       id: 'health-check', name: 'health-check', description: '개발 중인 서비스의 응답 상태를 확인합니다.', runtime: 'python', timeoutSeconds: 30, memoryMb: 128,
@@ -78,6 +93,16 @@ function normalizeState(value: unknown): { value: DemoServerlessState; changed: 
         trigger.schedule = '0 9 * * *';
         changed = true;
       }
+    }
+    if (fn.id === 'welcome-api' && fn.runs.length === initialRuns.length && initialRuns.every((run, index) => fn.runs[index]?.id === run.id)) {
+      fn.runs = structuredClone(initialLogHistory);
+      changed = true;
+    }
+    if (fn.id === 'welcome-api' && fn.testResult && fn.testResult.dailyExecutionsUsed === undefined) {
+      const used = migrated.executionsToday === 1284 ? 1285 : migrated.executionsToday;
+      fn.testResult.dailyExecutionsUsed = used;
+      fn.testResult.pathCaption = `오늘 실행 ${used.toLocaleString('ko-KR')} / ${migrated.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`;
+      changed = true;
     }
   }
   return { value: migrated, changed };
@@ -177,19 +202,33 @@ export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoSer
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
 export function regenerateDemoServerlessUrl(id: string) { return mutate(id, fn => { fn.publicUrl = `https://${crypto.randomUUID().slice(0, 12)}.example.com`; }); }
-export function executeDemoServerlessTest(id: string, payload: string): Promise<DemoServerlessTestResult | undefined> {
-  let output: DemoServerlessTestResult | undefined;
-  return mutate(id, (fn, state) => {
+export async function executeDemoServerlessTest(id: string, payload: string): Promise<DemoServerlessTestExecution> {
+  const { result } = await transactDemoServerlessState(seed, normalizeState, state => {
+    const fn = state.functions.find(item => item.id === id);
+    if (!fn) return { kind: 'missing' } as const;
+    if (!fn.active) return { kind: 'inactive' } as const;
+    if (state.executionsToday >= state.dailyLimit) return { kind: 'quota' } as const;
     const body = JSON.parse(payload) as { name?: string };
     const name = typeof body.name === 'string' ? body.name : '지민';
     const greeting = fn.variables.find(item => item.name === 'GREETING')?.value ?? '안녕하세요';
     const message = fn.runtime === 'python' ? '함수가 정상적으로 응답했습니다' : `${greeting}, ${name}!`;
     const timestamp = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Seoul' }).format(new Date());
-    output = { responseJson: JSON.stringify({ message: fn.runtime === 'python' ? 'ok' : message, ...(fn.runtime === 'python' ? { service: fn.name } : {}) }, null, 2), statusLabel: '성공', statusMessage: message, pathLabel: '수동 실행', pathCaption: '오늘 실행 횟수에 포함됩니다', durationLabel: '182ms', durationCaption: `메모리 ${Math.min(128, fn.memoryMb)}MB`, logs: `Greeting sent ${name}`, timestampLabel: timestamp };
-    fn.testResult = output;
     state.executionsToday += 1;
-    fn.runs.unshift({ id: crypto.randomUUID(), result: 'success', startedAt: timestamp, path: '수동', duration: '182ms', outputLines: output.logs.split('\n') });
-  }).then(() => output);
+    const execution: DemoServerlessTestResult = { responseJson: JSON.stringify({ message: fn.runtime === 'python' ? 'ok' : message, ...(fn.runtime === 'python' ? { service: fn.name } : {}) }, null, 2), statusLabel: '성공', statusMessage: message, pathLabel: '수동 실행', pathCaption: `오늘 실행 ${state.executionsToday.toLocaleString('ko-KR')} / ${state.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`, durationLabel: '182ms', durationCaption: `메모리 ${Math.min(128, fn.memoryMb)}MB`, logs: `Greeting sent ${name}`, timestampLabel: timestamp, dailyExecutionsUsed: state.executionsToday };
+    fn.testResult = execution;
+    fn.runs.unshift({ id: crypto.randomUUID(), result: 'success', startedAt: timestamp, path: '수동', duration: '182ms', outputLines: execution.logs.split('\n') });
+    return { kind: 'executed', result: execution } as const;
+  });
+  return result ?? { kind: 'missing' };
 }
-export function deleteDemoServerlessRuns(id: string) { return mutate(id, fn => { fn.runs = []; }); }
-export function getDemoServerlessUrl(id: string) { const fn = getDemoServerlessFunction(id); return fn?.publicUrl ?? `https://${id === 'welcome-api' ? 'q8w2n5r7t1vz' : id}.example.com`; }
+export function deleteDemoServerlessRuns(id: string) { return mutate(id, fn => { fn.runs = []; fn.testResult = null; }); }
+export function redactDemoServerlessSecrets(text: string, variables: DemoServerlessVariable[]): string {
+  return variables.reduce((visible, variable) => {
+    if (!variable.secret || !variable.value) return visible;
+    return visible.split(variable.value).join('••••••••');
+  }, text);
+}
+export function getDemoServerlessUrl(id: string) {
+  const fn = getDemoServerlessFunction(id);
+  return fn?.publicUrl ?? (id === 'welcome-api' ? defaultWelcomePublicUrl : `https://${id}.example.com`);
+}
