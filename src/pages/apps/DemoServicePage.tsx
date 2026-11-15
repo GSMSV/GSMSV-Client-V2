@@ -1250,7 +1250,7 @@ export function DemoStoppedPublicAppPage() {
     return (
       <PublicPage>
         <PublicHeader>
-          <button onClick={() => navigate("/")}>GSMSV</button>
+          <button type="button" onClick={() => navigate("/")}>GSM SV</button>
         </PublicHeader>
         <StoppedCard>
           <StoppedTitle>앱을 찾을 수 없습니다</StoppedTitle>
@@ -1260,7 +1260,7 @@ export function DemoStoppedPublicAppPage() {
   return (
     <PublicPage>
       <PublicHeader>
-        <button onClick={() => navigate("/")}>GSMSV</button>
+        <button type="button" onClick={() => navigate("/")}>GSM SV</button>
       </PublicHeader>
       <StoppedCard>
         <StoppedTitle>
