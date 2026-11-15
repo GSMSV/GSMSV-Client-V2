@@ -383,6 +383,7 @@ export function ServerlessTriggersPage({
   onConnectDomain,
 }: ServerlessTriggersPageProps) {
   const [dialogType, setDialogType] = useState<DemoServerlessTrigger['type'] | null>(null);
+  const [confirmUrlRegeneration, setConfirmUrlRegeneration] = useState(false);
   const [domainDialog, setDomainDialog] = useState<'input' | 'verification-error' | null>(null);
   const [domainDraft, setDomainDraft] = useState('');
   const nextTriggerType = getNextDemoServerlessTriggerType(triggers);
@@ -449,7 +450,7 @@ export function ServerlessTriggersPage({
         <SurfaceHeading>
           <SurfaceTitle>호출 주소</SurfaceTitle>
           <Actions>
-            <Button variant="secondary" icon={<Octicon name="sync" size={16} />} disabled={!onRegenerateUrl} onClick={onRegenerateUrl}>호출 주소 재발급</Button>
+          <Button variant="secondary" icon={<Octicon name="sync" size={16} />} disabled={!onRegenerateUrl} onClick={() => setConfirmUrlRegeneration(true)}>호출 주소 재발급</Button>
             <Button variant="secondary" icon={<Octicon name="play" size={16} />} disabled={!onTest} onClick={onTest}>테스트하기</Button>
           </Actions>
         </SurfaceHeading>
@@ -566,6 +567,19 @@ export function ServerlessTriggersPage({
           <DomainDialogActions>
             <Button type="button" variant="secondary" onClick={closeDomainDialog}>닫기</Button>
             <Button type="button" variant="primary" onClick={retryDomainVerification}>다시 확인</Button>
+          </DomainDialogActions>
+        </DomainDialog>
+      </DomainOverlay>}
+      {confirmUrlRegeneration && <DomainOverlay onMouseDown={event => { if (event.currentTarget === event.target) setConfirmUrlRegeneration(false); }}>
+        <DomainDialog role="alertdialog" aria-modal="true" aria-labelledby="serverless-url-regeneration-title">
+          <DomainDialogTitle id="serverless-url-regeneration-title">호출 주소를 재발급하시겠습니까?</DomainDialogTitle>
+          <DomainDialogCopy>
+            <span>· 지금 주소는 바로 막힙니다.</span>
+            <span>· 이 주소를 쓰는 곳을 새 주소로 바꿔 주세요.</span>
+          </DomainDialogCopy>
+          <DomainDialogActions>
+            <Button type="button" variant="secondary" onClick={() => setConfirmUrlRegeneration(false)}>취소</Button>
+            <Button type="button" variant="primary" onClick={() => { setConfirmUrlRegeneration(false); onRegenerateUrl?.(); }}>재발급</Button>
           </DomainDialogActions>
         </DomainDialog>
       </DomainOverlay>}
