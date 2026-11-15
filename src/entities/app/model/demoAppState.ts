@@ -249,14 +249,14 @@ const expiredWeb = structuredClone(demoAppSeed[0].services[0]);
 const expiredApp: DemoManagedApp = {
   ...structuredClone(demoTeamAppSeed),
   id: "demo-expired-app",
-  name: "events-web",
-  repository: "gsm-jimin/events-web",
+  name: "portfolio-web",
+  repository: "gsm-jimin/portfolio-web",
   expiresAtMs: demoNow - minute,
   stoppedFixture: true,
   services: [{
     ...expiredWeb,
     id: "demo-expired-web",
-    subdomain: "events-web",
+    subdomain: "portfolio-web",
     databaseId: "connect-db",
     shellOpen: false,
     shellLines: [],
