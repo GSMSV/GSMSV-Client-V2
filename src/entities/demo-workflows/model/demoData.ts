@@ -13,6 +13,7 @@ export interface Inquiry {
   content: string;
   source?: { title: string; url?: string };
   reply: string;
+  replyHistory?: string[];
   status: WorkflowStatus;
   isMine: boolean;
 }

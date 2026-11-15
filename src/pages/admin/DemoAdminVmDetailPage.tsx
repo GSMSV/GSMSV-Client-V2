@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoInfraSnapshot, saveDemoInfraSnapshot, type DemoInfraSnapshot } from '../../entities/infra-node/demo';
+import { addDemoNotification } from '../../entities/notification';
 import { Button } from '../../shared/ui/controls';
-import { DeleteConfirmDialog } from '../../shared/ui/feedback';
+import { ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
-import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Stat, Stats, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Stat, Stats, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
 const Expiry = styled.div`
   padding: 16px;
@@ -81,6 +82,27 @@ const DialogTitle = styled.h2`
 const DialogActions = styled(Actions)`
   margin-top: 8px;
 `;
+const AdminDeleteDialog = styled(Dialog)`
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 48px));
+  height: 664px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+
+  & > h2 { display: flex; align-items: center; gap: 12px; }
+`;
+const DeleteSummary = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: 400 14px/22px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+const DeleteCaption = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.faint};
+  font: 400 12px/18px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
 const SshActions = styled.div`
   display: flex;
   align-items: center;
@@ -100,6 +122,7 @@ export default function DemoAdminVmDetailPage() {
   const [snapshot, setSnapshot] = useState<DemoInfraSnapshot>(() => getDemoInfraSnapshot());
   const [notice, setNotice] = useState('');
   const [confirmName, setConfirmName] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
   const [showDelete, setShowDelete] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [panel, setPanel] = useState<DetailPanel>(null);
@@ -113,8 +136,9 @@ export default function DemoAdminVmDetailPage() {
     : 0;
 
   function persist(next: DemoInfraSnapshot) {
+    if (!saveDemoInfraSnapshot(next)) return false;
     setSnapshot(next);
-    saveDemoInfraSnapshot(next);
+    return true;
   }
 
   function updateDetails(patch: Partial<NonNullable<typeof details>>) {
@@ -135,6 +159,8 @@ export default function DemoAdminVmDetailPage() {
 
   function removeVm() {
     if (!vm || !details) return;
+    const reason = deleteReason.trim();
+    if (!reason || confirmName !== vm.name) return;
     const resources = snapshot.resources.filter(item => item.grn !== vm.grn);
     const nodeVms = Object.fromEntries(Object.entries(snapshot.nodeVms).map(([node, items]) => [
       node,
@@ -142,16 +168,27 @@ export default function DemoAdminVmDetailPage() {
     ]));
     const vmDetails = { ...snapshot.vmDetails };
     delete vmDetails[vm.grn];
-    persist({
+    if (!persist({
       ...snapshot,
       resources,
       nodeVms,
       vmDetails,
       expiringGrns: snapshot.expiringGrns.filter(grn => grn !== vm.grn),
       expiringWithinThreeDays: Math.max(0, snapshot.expiringWithinThreeDays - Number(snapshot.expiringGrns.includes(vm.grn))),
+    })) {
+      setNotice('VM을 삭제하지 못했습니다. 목록을 새로고침하고 다시 시도해 주세요.');
+      return;
+    }
+    const ownerNotified = addDemoNotification({
+      kind: 'vm-deleted-for-purpose-violation',
+      category: 'VM',
+      group: 'Resource',
+      title: `${vm.name}이(가) 삭제되었습니다`,
+      body: `관리자가 사용 목적 위반으로 삭제했습니다. 삭제 사유: ${reason}`,
+      resource: null,
     });
     setShowDelete(false);
-    setNotice(`${vm.name}을 로컬 미리보기에서 삭제했습니다.`);
+    setNotice(ownerNotified ? `${vm.name}을 삭제하고 소유자에게 사유를 전달했습니다.` : `${vm.name}을 삭제했지만 소유자 알림을 저장하지 못했습니다.`);
     navigate('/admin/vms');
   }
 
@@ -181,7 +218,7 @@ export default function DemoAdminVmDetailPage() {
       <Actions>
         <Button variant="secondary" icon={actionIcon('stop')} disabled={!running} onClick={() => changePower('stopped')}>정상 종료</Button>
         <Button variant="secondary" icon={actionIcon('sync')} disabled={running} onClick={() => changePower('running')}>재시작</Button>
-        <Button variant="danger" icon={actionIcon('trashcan')} onClick={() => { setConfirmName(''); setShowDelete(true); }}>관리자 삭제</Button>
+        <Button variant="danger" icon={actionIcon('trashcan')} onClick={() => { setConfirmName(''); setDeleteReason(''); setShowDelete(true); }}>관리자 삭제</Button>
       </Actions>
     </Heading>
     <Expiry>◷　{expiryDays <= 0 ? '만료되었습니다' : `만료까지 ${expiryDays}일 남았어요`}<br /><Muted>{details.expiresAt} (KST) · 로컬 미리보기 데이터</Muted></Expiry>
@@ -221,21 +258,31 @@ export default function DemoAdminVmDetailPage() {
         </SshButtons>
       </SshActions>
     </Card>
-    {showDelete && <Overlay onMouseDown={event => { if (event.target === event.currentTarget) setShowDelete(false); }}>
-      <DeleteConfirmDialog
-        open
-        title={`${vm.name}을(를) 삭제하시겠습니까?`}
-        description="로컬 미리보기 목록에서 이 VM을 삭제합니다. 실제 서버에는 영향을 주지 않습니다."
-        fieldLabel="확인을 위해 VM 이름을 입력하세요"
-        confirmationName={vm.name}
-        value={confirmName}
-        onValueChange={setConfirmName}
-        onConfirm={removeVm}
-        onCancel={() => setShowDelete(false)}
-        confirmLabel="VM 삭제"
-        hint="VM 이름을 정확히 입력하세요."
-      />
-    </Overlay>}
+    {showDelete && <ModalSurface labelledBy="admin-vm-delete-title" onDismiss={() => setShowDelete(false)}>
+      <AdminDeleteDialog aria-labelledby="admin-vm-delete-title">
+        <DialogTitle id="admin-vm-delete-title"><Octicon name="alert" size={24} />{vm.name}를 영구 삭제하시겠습니까?</DialogTitle>
+        <DeleteSummary>
+          <span>사용 목적 위반으로 삭제하는 이유를 입력해 주세요. 삭제 사유가 소유자에게 알림으로 전달됩니다.</span>
+          <span>· 디스크 데이터 {details.diskGb} GB</span>
+          <span>· Snapshot {details.retainedSnapshots}개 · 외부 접속 포트 3개 · HTTPS Domain 1개</span>
+          <span>· 실행 중인 VM은 강제 정지한 뒤 삭제됩니다.</span>
+          <span>· 삭제한 VM과 데이터는 복구할 수 없습니다.</span>
+        </DeleteSummary>
+        <Field htmlFor="admin-vm-delete-reason">삭제 사유
+          <Textarea id="admin-vm-delete-reason" value={deleteReason} placeholder="소유자에게 전달할 삭제 사유를 입력하세요" onChange={event => setDeleteReason(event.currentTarget.value)} />
+          <DeleteCaption>목적 위반 삭제 시 반드시 입력해야 합니다.</DeleteCaption>
+        </Field>
+        <Field htmlFor="admin-vm-delete-name">확인하려면 VM 이름을 입력하세요
+          <Input id="admin-vm-delete-name" value={confirmName} onChange={event => setConfirmName(event.currentTarget.value)} />
+          <DeleteCaption>VM 이름을 정확히 입력해야 삭제할 수 있습니다.</DeleteCaption>
+        </Field>
+        <DialogActions>
+          <Button variant="secondary" onClick={() => setShowDelete(false)}>취소</Button>
+          <Button variant="danger" icon={actionIcon('trashcan')} disabled={!deleteReason.trim() || confirmName !== vm.name} onClick={removeVm}>영구 삭제</Button>
+        </DialogActions>
+        {(!deleteReason.trim() || confirmName !== vm.name) && <DeleteCaption>삭제 사유와 정확한 VM 이름을 입력해 주세요.</DeleteCaption>}
+      </AdminDeleteDialog>
+    </ModalSurface>}
     {panel && <Overlay onMouseDown={event => { if (event.target === event.currentTarget) setPanel(null); }}>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="vm-management-title">
         <DialogTitle id="vm-management-title">{panel === 'purpose' ? '사용 목적 수정' : '자동 Snapshot 관리'}</DialogTitle>
