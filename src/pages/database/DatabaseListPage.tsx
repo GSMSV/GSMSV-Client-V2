@@ -8,18 +8,10 @@ import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary 
 import { isDemoMode } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
-import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
+import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { ResourceListCards, ResourceListHeading, ResourceListPage, ResourceListSummary, ResourceListGuide } from '../../shared/ui/layout/ResourceListLayout';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
-
-const Page = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  width: 100%;
-  max-width: 1224px;
-  padding: 40px;
-`;
 
 const Breadcrumb = styled.p`
   width: 100%;
@@ -32,14 +24,6 @@ const HeadingGroup = styled.section`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
-`;
-
-const HeadingRow = styled.div`
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
   width: 100%;
 `;
 
@@ -62,13 +46,6 @@ const Description = styled.p`
   font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
 `;
 
-const SummaryRow = styled.section`
-  display: flex;
-  align-items: stretch;
-  gap: 16px;
-  width: 100%;
-`;
-
 const FlexibleUsageCard = styled(UsageCard)`
   width: auto;
   min-width: 0;
@@ -86,14 +63,6 @@ const SectionTitle = styled.h2`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
-`;
-
-const CardsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-  width: 100%;
 `;
 
 const DatabaseCard = styled.article`
@@ -181,7 +150,7 @@ const SummaryLoading = styled(LoadingCard)`
 `;
 
 const DatabaseListError = styled(ErrorCard)`
-  width: 371px;
+  width: min(371px, 100%);
 `;
 
 const InlineRetry = styled.button`
@@ -456,10 +425,10 @@ export default function DatabaseListPage() {
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
     >
-      <Page>
+      <ResourceListPage>
         <Breadcrumb>Database</Breadcrumb>
         <HeadingGroup>
-          <HeadingRow>
+          <ResourceListHeading>
             <TitleBlock>
               <Title>Database</Title>
               <Description>VM에 설치하지 않고 발급받아 쓰는 데이터베이스입니다.</Description>
@@ -476,10 +445,10 @@ export default function DatabaseListPage() {
                 }}
               >새 Database</Button>
             ) : <Button variant="primary" icon={<Octicon name="plus" size={16} />} onClick={() => navigate('/databases/new')}>새 Database</Button>}
-          </HeadingRow>
+          </ResourceListHeading>
         </HeadingGroup>
 
-        {!isTeamScope && <SummaryRow aria-label="Database 사용량">
+        {!isTeamScope && <ResourceListSummary aria-label="Database 사용량">
           {quota.loading ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
           ) : (
@@ -506,33 +475,33 @@ export default function DatabaseListPage() {
               />
             </>
           )}
-        </SummaryRow>}
+        </ResourceListSummary>}
 
         <Section>
           <SectionTitle>{isTeamScope ? `${currentTeamName ?? '팀'} Database` : '내 Database'}</SectionTitle>
           {teams.error && <ScopeError role="alert">팀 범위를 불러오지 못했습니다.<Button variant="ghost" onClick={() => setScopeRetryKey(value => value + 1)}>다시 시도</Button></ScopeError>}
           {currentTeam.error && <ScopeError role="alert">팀 정보를 불러오지 못했습니다. 팀 접근 권한을 확인해 주세요.</ScopeError>}
           {databases.loading ? (
-            <CardsRow><LoadingCard width="calc((100% - 32px) / 3)" height={254} /></CardsRow>
+            <ResourceListCards><LoadingCard width="calc((100% - 32px) / 3)" height={254} /></ResourceListCards>
           ) : databases.error ? (
             <DatabaseListError onRetry={() => setRetryKey(value => value + 1)} />
           ) : (
-            <CardsRow>
+            <ResourceListCards>
               {databases.value?.map(database => (
                 <DatabaseResourceCard key={database.grn} database={database} onOpen={() => openDatabase(database)} />
               ))}
-            </CardsRow>
+            </ResourceListCards>
           )}
         </Section>
 
-        <Banner
+        <ResourceListGuide
           title="인터넷에서는 바로 접속할 수 없습니다"
           description={<BannerDescription>VM에서 Database에 연결하세요. PC의 DB 도구는 VM을 거치는 SSH 터널로 연결할 수 있습니다.</BannerDescription>}
           tone="neutral"
           icon={<Octicon name="info" size={20} />}
           action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/docs')}>접속 방법 Docs</Button>}
         />
-      </Page>
+      </ResourceListPage>
     </StudentShell>
   );
 }

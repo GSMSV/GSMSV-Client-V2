@@ -8,33 +8,17 @@ import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { ResourceListCards, ResourceListHeading, ResourceListPage, ResourceListSummary } from '../../shared/ui/layout/ResourceListLayout';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 import { isDemoMode } from '../../shared/demo';
 
 const TEAM_APP_LIMIT = 4;
-
-const Page = styled.div`
-  display: flex;
-  width: 100%;
-  max-width: 1224px;
-  flex-direction: column;
-  gap: 24px;
-  padding: 40px;
-`;
 
 const Breadcrumb = styled.p`
   width: 100%;
   margin: 0;
   color: ${({ theme }) => theme.colors.faint};
   font: 400 12px/18px ${({ theme }) => theme.typography.body.family}, sans-serif;
-`;
-
-const HeadingRow = styled.section`
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  width: 100%;
 `;
 
 const HeadingCopy = styled.div`
@@ -62,13 +46,6 @@ const CreateNote = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
-const SummaryRow = styled.section`
-  display: flex;
-  align-items: stretch;
-  gap: 16px;
-  width: 100%;
-`;
-
 const TeamUsageCard = styled(UsageCard)`
   width: auto;
   min-width: 0;
@@ -86,14 +63,6 @@ const SectionTitle = styled.h2`
   margin: 0;
   color: ${({ theme }) => theme.colors.text};
   font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
-`;
-
-const CardsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-  width: 100%;
 `;
 
 const EmptySurface = styled.div`
@@ -251,15 +220,15 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
     >
-      <Page>
+      <ResourceListPage>
         <Breadcrumb>{teamScope?.name ?? '팀'} / Apps</Breadcrumb>
-        <HeadingRow>
+        <ResourceListHeading as="section">
           <HeadingCopy>
             <Title>Apps</Title>
             <Description>{teamScope ? `${teamScope.name} 팀에서 관리하는 Apps입니다.` : '팀 Apps를 불러오고 있습니다.'}</Description>
           </HeadingCopy>
           <Button variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!team.value || (team.value.status !== 'approved' && !(demoMode && team.value.status === 'pending')) || (demoMode && team.value.my_role === 'member') || apps.loading || apps.error || !apps.value || appCount >= TEAM_APP_LIMIT} onClick={() => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new`)} title={team.value && team.value.status !== 'approved' ? '팀이 승인되면 앱을 만들 수 있어요' : appCount >= TEAM_APP_LIMIT ? '팀 Apps 생성 한도에 도달했습니다.' : undefined}>새 앱</Button>
-        </HeadingRow>
+        </ResourceListHeading>
         {team.value && team.value.status !== 'approved' && <CreateNote role="note">팀이 승인되면 앱을 만들 수 있어요</CreateNote>}
         {appCount >= TEAM_APP_LIMIT && <CreateNote role="note">팀 Apps는 최대 {TEAM_APP_LIMIT}개까지 만들 수 있습니다.</CreateNote>}
 
@@ -270,7 +239,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
           </ScopeError>
         )}
 
-        <SummaryRow aria-label="팀 Apps 사용량">
+        <ResourceListSummary aria-label="팀 Apps 사용량">
           {apps.loading && !apps.value ? <LoadingCard width="371px" height={174} /> : apps.error || !apps.value ? (
             <TeamUsageCard label="팀 Apps" value="— / 4" caption="팀 Apps 사용량을 확인할 수 없습니다." icon={<Octicon name="code" size={16} />} />
           ) : (
@@ -282,7 +251,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
               meter={{ value: Math.min(100, (appCount / TEAM_APP_LIMIT) * 100), tone: appCount >= TEAM_APP_LIMIT ? 'warning' : 'primary', label: '팀 Apps 사용량' }}
             />
           )}
-        </SummaryRow>
+        </ResourceListSummary>
 
         {team.loading && !team.value ? <LoadingCard width="100%" height={416} /> : team.error || !team.value ? (
           <ErrorCard onRetry={retry} />
@@ -290,17 +259,17 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
           <Section>
             <SectionTitle>{team.value.name} Apps</SectionTitle>
             {apps.loading && !apps.value ? (
-              <CardsRow><LoadingCard width="calc((100% - 32px) / 3)" height={180} /></CardsRow>
+              <ResourceListCards><LoadingCard width="calc((100% - 32px) / 3)" height={180} /></ResourceListCards>
             ) : apps.error || !apps.value ? (
               <ErrorCard onRetry={retry} />
             ) : apps.value.length ? (
-              <CardsRow>
+              <ResourceListCards>
                 {apps.value.map(app => (
                   <AppResourceCard key={app.grn} app={app} onOpen={() => navigate(demoMode
                     ? `/apps/${encodeURIComponent(app.id)}/demo`
                     : `/apps/${encodeURIComponent(app.grn)}`)} />
                 ))}
-              </CardsRow>
+              </ResourceListCards>
             ) : (
               <EmptySurface>
                 <EmptyTitle>아직 팀 Apps가 없습니다</EmptyTitle>
@@ -309,7 +278,7 @@ export default function TeamAppsListPage({ teamId }: { teamId: string }) {
             )}
           </Section>
         )}
-      </Page>
+      </ResourceListPage>
     </StudentShell>
   );
 }
