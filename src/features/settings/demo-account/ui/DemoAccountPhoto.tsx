@@ -4,6 +4,7 @@ import { Button } from '../../../../shared/ui/controls';
 import { selectPhoto, type PhotoSelection } from '../model/profilePhoto';
 import { AccountDialog, DialogCopy } from './AccountDialog';
 import { ProfilePhotoCropDialog, ProfilePhotoErrorDialog } from './ProfilePhotoDialog';
+import { Octicon } from '../../../../shared/ui/icons';
 
 const Actions = styled.div`
   display: flex;
@@ -46,8 +47,8 @@ export function DemoAccountPhoto({ photoUrl, onSave, onDraftChange }: {
   return (
     <Actions>
       <input ref={input} type="file" accept=".jpg,.jpeg,.png,.webp" hidden onChange={changePhoto} aria-label="프로필 사진 파일 선택" />
-      <Button variant="secondary" disabled={!photoUrl} onClick={() => { setDeleteFailed(false); setDeleting(true); }}>사진 삭제</Button>
-      <Button variant="secondary" onClick={choosePhoto}>사진 변경</Button>
+      <Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} disabled={!photoUrl} onClick={() => { setDeleteFailed(false); setDeleting(true); }}>사진 삭제</Button>
+      <Button variant="secondary" icon={<Octicon name="image" size={16} />} onClick={choosePhoto}>사진 변경</Button>
       {selection && ('error' in selection
         ? <ProfilePhotoErrorDialog error={selection.error} onChoose={choosePhoto} onDismiss={() => setSelection(null)} />
         : <ProfilePhotoCropDialog photo={selection} onDismiss={() => setSelection(null)} onSave={url => {

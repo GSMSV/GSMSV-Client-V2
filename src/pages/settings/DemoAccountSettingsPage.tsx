@@ -47,7 +47,37 @@ const Panel = styled.section`
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
 `;
-const DangerPanel = styled(Panel)`border: 1px solid ${({ theme }) => theme.colors.danger};`;
+// Figma 23(53:3934): 위험 구역은 danger 톤 배너형 카드다.
+const DangerPanel = styled.section`
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: ${({ theme }) => theme.space[16]}px;
+  padding: ${({ theme }) => theme.space[16]}px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.dangerSoft};
+
+  > svg { flex: none; color: ${({ theme }) => theme.colors.danger}; }
+
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+`;
+const DangerCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme: { typography: { bodySmall } } }) => `${bodySmall.weight} ${bodySmall.size}px/${bodySmall.lineHeight}px ${bodySmall.family}`}, sans-serif;
+`;
+const DangerTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.danger};
+  font: ${({ theme: { typography: { label } } }) => `${label.weight} ${label.size}px/${label.lineHeight}px ${label.family}`}, sans-serif;
+`;
 const PanelTitle = styled.h2`
   margin: 0;
   font: ${({ theme: { typography: { title } } }) => `${title.weight} ${title.size}px/${title.lineHeight}px ${title.family}`}, sans-serif;
@@ -126,7 +156,6 @@ const Description = styled.p`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme: { typography: { bodySmall } } }) => `${bodySmall.weight} ${bodySmall.size}px/${bodySmall.lineHeight}px ${bodySmall.family}`}, sans-serif;
 `;
-const MutedText = styled.p`margin: 0; color: ${({ theme }) => theme.colors.muted};`;
 const StateError = styled(ErrorCard)<{ $height: number }>`height: ${({ $height }) => $height}px; min-width: 0;`;
 
 type LoadStatus = 'loading' | 'error' | 'ready';
@@ -293,13 +322,12 @@ export default function DemoAccountSettingsPage() {
           />
         </Panel>
         <DangerPanel aria-labelledby="account-danger-title">
-          <ActionRow>
-            <div><PanelTitle id="account-danger-title">위험 구역 · 계정 탈퇴</PanelTitle><MutedText>탈퇴하면 내 VM·Database·함수·앱이 모두 삭제되며 되돌릴 수 없습니다. 팀 자원은 팀에 남습니다.</MutedText></div>
+          <Octicon name="alert" size={20} aria-hidden="true" />
+          <DangerCopy><DangerTitle id="account-danger-title">위험 구역 · 계정 탈퇴</DangerTitle><span>탈퇴하면 내 VM·Database·함수·앱이 모두 삭제되며 되돌릴 수 없습니다. 팀 자원은 팀에 남습니다.</span></DangerCopy>
             <DemoAccountWithdrawal email={profile.email} deleted={profile.accountDeleted} onWithdraw={() => {
               clearSessionUser();
               setProfile(getDemoProfile());
             }} onLogin={goToLogin} />
-          </ActionRow>
         </DangerPanel>
         </>}
         {blocker.state === 'blocked' && (

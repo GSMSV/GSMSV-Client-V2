@@ -119,7 +119,7 @@ const primaryNavigation = [
   { key: 'vm-create', label: 'VM 생성', icon: 'plus' },
   { key: 'serverless', label: 'Serverless', icon: 'zap' },
   { key: 'database', label: 'Database', icon: 'database' },
-  { key: 'apps', label: 'Apps', icon: 'code' },
+  { key: 'apps', label: 'Apps', icon: 'upload' },
   { key: 'team', label: '팀', icon: 'people' },
 ] as const;
 
@@ -163,7 +163,7 @@ export function StudentSidebar({ sidebarRef, open = false, onKeyDown, activeItem
         ))}
       </Navigation>
       <SidebarActions $atBottom={actionsAtBottom}>
-        <Button variant="secondary" icon={<Octicon name="plus" size={16} />} onClick={onCreateTeam}>
+        <Button variant="secondary" icon={<Octicon name="people" size={16} />} onClick={onCreateTeam}>
           팀 만들기
         </Button>
         <Button variant="ghost" icon={<Octicon name="pulse" size={16} />} onClick={onOpenStatus}>

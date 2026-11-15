@@ -41,9 +41,13 @@ const Warning = styled.div`
   margin: 16px 0;
   padding: 16px;
   border-radius: ${({ theme }) => theme.radii.base}px;
+  align-items: center;
   background: ${({ theme }) => theme.colors.warningSoft};
-  color: ${({ theme }) => theme.colors.warning};
+  color: ${({ theme }) => theme.colors.muted};
   font: 400 14px/22px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+
+  > svg { flex: none; color: ${({ theme }) => theme.colors.warning}; }
+  strong { color: ${({ theme }) => theme.colors.warning}; font-weight: 500; }
 `;
 const InfoLine = styled.div`
   display: grid;

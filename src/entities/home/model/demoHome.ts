@@ -9,6 +9,9 @@ export interface DemoFunctionSummary {
   runtime: string;
   status: 'active' | 'paused';
   executionsToday: number;
+  description?: string;
+  /** 표시용 만료일(예: 2026. 10. 06.). */
+  expiresAt?: string;
 }
 
 /** 홈 「VM을 만들지 못했어요」 배너에 다시 보여 줄 생성 요청 설정. */

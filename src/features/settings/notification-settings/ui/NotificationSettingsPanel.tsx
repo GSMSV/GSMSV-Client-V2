@@ -49,21 +49,21 @@ const Description = styled.p`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const Rows = styled.div`
+const Rows = styled.div<{ $single?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: ${({ $single }) => $single ? 8 : 16}px;
 `;
 
-const Row = styled.div`
+const Row = styled.div<{ $single?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(2, 180px);
+  grid-template-columns: ${({ $single }) => $single ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr) repeat(2, 180px)'};
   align-items: center;
   gap: 16px;
   min-height: 32px;
 
   @media (max-width: 600px) {
-    grid-template-columns: minmax(0, 1fr) 52px 52px;
+    grid-template-columns: ${({ $single }) => $single ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto auto'};
     gap: 8px;
   }
 `;
@@ -94,18 +94,6 @@ const ToggleCell = styled.div`
   justify-content: flex-end;
 `;
 
-const ChannelSwitch = styled(Switch)`
-  position: relative;
-
-  & > span:nth-of-type(2) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-`;
 
 const SaveError = styled.p`
   margin: 0;
@@ -178,8 +166,13 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
 
   useEffect(() => () => onUnsavedInputChange?.(false), [onUnsavedInputChange]);
 
-  const updateDraft = (group: string, channel: 'email' | 'discord', value: boolean) => {
-    setDraft(items => items.map(item => item.group === group && !item.locked ? { ...item, [channel]: value } : item));
+  // Figma 23(53:3934): 데모 계정 설정은 알림 종류마다 스위치 하나로 이메일·Discord 수신을 함께 켜고 끈다.
+  const singleToggle = demoDiscordConnected !== undefined;
+
+  const updateDraft = (group: string, channel: 'email' | 'discord' | 'both', value: boolean) => {
+    setDraft(items => items.map(item => item.group === group && !item.locked
+      ? channel === 'both' ? { ...item, email: value, discord: value } : { ...item, [channel]: value }
+      : item));
     setSaved(false);
     setSaveError(null);
   };
@@ -223,19 +216,23 @@ export function NotificationSettingsPanel({ onUnsavedInputChange, showChannelBan
 
         {loadError ? <ErrorCard onRetry={() => setRetryKey(value => value + 1)} /> : loading ? <LoadingCard height={220} /> : settings && (
           <>
-            <Rows>
-              <Row aria-hidden="true">
+            <Rows $single={singleToggle}>
+              {!singleToggle && <Row aria-hidden="true">
                 <span />
                 <ChannelHeader>이메일</ChannelHeader>
                 <ChannelHeader>Discord</ChannelHeader>
-              </Row>
-              {draft.map(item => <Row key={item.group}>
+              </Row>}
+              {draft.map(item => <Row key={item.group} $single={singleToggle}>
                 <RowLabel>
                   <span>{item.group}</span>
                   {item.locked && <LockedHint>{demoDiscordConnected === undefined ? '필수 알림 · 해제할 수 없습니다' : '자원이 삭제되기 전에 알리기 위해 끌 수 없습니다.'}</LockedHint>}
                 </RowLabel>
-                <ToggleCell><ChannelSwitch label={`${item.group} 이메일 수신`} checked={item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
-                <ToggleCell><ChannelSwitch label={`${item.group} Discord 수신`} checked={discordConnected && (item.locked || item.discord)} disabled={disabled || item.locked || saving || !discordConnected} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
+                {singleToggle
+                  ? <ToggleCell><Switch label="" ariaLabel={`${item.group} 알림 받기`} statusText={item.locked ? '켜짐 · 필수' : undefined} checked={item.locked || item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'both', value)} /></ToggleCell>
+                  : <>
+                    <ToggleCell><Switch label="" ariaLabel={`${item.group} 이메일 수신`} checked={item.email} disabled={disabled || item.locked || saving} onChange={value => updateDraft(item.group, 'email', value)} /></ToggleCell>
+                    <ToggleCell><Switch label="" ariaLabel={`${item.group} Discord 수신`} checked={discordConnected && (item.locked || item.discord)} disabled={disabled || item.locked || saving || !discordConnected} onChange={value => updateDraft(item.group, 'discord', value)} /></ToggleCell>
+                  </>}
               </Row>)}
               {draft.length === 0 && <GroupHint>설정할 알림 그룹이 없습니다.</GroupHint>}
             </Rows>

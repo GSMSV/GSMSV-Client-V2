@@ -38,8 +38,10 @@ const Panel = styled.aside`
   gap: ${({ theme }) => theme.space[16]}px;
   overflow-y: auto;
   padding: ${({ theme }) => theme.space[24]}px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 12px 36px #0007;
 
   &:focus { outline: none; }
 `;

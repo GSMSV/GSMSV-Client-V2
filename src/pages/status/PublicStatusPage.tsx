@@ -357,7 +357,7 @@ export default function PublicStatusPage() {
         </Brand>
         <HeaderActions aria-label="페이지 이동">
           <Button variant="ghost" onClick={() => window.location.assign('/docs')} icon={<Octicon name="book" size={16} />}>Docs</Button>
-          <Button variant="secondary" onClick={() => window.location.assign('/')} icon={<Octicon name="arrow-right" size={16} />}>GSM SV 열기</Button>
+          <Button variant="secondary" onClick={() => window.location.assign('/')} icon={<Octicon name="link-external" size={16} />}>GSM SV 열기</Button>
         </HeaderActions>
       </Header>
 
@@ -366,7 +366,7 @@ export default function PublicStatusPage() {
           <Heading>
             <Title>GSM SV 서비스 상태</Title>
             <Subtitle>
-              {demoMode ? '2026.09.30 14:32 기준 · 운영 상태 예시' : health.checkedAt ? `${formatCheckedAt(health.checkedAt)} 기준 · 1분마다 갱신됩니다` : 'API 상태를 확인합니다. · 1분마다 갱신됩니다'}
+              {demoMode ? '2026.09.30 14:32 기준 · 1분마다 갱신됩니다' : health.checkedAt ? `${formatCheckedAt(health.checkedAt)} 기준 · 1분마다 갱신됩니다` : 'API 상태를 확인합니다. · 1분마다 갱신됩니다'}
             </Subtitle>
           </Heading>
 

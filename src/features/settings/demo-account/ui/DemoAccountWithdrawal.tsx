@@ -5,6 +5,7 @@ import { DeleteConfirmDialog } from '../../../../shared/ui/feedback';
 import { ModalSurface } from '../../../../shared/ui/feedback/ModalSurface';
 import { getWithdrawalItems, getWithdrawalStep, withdrawDemoAccount, type WithdrawalStep } from '../model/demoWithdrawal';
 import { AccountDialog, DialogCopy } from './AccountDialog';
+import { Octicon } from '../../../../shared/ui/icons';
 
 export function DemoAccountWithdrawal({ email, deleted, onWithdraw, onLogin }: {
   email: string;
@@ -87,7 +88,7 @@ export function DemoAccountWithdrawal({ email, deleted, onWithdraw, onLogin }: {
   }
 
   return <>
-    <Button variant="danger" disabled={deleted} onClick={() => start()}>계정 탈퇴</Button>
+    <Button variant="ghost" icon={<Octicon name="trashcan" size={16} />} disabled={deleted} onClick={() => start()}>계정 탈퇴</Button>
     {modal}
   </>;
 }

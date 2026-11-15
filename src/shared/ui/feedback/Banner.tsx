@@ -16,6 +16,11 @@ const Surface = styled.section<{ $tone: BannerTone }>`
     $tone === 'warning' ? theme.colors.warningSoft :
     $tone === 'danger' ? theme.colors.dangerSoft : theme.colors.surface};
   color: ${({ theme }) => theme.colors.text};
+
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
 `;
 
 const IconSlot = styled.span<{ $tone: BannerTone }>`
@@ -36,6 +41,10 @@ const Copy = styled.div`
   flex: 1 1 auto;
   gap: 4px;
   min-width: 0;
+
+  @media (max-width: 600px) {
+    flex-basis: calc(100% - 36px);
+  }
 `;
 
 const Title = styled.strong<{ $tone: BannerTone }>`
@@ -62,6 +71,12 @@ const Actions = styled.div`
   align-items: center;
   gap: 8px;
   margin-left: auto;
+
+  @media (max-width: 600px) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
+  }
 `;
 
 export interface BannerProps {

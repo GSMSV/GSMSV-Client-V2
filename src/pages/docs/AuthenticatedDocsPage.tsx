@@ -200,20 +200,30 @@ const FaqAnswer = styled.p`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
-const FeedbackHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-`;
-
 const FeedbackBody = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  color: ${({ theme }) => theme.colors.muted};
+  svg { flex: 0 0 16px; }
+`;
+
+const FeedbackCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const FeedbackLabel = styled.span`
   color: ${({ theme }) => theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
-  svg { flex: 0 0 16px; }
+`;
+
+const FeedbackText = styled.span`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
 const FeedbackActions = styled.div`
@@ -463,13 +473,14 @@ export default function AuthenticatedDocsPage() {
         </Card>
 
         <Card aria-labelledby="feedback-title">
-          <FeedbackHeader>
-            <CardTitle id="feedback-title">문제가 해결됐습니까?</CardTitle>
-            <Button variant="ghost" disabled={!demoMode} title={!demoMode ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
-          </FeedbackHeader>
+          <CardTitle id="feedback-title">문제가 해결됐습니까?</CardTitle>
           <FeedbackBody>
             <Octicon name="question" size={16} aria-hidden="true" />
-            <span>Docs를 확인해도 해결되지 않는 문제가 있다면 문의를 남겨주세요.<br />답변이 등록되면 알림으로 알려드립니다.</span>
+            <FeedbackCopy>
+              <FeedbackLabel>더 도움이 필요하다면</FeedbackLabel>
+              <FeedbackText>관련 VM을 선택해 문의를 남겨주세요.</FeedbackText>
+            </FeedbackCopy>
+            <Button variant="ghost" disabled={!demoMode} title={!demoMode ? '문의 기능은 로컬 미리보기에서 확인할 수 있습니다.' : undefined} onClick={() => navigate('/support/inquiries')} icon={<Octicon name="comment-discussion" size={16} />}>문의하기</Button>
           </FeedbackBody>
           <FeedbackActions>
             <Button variant="secondary" aria-pressed={feedback === 'yes'} onClick={() => setFeedback('yes')} icon={<Octicon name="check" size={16} />}>도움이 됐습니다</Button>
