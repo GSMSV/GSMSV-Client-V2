@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { getApiHealth, type ApiHealth } from '../../features/status/get-api-health';
 import { ApiRequestError } from '../../shared/api';
+import { isDemoMode } from '../../shared/demo/model/demoMode';
 import { Button } from '../../shared/ui/controls';
 import { Octicon } from '../../shared/ui/icons';
 
@@ -125,12 +126,12 @@ const StatusBadge = styled.span<{ $state: 'up' | 'down' | 'unknown' }>`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
-const UptimeBadge = styled.span<{ $state: 'normal' | 'slow' }>`
+const UptimeBadge = styled.span<{ $state: 'normal' | 'slow' | 'unknown' }>`
   flex: 0 0 auto;
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme, $state }) => $state === 'slow' ? theme.colors.warningSoft : theme.colors.primarySoft};
-  color: ${({ theme, $state }) => $state === 'slow' ? theme.colors.warning : theme.colors.primary};
+  background: ${({ theme, $state }) => $state === 'slow' ? theme.colors.warningSoft : $state === 'normal' ? theme.colors.primarySoft : theme.colors.raised};
+  color: ${({ theme, $state }) => $state === 'slow' ? theme.colors.warning : $state === 'normal' ? theme.colors.primary : theme.colors.muted};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
@@ -173,14 +174,14 @@ const UptimeTrack = styled.div`
   height: 28px;
   gap: 2px;
 `;
-const UptimeSegment = styled.span<{ $state: 'normal' | 'slow' | 'incident' | 'maintenance' }>`
+const UptimeSegment = styled.span<{ $state: 'normal' | 'slow' | 'incident' | 'maintenance' | 'unknown' }>`
   min-width: 0;
   flex: 1 1 0;
   height: 28px;
   border-radius: 2px;
   background: ${({ theme, $state }) => $state === 'normal' ? theme.colors.primary
     : $state === 'slow' ? theme.colors.warning
-      : $state === 'incident' ? theme.colors.danger : theme.colors.faint};
+      : $state === 'incident' ? theme.colors.danger : $state === 'maintenance' ? theme.colors.faint : theme.colors.raised};
 `;
 const UptimeScale = styled.div`
   display: flex;
@@ -245,22 +246,13 @@ interface HealthState {
   error: boolean;
 }
 
-type HistorySegmentState = 'normal' | 'slow' | 'incident' | 'maintenance';
+type HistorySegmentState = 'normal' | 'slow' | 'incident' | 'maintenance' | 'unknown';
 interface ComponentHistory { name: string; status: 'normal' | 'slow'; uptime: string; exceptions: Record<number, HistorySegmentState>; }
+interface Incident { title: string; description: string; date: string; icon: 'alert' | 'check-circle' | 'calendar'; ongoing?: boolean; }
+interface StatusNotice { title: string; description: string; icon: 'alert' | 'calendar'; tone: 'warning' | 'surface'; }
+interface StatusDemoData { componentHistory: readonly ComponentHistory[]; incidents: readonly Incident[]; notices: readonly StatusNotice[]; historyDescription: string; }
 
-const componentHistory: ComponentHistory[] = [
-  { name: '로그인', status: 'normal', uptime: '100%', exceptions: {} },
-  { name: 'VM 생성', status: 'normal', uptime: '99.98%', exceptions: { 79: 'slow' } },
-  { name: 'VM Network·접속', status: 'normal', uptime: '100%', exceptions: { 72: 'maintenance' } },
-  { name: 'Serverless', status: 'slow', uptime: '99.96%', exceptions: { 63: 'incident', 88: 'slow' } },
-];
-
-const incidents = [
-  { title: 'Serverless 응답 지연 · 진행 중', description: '14:25 · 원인을 확인하고 있습니다. 함수 실행이 평소보다 2초 이상 걸릴 수 있습니다.', date: '2026.09.30 14:10 시작 · Serverless', icon: 'alert' as const, ongoing: true },
-  { title: 'VM 생성 지연 · 해결됨', description: '생성 대기열 처리가 늦어져 새 VM 생성이 최대 32분 지연됐습니다.', date: '2026.09.21 10:05–10:37 · VM 생성', icon: 'check-circle' as const },
-  { title: '계획 점검 · Network 장비 교체 · 완료', description: '외부 접속 포트와 HTTPS Domain이 잠시 끊겼습니다. 가용률 계산에서 뺐습니다.', date: '2026.09.13 02:00–04:00 · VM Network·접속', icon: 'calendar' as const },
-  { title: 'Serverless 장애 · 해결됨', description: '함수 실행 Node가 응답하지 않아 호출이 실패했습니다. Node를 교체했습니다.', date: '2026.09.05 21:40–22:15 · Serverless', icon: 'check-circle' as const },
-];
+const componentNames = ['로그인', 'VM 생성', 'VM Network·접속', 'Serverless'];
 
 function initialState(): HealthState {
   return { value: null, checkedAt: null, loading: true, error: false };
@@ -286,6 +278,16 @@ function isUnhealthyError(error: unknown) {
 
 export default function PublicStatusPage() {
   const [health, setHealth] = useState<HealthState>(initialState);
+  const [demoData, setDemoData] = useState<StatusDemoData | null>(null);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isDemoMode()) return;
+    let active = true;
+    void import('./statusDemoData').then(data => {
+      if (active) setDemoData(data);
+    });
+    return () => { active = false; };
+  }, []);
 
   const refresh = useCallback(async (signal: AbortSignal) => {
     setHealth(current => ({ ...current, loading: true, error: false }));
@@ -325,6 +327,10 @@ export default function PublicStatusPage() {
 
   const state = health.loading ? 'unknown' : health.value?.status === 'UP' ? 'up' : health.value?.status === 'DOWN' ? 'down' : 'unknown';
   const stateLabel = state === 'up' ? '정상' : state === 'down' ? '응답하지 않음' : health.error ? '확인 실패' : '확인 중';
+  const demoMode = import.meta.env.DEV && isDemoMode();
+  const components = demoMode && demoData
+    ? demoData.componentHistory
+    : componentNames.map(name => ({ name, status: 'unknown' as const, uptime: '', exceptions: {} }));
   return (
     <Screen>
       <Header>
@@ -347,22 +353,21 @@ export default function PublicStatusPage() {
             </Subtitle>
           </Heading>
 
-          <Notice $tone="warning">
-            <NoticeIcon $tone="warning" aria-hidden="true"><Octicon name="alert" size={20} /></NoticeIcon>
-            <NoticeCopy><NoticeTitle $tone="warning">Serverless 응답이 느립니다 · 성능 저하</NoticeTitle><NoticeBody>14:10부터 함수 실행 응답이 평소보다 느립니다. 원인을 확인하고 있습니다. 로그인, VM 생성, VM 접속은 정상입니다.</NoticeBody></NoticeCopy>
-          </Notice>
-
-          <Notice $tone="surface">
-            <NoticeIcon $tone="surface" aria-hidden="true"><Octicon name="calendar" size={20} /></NoticeIcon>
-            <NoticeCopy><NoticeTitle $tone="surface">예정된 점검 · 10월 4일(일) 02:00–04:00 · VM 생성</NoticeTitle><NoticeBody>점검 중에는 새 VM을 만들 수 없습니다. 실행 중인 VM과 접속에는 영향이 없습니다. 점검 시간은 가용률에서 뺍니다.</NoticeBody></NoticeCopy>
-          </Notice>
+          {demoMode && demoData ? demoData.notices.map(notice => <Notice key={notice.title} $tone={notice.tone}>
+            <NoticeIcon $tone={notice.tone} aria-hidden="true"><Octicon name={notice.icon} size={20} /></NoticeIcon>
+            <NoticeCopy><NoticeTitle $tone={notice.tone}>{notice.title}</NoticeTitle><NoticeBody>{notice.description}</NoticeBody></NoticeCopy>
+          </Notice>) : <Notice $tone="surface">
+            <NoticeIcon $tone="surface" aria-hidden="true"><Octicon name="info" size={20} /></NoticeIcon>
+            <NoticeCopy><NoticeTitle $tone="surface">일부 서비스 상태를 확인할 수 없습니다</NoticeTitle><NoticeBody>현재 API 상태만 제공됩니다. 구성요소별 상태와 점검 정보는 확인 가능한 데이터가 없습니다.</NoticeBody></NoticeCopy>
+          </Notice>}
 
           <Panel aria-labelledby="components-title">
             <PanelHeading><PanelTitle id="components-title">구성요소 · 지난 90일</PanelTitle></PanelHeading>
             <ComponentRows>
-              {componentHistory.map(component => {
-                const currentLoginState = component.name === '로그인' ? state : component.status === 'slow' ? 'down' : 'up';
-                const currentLoginLabel = component.name === '로그인' ? stateLabel : component.status === 'slow' ? '성능 저하' : '정상';
+              {components.map(component => {
+                const currentLoginState = component.name === '로그인' ? state : component.status === 'slow' ? 'down' : component.status === 'normal' ? 'up' : 'unknown';
+                const currentLoginLabel = component.name === '로그인' ? stateLabel : component.status === 'slow' ? '성능 저하' : component.status === 'normal' ? '정상' : '확인 불가';
+                const uptime = component.status === 'unknown' ? '확인 불가' : component.uptime;
                 return <ComponentRow key={component.name}>
                   <ComponentHeader>
                     <ComponentName>{component.name}</ComponentName>
@@ -370,14 +375,14 @@ export default function PublicStatusPage() {
                       ? <StatusBadge $state={currentLoginState}>{currentLoginLabel}</StatusBadge>
                       : <UptimeBadge $state={component.status}>{currentLoginLabel}</UptimeBadge>}
                   </ComponentHeader>
-                  <UptimeTrack role="img" aria-label={`${component.name}, 지난 90일 가용률 ${component.uptime}`}>
+                  <UptimeTrack role="img" aria-label={`${component.name}, 지난 90일 가용률 ${uptime}`}>
                     {Array.from({ length: 90 }, (_, day) => {
-                      const segmentState = component.exceptions[day] ?? 'normal';
-                      const labels: Record<HistorySegmentState, string> = { normal: '정상', slow: '성능 저하', incident: '장애', maintenance: '계획 점검' };
-                      return <UptimeSegment key={day} $state={segmentState} title={`${90 - day}일 전 · ${labels[segmentState]}`} aria-hidden="true" />;
+                      const segmentState = component.status === 'unknown' ? 'unknown' : component.exceptions[day] ?? 'normal';
+                      const labels: Record<HistorySegmentState, string> = { normal: '정상', slow: '성능 저하', incident: '장애', maintenance: '계획 점검', unknown: '확인 불가' };
+                      return <UptimeSegment key={day} $state={segmentState} title={segmentState === 'unknown' ? '가용률 데이터 확인 불가' : `${90 - day}일 전 · ${labels[segmentState]}`} aria-hidden="true" />;
                     })}
                   </UptimeTrack>
-                  <UptimeScale><span>90일 전</span><UptimePercent>가용률 {component.uptime}</UptimePercent><span>오늘</span></UptimeScale>
+                  <UptimeScale><span>90일 전</span><UptimePercent>가용률 {uptime}</UptimePercent><span>오늘</span></UptimeScale>
                 </ComponentRow>;
               })}
             </ComponentRows>
@@ -385,16 +390,18 @@ export default function PublicStatusPage() {
             <Legend aria-label="이력 범례">
               {([['normal', '정상'], ['slow', '성능 저하'], ['incident', '장애'], ['maintenance', '계획 점검']] as const).map(([kind, label]) => <LegendItem key={kind}><LegendSwatch $state={kind} />{label}</LegendItem>)}
             </Legend>
-            <HistoryNote>외부 감시 서버가 1분마다 확인합니다. 3회 연속 실패하면 장애, 응답 시간 95번째 백분위가 2초를 넘는 상태가 5분 이어지면 성능 저하로 표시합니다. 가용률은 정상인 분 ÷ 전체 분이며, 계획 점검 시간은 뺍니다.</HistoryNote>
+            <HistoryNote>{demoMode && demoData ? demoData.historyDescription : '구성요소별 상태와 지난 90일 가용률 데이터는 아직 제공되지 않습니다.'}</HistoryNote>
           </Panel>
 
           <Panel aria-labelledby="history-title">
             <PanelTitle id="history-title">지난 90일 이력</PanelTitle>
             <IncidentList>
-              {incidents.map(incident => <IncidentRow key={incident.title}>
+              {demoMode && demoData ? demoData.incidents.map(incident => <IncidentRow key={incident.title}>
                 <IncidentIcon $ongoing={incident.ongoing} aria-hidden="true"><Octicon name={incident.icon} size={20} /></IncidentIcon>
                 <IncidentCopy><IncidentTitle>{incident.title}</IncidentTitle><IncidentDescription>{incident.description}</IncidentDescription><IncidentDate>{incident.date}</IncidentDate></IncidentCopy>
-              </IncidentRow>)}
+              </IncidentRow>) : <IncidentRow>
+                <IncidentCopy><IncidentTitle>이력 데이터를 확인할 수 없습니다</IncidentTitle><IncidentDescription>장애·점검 이력 API가 아직 연결되지 않았습니다.</IncidentDescription></IncidentCopy>
+              </IncidentRow>}
             </IncidentList>
           </Panel>
 
