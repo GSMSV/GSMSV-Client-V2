@@ -331,7 +331,7 @@ export function VmOverviewPage() {
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="stop" />} onClick={() => beginPowerOperation('normal')}>정상 종료</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="sync" />} onClick={() => beginPowerOperation('restart')}>재시작</Button>
         <Button variant="secondary" disabled={memberReadOnly || vm.status !== 'running' || Boolean(powerOperation)} title={memberReadOnly ? '팀장 또는 DevOps만 전원을 제어할 수 있습니다.' : undefined} icon={<Octicon name="alert" />} onClick={() => setPowerDialog('force-confirm')}>강제 정지</Button>
-        {vm.status === 'queued' && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
+        {vm.status === 'queued' && vm.owner === 'team' && !memberReadOnly && <Button variant="danger" icon={<Octicon name="x" />} onClick={() => setCancelDialog('confirm')}>생성 취소</Button>}
         {!memberReadOnly && vm.owner === 'personal' && <Button variant="primary" disabled={vm.status === 'queued'} icon={<Octicon name="calendar" />} onClick={() => requestExtension()}>14일 연장</Button>}
       </PowerActions></Heading>
       <DetailTabs vmId={vm.id} active="개요" teamId={vm.teamId} networkVmGrn={vm.grn} />
