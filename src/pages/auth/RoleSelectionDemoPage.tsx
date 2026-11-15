@@ -15,7 +15,7 @@ const Screen = styled.main`
   width: 100%;
   min-width: 0;
   min-height: 100svh;
-  padding: 48px 0;
+  padding: clamp(24px, 4.5svh, 48px) 0;
   overflow-x: hidden;
   background: ${({ theme }) => theme.colors.canvas};
 
@@ -39,10 +39,12 @@ const IntroductionPanel = styled.aside`
 const BrandMark = styled.img`
   position: absolute;
   top: 50%;
-  left: -240px;
+  /* Figma 1440×1080 기준 로고는 창 높이의 74%(최대 800px), 왼쪽으로 크기의 30%만큼 나간다. */
+  --brand-size: min(800px, 74svh);
+  left: calc(var(--brand-size) * -0.3);
   display: block;
-  width: 800px;
-  height: 800px;
+  width: var(--brand-size);
+  height: var(--brand-size);
   transform: translateY(-50%);
   @media (max-width: 1024px) { display: none; }
 `;
