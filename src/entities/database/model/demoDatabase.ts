@@ -11,18 +11,33 @@ export interface DemoDatabaseState {
   suspendedFixtureInitialized?: boolean;
   welcomeFixtureInitialized?: boolean;
   welcomeBackupsFixtureInitialized?: boolean;
+  /** 개인 상태 fixture를 팀 fixture로 옮긴 뒤 true. */
+  teamStateFixturesInitialized?: boolean;
+  /** 비밀번호를 마지막으로 교체할 때 팀에 있던 사람들. 이후 나간 사람이 있으면 교체를 권한다. */
+  knownMembers?: Record<string, string[]>;
+  /** 쓰기 금지가 풀린 시각. 다시 용량이 늘거나 잠기면 지운다. */
+  unlockedAt?: Record<string, string>;
 }
 
 const legacyWelcomeGrn = 'grn:gsmsv:database:demo-student:student-db';
 const welcomeGrn = 'grn:gsmsv:database:demo-student:welcome-db';
-const lockedGrn = 'grn:gsmsv:database:demo-student:quota-locked-db';
-const suspendedGrn = 'grn:gsmsv:database:demo-student:suspended-welcome-db';
+const legacyLockedGrn = 'grn:gsmsv:database:demo-student:quota-locked-db';
+const legacySuspendedGrn = 'grn:gsmsv:database:demo-student:suspended-welcome-db';
 const teamGrn = 'grn:gsmsv:database:demo-team:connect-db';
+const teamSuspendedGrn = 'grn:gsmsv:database:demo-team:connect-legacy-db';
+const teamMemberViewGrn = 'grn:gsmsv:database:demo-team:connect-stats-db';
+const teamFixtureGrns = [teamSuspendedGrn, teamMemberViewGrn];
+const demoTeamMemberNames = ['김지민', '한도윤', '윤채원'];
+/** 쿼리 콘솔에서 INSERT·UPDATE 한 번이 늘리는(DELETE·TRUNCATE·DROP 한 번이 줄이는) 용량. */
+export const DEMO_DATABASE_WRITE_STEP_GB = 0.26;
+const fullPermissions = { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true };
+const memberPermissions = { view: true, view_credentials: true, update: false, rotate_password: false, delete: false, extend: true, read_backup: true, restore_backup: false };
 const demoDatabaseSeed: DemoDatabaseState = {
-  lockedFixtureInitialized: true,
-  suspendedFixtureInitialized: true,
   welcomeFixtureInitialized: true,
   welcomeBackupsFixtureInitialized: true,
+  teamStateFixturesInitialized: true,
+  knownMembers: { [teamGrn]: demoTeamMemberNames },
+  unlockedAt: {},
   databases: [
     {
       grn: welcomeGrn, id: 'welcome-db', name: 'welcome-db',
@@ -34,31 +49,31 @@ const demoDatabaseSeed: DemoDatabaseState = {
       permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
     },
     {
-      grn: lockedGrn, id: 'quota-locked-db', name: 'quota-locked-db',
-      owner: { type: 'user', id: 'demo-student', name: '김민수' },
-      engine: 'mysql', isolation: 'shared', status: 'active', write_locked: true,
-      connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'quota_locked_db', username: 'student_user', tls: true },
-      storage: { used_gb: 0.9, owner_total_used_gb: 1.2, owner_limit_gb: 1 }, max_connections: 10,
-      created_by: { name: '김민수' }, created_at: '2026-10-05T00:00:00.000Z', updated_at: '2026-11-13T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
-      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
-    },
-    {
-      grn: suspendedGrn, id: 'suspended-welcome-db', name: 'welcome-db',
-      owner: { type: 'user', id: 'demo-student', name: '김민수' },
-      engine: 'mysql', isolation: 'shared', status: 'suspended', write_locked: false,
-      connection: { host: 'db-demo.gs-msv.local', port: 3306, database: 'welcome_db', username: 'welcome_user', tls: true },
-      storage: { used_gb: 0.3, owner_total_used_gb: 0.3, owner_limit_gb: 1 }, max_connections: 10,
-      created_by: { name: '김민수' }, created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-10-06T05:00:00.000Z', expires_at: '2026-10-06T05:00:00.000Z',
-      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
-    },
-    {
       grn: teamGrn, id: 'connect-db', name: 'connect-db',
       owner: { type: 'team', id: 'demo-team', name: 'GSM Connect' },
       engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
       connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_db', username: 'connect_admin', tls: true },
-      storage: { used_gb: 7.4, owner_total_used_gb: 7.4, owner_limit_gb: 60 }, max_connections: 100,
+      storage: { used_gb: 7.4, owner_total_used_gb: 10.7, owner_limit_gb: 60 }, max_connections: 100,
       created_by: { name: '김민수' }, created_at: '2026-10-03T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
-      permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+      permissions: { ...fullPermissions },
+    },
+    {
+      grn: teamSuspendedGrn, id: 'connect-legacy-db', name: 'connect-legacy-db',
+      owner: { type: 'team', id: 'demo-team', name: 'GSM Connect' },
+      engine: 'mysql', isolation: 'shared', status: 'suspended', write_locked: false,
+      connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_legacy_db', username: 'connect_legacy', tls: true },
+      storage: { used_gb: 1.2, owner_total_used_gb: 10.7, owner_limit_gb: 60 }, max_connections: 100,
+      created_by: { name: '김지민' }, created_at: '2026-09-06T05:00:00.000Z', updated_at: '2026-10-06T05:00:00.000Z', expires_at: '2026-10-06T05:00:00.000Z',
+      permissions: { ...fullPermissions },
+    },
+    {
+      grn: teamMemberViewGrn, id: 'connect-stats-db', name: 'connect-stats-db',
+      owner: { type: 'team', id: 'demo-team', name: 'GSM Connect' },
+      engine: 'mysql', isolation: 'shared', status: 'active', write_locked: false,
+      connection: { host: 'team-db-demo.gs-msv.local', port: 3306, database: 'connect_stats_db', username: 'connect_stats', tls: true },
+      storage: { used_gb: 2.1, owner_total_used_gb: 10.7, owner_limit_gb: 60 }, max_connections: 100,
+      created_by: { name: '한도윤' }, created_at: '2026-10-04T00:00:00.000Z', updated_at: '2026-11-12T04:00:00.000Z', expires_at: '2026-12-31T14:59:59.000Z',
+      permissions: { ...memberPermissions },
     },
   ],
   deletedBackups: {},
@@ -72,15 +87,17 @@ const demoDatabaseSeed: DemoDatabaseState = {
       { id: 'welcome-db-daily-20260925', kind: 'daily', created_at: '2026-09-24T19:00:00.000Z', size_mb: 205, expires_at: '2026-10-01T19:00:00.000Z' },
       { id: 'welcome-db-daily-20260924', kind: 'daily', created_at: '2026-09-23T19:00:00.000Z', size_mb: 205, expires_at: '2026-09-30T19:00:00.000Z' },
     ],
-    [lockedGrn]: [],
-    [suspendedGrn]: [
-      { id: 'suspended-welcome-db-daily-20261006', kind: 'daily', created_at: '2026-10-05T19:00:00.000Z', size_mb: 307, expires_at: '2026-10-12T19:00:00.000Z' },
-    ],
     [teamGrn]: [
       { id: 'connect-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 936, expires_at: '2026-11-21T00:00:00.000Z' },
     ],
+    [teamSuspendedGrn]: [
+      { id: 'connect-legacy-db-daily-20261006', kind: 'daily', created_at: '2026-10-05T19:00:00.000Z', size_mb: 1229, expires_at: '2026-10-12T19:00:00.000Z' },
+    ],
+    [teamMemberViewGrn]: [
+      { id: 'connect-stats-db-daily-20261114', kind: 'daily', created_at: '2026-11-14T00:00:00.000Z', size_mb: 2150, expires_at: '2026-11-21T00:00:00.000Z' },
+    ],
   },
-  passwords: { [welcomeGrn]: 'demo-local-pass-welcome', [lockedGrn]: 'demo-local-pass-locked', [suspendedGrn]: 'demo-local-pass-suspended', [teamGrn]: 'demo-local-pass-team' },
+  passwords: { [welcomeGrn]: 'demo-local-pass-welcome', [teamGrn]: 'demo-local-pass-team', [teamSuspendedGrn]: 'demo-local-pass-legacy', [teamMemberViewGrn]: 'demo-local-pass-stats' },
 };
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -116,6 +133,30 @@ function settleDemoDatabaseTransitions(state: DemoDatabaseState, now: number): b
   for (const [grn, archive] of Object.entries(state.deletedBackups ?? {})) {
     if (new Date(archive.expiresAt).getTime() <= now) {
       delete state.deletedBackups?.[grn];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+const roundGb = (value: number) => Math.round(value * 100) / 100;
+
+function ownerKey(owner: DatabaseDetail['owner']) {
+  return `${owner.type}:${owner.id}`;
+}
+
+/** 소유자 전체 사용량(owner_total_used_gb)을 같은 소유자 Database 크기의 합으로 맞춘다. */
+function syncDemoOwnerTotals(state: DemoDatabaseState): boolean {
+  const totals = new Map<string, number>();
+  for (const database of state.databases) {
+    const key = ownerKey(database.owner);
+    totals.set(key, roundGb((totals.get(key) ?? 0) + database.storage.used_gb));
+  }
+  let changed = false;
+  for (const database of state.databases) {
+    const total = totals.get(ownerKey(database.owner)) ?? 0;
+    if (database.storage.owner_total_used_gb !== total) {
+      database.storage.owner_total_used_gb = total;
       changed = true;
     }
   }
@@ -194,7 +235,7 @@ export function getDemoDatabaseState(): DemoDatabaseState {
       database.permissions.view_credentials = true;
       changed = true;
     }
-    if ((database.grn === welcomeGrn || database.grn === lockedGrn) && database.max_connections === 30) {
+    if (database.grn === welcomeGrn && database.max_connections === 30) {
       database.max_connections = 10;
       changed = true;
     }
@@ -208,27 +249,28 @@ export function getDemoDatabaseState(): DemoDatabaseState {
     validState.welcomeBackupsFixtureInitialized = true;
     changed = true;
   }
-  if (!validState.lockedFixtureInitialized) {
-    const lockedDatabase = demoDatabaseSeed.databases.find(database => database.grn === lockedGrn);
-    if (lockedDatabase && !validState.databases.some(database => database.grn === lockedGrn)) {
-      validState.databases.push(clone(lockedDatabase));
+  if (!validState.teamStateFixturesInitialized) {
+    // 예전 개인 fixture(쓰기 금지·정지)는 목록에 나오지 않아 닿을 수 없었다.
+    // 개인 용량 상태는 쿼리 콘솔의 쓰기로 만들고, 정지·일반 팀원 상태는 팀 fixture로 옮긴다.
+    const legacyGrns = [legacyLockedGrn, legacySuspendedGrn];
+    validState.databases = validState.databases.filter(database => !legacyGrns.includes(database.grn));
+    for (const grn of legacyGrns) {
+      delete validState.backups[grn];
+      delete validState.passwords[grn];
     }
-    validState.backups[lockedGrn] ??= [];
-    validState.passwords[lockedGrn] ??= 'demo-local-pass-locked';
-    validState.lockedFixtureInitialized = true;
-    changed = true;
-  }
-  if (!validState.suspendedFixtureInitialized) {
-    const suspendedDatabase = demoDatabaseSeed.databases.find(database => database.grn === suspendedGrn);
-    if (suspendedDatabase && !validState.databases.some(database => database.grn === suspendedGrn)) {
-      validState.databases.push(clone(suspendedDatabase));
+    for (const grn of teamFixtureGrns) {
+      const fixture = demoDatabaseSeed.databases.find(database => database.grn === grn);
+      if (fixture && !validState.databases.some(database => database.grn === grn)) validState.databases.push(clone(fixture));
+      validState.backups[grn] ??= clone(demoDatabaseSeed.backups[grn] ?? []);
+      validState.passwords[grn] ??= demoDatabaseSeed.passwords[grn];
     }
-    validState.backups[suspendedGrn] ??= clone(demoDatabaseSeed.backups[suspendedGrn] ?? []);
-    validState.passwords[suspendedGrn] ??= 'demo-local-pass-suspended';
-    validState.suspendedFixtureInitialized = true;
+    validState.knownMembers = { [teamGrn]: [...demoTeamMemberNames], ...validState.knownMembers };
+    validState.unlockedAt ??= {};
+    validState.teamStateFixturesInitialized = true;
     changed = true;
   }
   if (settleDemoDatabaseTransitions(validState, Date.now())) changed = true;
+  if (syncDemoOwnerTotals(validState)) changed = true;
   if (changed) saveDemoDatabaseState(validState);
   return validState;
 }
@@ -243,7 +285,7 @@ export function saveDemoDatabaseState(state: DemoDatabaseState): boolean {
 
 export function listDemoDatabases(owner = 'me'): DatabaseSummary[] {
   return getDemoDatabaseState().databases
-    .filter(database => !['quota-locked-db', 'suspended-welcome-db'].includes(database.id) && (owner === 'me' ? database.owner.type === 'user' : database.owner.id === owner))
+    .filter(database => owner === 'me' ? database.owner.type === 'user' : database.owner.id === owner)
     .map(({ grn, name, engine, isolation, status, write_locked, storage, expires_at }) => ({ grn, name, engine, isolation, status, write_locked, storage: { used_gb: storage.used_gb }, expires_at }));
 }
 
@@ -251,24 +293,89 @@ export function getDemoDatabase(grn: string): DatabaseDetail | null {
   return getDemoDatabaseState().databases.find(database => database.grn === grn || database.id === grn) ?? null;
 }
 
+const demoCurrentConnections: Record<string, number> = { [welcomeGrn]: 3, [teamGrn]: 12, [teamMemberViewGrn]: 4 };
+
 export function getDemoDatabaseCurrentConnections(grn: string): number {
-  return grn === welcomeGrn || grn === suspendedGrn ? 3 : 0;
+  const database = getDemoDatabase(grn);
+  return database ? demoCurrentConnections[database.grn] ?? 0 : 0;
 }
 
+/**
+ * 정지된 Database는 정지 3일 뒤 삭제된다(정책). 목데이터에서 정지는 만료 시각에 일어나므로
+ * expires_at이 곧 정지 시각이다(connect-legacy-db: 10월 6일 14:00 KST 만료·정지 → 10월 9일 14:00 삭제, Figma 44-04와 같음).
+ */
 export function getDemoDatabaseSuspensionInfo(grn: string): { deleteInDays: number; deleteAt: string } | null {
-  return grn === suspendedGrn ? { deleteInDays: 3, deleteAt: '2026-10-09T05:00:00.000Z' } : null;
+  const database = getDemoDatabase(grn);
+  if (!database || database.status !== 'suspended') return null;
+  const suspendedAt = new Date(database.expires_at).getTime();
+  if (Number.isNaN(suspendedAt)) return null;
+  return { deleteInDays: 3, deleteAt: new Date(suspendedAt + 3 * 86_400_000).toISOString() };
 }
 
 export function getDemoDatabaseConnectedFunctions(grn: string): string[] {
-  return grn === welcomeGrn || grn === suspendedGrn ? ['welcome-api'] : [];
+  const database = getDemoDatabase(grn);
+  return database?.grn === welcomeGrn ? ['welcome-api'] : [];
+}
+
+/** 쓰기 금지가 풀린 시각. 풀린 적이 없거나 다시 잠기면 null. */
+export function getDemoDatabaseUnlockedAt(grn: string): string | null {
+  const database = getDemoDatabase(grn);
+  return database ? getDemoDatabaseState().unlockedAt?.[database.grn] ?? null : null;
+}
+
+/**
+ * 쿼리 콘솔의 쓰기 쿼리를 용량에 반영한다. INSERT·UPDATE는 늘리고 DELETE·TRUNCATE·DROP은 줄인다.
+ * 소유자 전체 사용량이 한도를 넘으면 그 소유자의 Database 전부가 쓰기 금지되고,
+ * 다시 한도 아래로 내려가면 풀리면서 '다시 쓸 수 있습니다' 상태가 된다.
+ */
+export function applyDemoDatabaseWrite(grn: string, direction: 'grow' | 'shrink'): DatabaseDetail | null {
+  const state = getDemoDatabaseState();
+  const database = state.databases.find(item => item.grn === grn || item.id === grn);
+  if (!database || database.status !== 'active') return null;
+  if (direction === 'grow' && database.write_locked) return null;
+  const delta = direction === 'grow' ? DEMO_DATABASE_WRITE_STEP_GB : -DEMO_DATABASE_WRITE_STEP_GB;
+  database.storage.used_gb = Math.max(0, roundGb(database.storage.used_gb + delta));
+  database.updated_at = new Date().toISOString();
+  syncDemoOwnerTotals(state);
+  const siblings = state.databases.filter(item => ownerKey(item.owner) === ownerKey(database.owner));
+  const wasLocked = siblings.some(item => item.write_locked);
+  const nowLocked = database.storage.owner_total_used_gb > database.storage.owner_limit_gb;
+  const unlockedAt = { ...state.unlockedAt };
+  for (const item of siblings) {
+    item.write_locked = nowLocked;
+    if (nowLocked || direction === 'grow') delete unlockedAt[item.grn];
+    else if (wasLocked) unlockedAt[item.grn] = new Date().toISOString();
+  }
+  state.unlockedAt = unlockedAt;
+  if (!saveDemoDatabaseState(state)) return null;
+  return clone(database);
+}
+
+/**
+ * 팀 Database의 비밀번호를 알던 사람 중 팀을 나간 사람. 비밀번호를 교체하면 비운다.
+ * 현재 팀원 이름은 화면에서 팀 저장소를 읽어 넘긴다.
+ */
+export function getDemoDatabaseDepartedMembers(grn: string, currentMemberNames: readonly string[]): string[] {
+  const database = getDemoDatabase(grn);
+  if (!database || database.owner.type !== 'team') return [];
+  const known = getDemoDatabaseState().knownMembers?.[database.grn] ?? [];
+  return known.filter(name => !currentMemberNames.includes(name));
+}
+
+export function acknowledgeDemoDatabaseMembers(grn: string, currentMemberNames: readonly string[]): boolean {
+  const state = getDemoDatabaseState();
+  const database = state.databases.find(item => item.grn === grn || item.id === grn);
+  if (!database || database.owner.type !== 'team') return false;
+  state.knownMembers = { ...state.knownMembers, [database.grn]: [...currentMemberNames] };
+  return saveDemoDatabaseState(state);
 }
 
 export function getDemoDatabaseQuota(): DatabaseQuota {
-  const personal = getDemoDatabaseState().databases.filter(database => database.owner.type === 'user' && !['quota-locked-db', 'suspended-welcome-db'].includes(database.id));
+  const personal = getDemoDatabaseState().databases.filter(database => database.owner.type === 'user');
   return {
     db: {
       count: { used: personal.length, limit: 2 },
-      shared_storage_gb: { used: personal.reduce((total, database) => total + database.storage.used_gb, 0), limit: 1 },
+      shared_storage_gb: { used: roundGb(personal.reduce((total, database) => total + database.storage.used_gb, 0)), limit: 1 },
     },
   };
 }
@@ -296,15 +403,18 @@ export function createDemoDatabase(
     status: 'creating',
     write_locked: false,
     connection: { host: dedicated ? 'team-db-demo.gs-msv.local' : 'db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: id.replaceAll('-', '_'), username: `${ownerInfo.id}_user`, tls: true },
-    storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 10 },
+    storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 1 },
     max_connections: dedicated ? 100 : 10,
     created_by: { name: '김민수' },
     created_at: now,
     updated_at: now,
     expires_at: new Date(Date.now() + (dedicated ? 31 : 7) * 86_400_000).toISOString(),
-    permissions: { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true },
+    permissions: { ...fullPermissions },
   };
   state.databases.unshift(database);
+  syncDemoOwnerTotals(state);
+  // 쓰기 금지는 소유자 전체 사용량이 실제로 한도를 넘을 때만 새 Database에도 걸린다.
+  database.write_locked = database.storage.owner_total_used_gb > database.storage.owner_limit_gb;
   state.backups[database.grn] = [];
   state.passwords[database.grn] = `demo-${crypto.randomUUID().slice(0, 18)}`;
   if (!saveDemoDatabaseState(state)) throw new Error('DEMO_DATABASE_SAVE_FAILED');

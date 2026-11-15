@@ -3,9 +3,9 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoQueryAudit, saveDemoQueryAudit } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
-import { Banner } from '../../shared/ui/feedback';
+import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { DemoOnlyGate, Breadcrumb, Card, CardHeader, Heading, Muted, PageStack, SectionTitle, Subtitle, Table, TableWrap, Title, TitleGroup, WorkflowLayout } from '../demo-workflows/ui/WorkflowLayout';
 
@@ -180,7 +180,7 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       return;
     }
     let cancelled = false;
-    void import('../../entities/database/demo').then(demo => {
+    void simulateDemoRequest('database-query').then(() => import('../../entities/database/demo')).then(demo => {
       if (cancelled) return;
       const value = demo.getDemoDatabase(databaseId);
       const ownerId = value?.owner.id;
@@ -226,12 +226,33 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       executedAt: new Date().toISOString(),
       succeeded,
     }]);
-    if (database.write_locked && /\b(insert|update)\b/i.test(query)) {
+    const statement = query.replace(/--[^\n]*/g, '').trim();
+    const growing = /^(insert|update)\b/i.test(statement);
+    const shrinking = /^(delete|truncate|drop\s+table)\b/i.test(statement);
+    if (database.write_locked && growing) {
       audit(false);
       setRows([]);
       setResultCount(0);
       setOutcome('write-locked');
       setRan(true);
+      return;
+    }
+    if (growing || shrinking) {
+      // 목데이터: 쓰기 쿼리는 용량에 반영된다. 늘면 80% 경고·쓰기 금지, 줄면 쓰기 금지 해제가 상세에 나타난다.
+      setExecuting(true);
+      void import('../../entities/database/demo').then(demo => {
+        const updated = demo.applyDemoDatabaseWrite(databaseId, growing ? 'grow' : 'shrink');
+        audit(Boolean(updated));
+        if (!updated) {
+          setError('쿼리를 실행하지 못했습니다. 다시 시도해 주세요.');
+        } else {
+          setDatabase(current => current ? { ...current, write_locked: updated.write_locked } : current);
+        }
+        setRows([]);
+        setResultColumns([]);
+        setResultCount(0);
+        setRan(true);
+      }).finally(() => setExecuting(false));
       return;
     }
     if (/--\s*demo:timeout\b/i.test(query)) {
@@ -317,12 +338,12 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/backups`)}>백업</Button>
       <Button variant="ghost" onClick={() => navigate(`/databases/${encodeURIComponent(databaseId)}/settings`)}>설정</Button>
     </DatabaseTabs>
-    {loadError && <Banner title="불러오지 못했습니다" description="Database 정보를 확인하지 못했습니다. 다시 시도해 주세요." tone="danger" action={<Button variant="secondary" onClick={() => setRetryKey(value => value + 1)}>다시 시도</Button>} />}
     {database?.status === 'suspended' && <Banner title="Database가 정지되어 쿼리를 실행하지 않았습니다" description="사용 기간을 연장한 뒤 다시 실행해 주세요." tone="danger" icon={<Octicon name="clock" size={20} />} />}
-    {database?.write_locked && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
+    {outcome === 'write-locked' && <Banner title="쓰기 금지 중이라 실행하지 않았습니다" description="INSERT · UPDATE처럼 크기를 늘리는 쿼리는 막혀 있습니다. 읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다." tone="danger" icon={<Octicon name="lock" size={20} />} />}
     {outcome === 'timeout' && <Banner title="쿼리가 45초를 넘어 멈췄습니다" description="조건을 좁히거나 LIMIT을 넣어 다시 실행해 주세요." tone="danger" icon={<Octicon name="alert" size={20} />} />}
     {outcome === 'row-cap' && <Banner title="결과를 1,000행까지만 보여 줍니다" description="전체 결과가 더 많습니다. LIMIT으로 범위를 줄이거나 백업을 내려받아 확인하세요." tone="neutral" icon={<Octicon name="info" size={20} />} />}
     {outcome === 'byte-cap' && <Banner title="결과는 1,000행 또는 1 MB까지 보입니다" description="전체 결과가 더 많습니다. LIMIT으로 범위를 줄이거나 백업을 내려받아 확인하세요." tone="neutral" icon={<Octicon name="info" size={20} />} />}
+    {!databaseResolved ? <><LoadingCard height={178} /><LoadingCard height={178} /></> : loadError ? <><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setRetryKey(value => value + 1)} /></> : <>
     <Card>
       <EditorHeader><Octicon name="code" size={16} /><SectionTitle>쿼리</SectionTitle></EditorHeader>
       <Editor aria-label="SQL 쿼리" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -334,6 +355,7 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행 · 0.04초</ResultHeading></CardHeader>
       <TableWrap><ResultsTable><thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
     </Card>
+    </>}
     <FooterNote><span>SQL과 결과는 저장하지 않습니다</span><span>누가 언제 실행했는지와 성공 여부만 기록합니다. 쓰기 금지·정지 상태도 콘솔에 그대로 적용됩니다.</span></FooterNote>
   </PageStack></WorkflowLayout>;
 }

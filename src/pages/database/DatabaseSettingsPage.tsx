@@ -5,7 +5,7 @@ import { deleteDatabase, getDatabase, renameDatabase, rotateDatabasePassword } f
 import type { DatabaseDetail, DatabaseOperation, DatabasePasswordRotation } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
-import { isDemoMode } from '../../shared/demo';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button, TextField } from '../../shared/ui/controls';
 import { Banner, DeleteConfirmDialog, ErrorCard, LoadingCard, RevealableSecret } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -130,6 +130,7 @@ export default function DatabaseSettingsPage(){
   const load=useCallback(async(signal:AbortSignal)=>{
     setDetail(current=>({...current,loading:true,error:false}));
     if(isDemoMode()){
+      try{await simulateDemoRequest('database-settings',signal);}catch{if(!signal.aborted)setDetail({value:null,loading:false,error:true});return;}
       const demo=await import('../../entities/database/demo');
       if(signal.aborted)return;
       const value=demo.getDemoDatabase(databaseGrn);
@@ -229,6 +230,11 @@ export default function DatabaseSettingsPage(){
         const demo=await import('../../entities/database/demo');
         const password=`demo-${crypto.randomUUID().slice(0,18)}`;
         if (!demo.setDemoDatabasePassword(value.grn,password)) throw new Error('Database password could not be saved');
+        if(value.owner.type==='team'){
+          // 교체 시점의 팀원을 기록해 '비밀번호 교체를 권합니다' 배너를 닫는다.
+          const team=(await import('../../entities/team/demo')).getDemoTeam(value.owner.id);
+          if(team)demo.acknowledgeDemoDatabaseMembers(value.grn,team.members.map(member=>member.name));
+        }
         setRotationResult({password,rotated_at:new Date().toISOString(),reconnected:{functions:connectedFunctions.length,app_cells:0}});
         setShowRotationDialog(false);return;
       }

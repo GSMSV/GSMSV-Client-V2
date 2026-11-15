@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { extendDatabase, getDatabase, getDatabaseCredentials, listDatabaseBackups } from '../../entities/database';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail } from '../../entities/database';
 import { getSessionUser } from '../../entities/session';
-import { isDemoMode } from '../../shared/demo';
+import { DemoSimulatedError, isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/team';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
@@ -90,6 +90,8 @@ const HelpText = styled.p`
   font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 const FieldValueRow = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;`;
+const ActionRow = styled.div`display: flex; justify-content: flex-end;`;
+const TallErrorCard = styled(ErrorCard)`height: 276px;`;
 const CopyButton = styled.button`
   flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: ${({ theme }) => theme.colors.primary};
   font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
@@ -121,6 +123,14 @@ function sqlExample(database: DatabaseDetail) {
     help: 'PostgreSQL에 연결된 뒤 public 스키마의 테이블을 조회하는 예시입니다.',
   };
 }
+interface DemoMetrics {
+  currentConnections: number | null;
+  suspensionInfo: { deleteInDays: number; deleteAt: string } | null;
+  unlockedAt: string | null;
+  departedMembers: string[];
+}
+const emptyDemoMetrics: DemoMetrics = { currentConnections: null, suspensionInfo: null, unlockedAt: null, departedMembers: [] };
+
 export default function DatabaseDetailPage() {
   const { databaseGrn = '' } = useParams();
   const navigate = useNavigate();
@@ -137,12 +147,23 @@ export default function DatabaseDetailPage() {
   const [extendError, setExtendError] = useState(false);
   const [extendedUntil, setExtendedUntil] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [demoMetrics, setDemoMetrics] = useState<{ currentConnections: number | null; suspensionInfo: { deleteInDays: number; deleteAt: string } | null }>({ currentConnections: null, suspensionInfo: null });
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [demoMetrics, setDemoMetrics] = useState<DemoMetrics>(emptyDemoMetrics);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setDetail(current => ({ ...current, loading: true, error: false }));
     setBackups(current => ({ ...current, loading: true, error: false }));
+    setLoadFailed(false);
     if (isDemoMode()) {
+      try {
+        await simulateDemoRequest('database', signal);
+      } catch (error) {
+        if (signal.aborted || !(error instanceof DemoSimulatedError)) return;
+        setLoadFailed(true);
+        setDetail({ value: null, loading: false, error: true });
+        setBackups({ value: null, loading: false, error: true });
+        return;
+      }
       const demo = await import('../../entities/database/demo');
       if (signal.aborted) return;
       const value = demo.getDemoDatabase(databaseGrn);
@@ -179,11 +200,17 @@ export default function DatabaseDetailPage() {
 
   useEffect(() => {
     const current = detail.value;
-    if (!isDemoMode() || !current) { setDemoMetrics({ currentConnections: null, suspensionInfo: null }); return; }
+    if (!isDemoMode() || !current) { setDemoMetrics(emptyDemoMetrics); return; }
     let active = true;
-    void import('../../entities/database/demo').then(demo => {
+    void Promise.all([import('../../entities/database/demo'), import('../../entities/team/demo')]).then(([demo, teamDemo]) => {
       if (!active) return;
-      setDemoMetrics({ currentConnections: demo.getDemoDatabaseCurrentConnections(current.grn), suspensionInfo: demo.getDemoDatabaseSuspensionInfo(current.grn) });
+      const team = current.owner.type === 'team' ? teamDemo.getDemoTeam(current.owner.id) : undefined;
+      setDemoMetrics({
+        currentConnections: demo.getDemoDatabaseCurrentConnections(current.grn),
+        suspensionInfo: demo.getDemoDatabaseSuspensionInfo(current.grn),
+        unlockedAt: demo.getDemoDatabaseUnlockedAt(current.grn),
+        departedMembers: team ? demo.getDemoDatabaseDepartedMembers(current.grn, team.members.map(member => member.name)) : [],
+      });
     });
     return () => { active = false; };
   }, [detail.value]);
@@ -214,6 +241,10 @@ export default function DatabaseDetailPage() {
   const currentConnections = detail.value && demoMode ? demoMetrics.currentConnections : null;
   const suspensionInfo = detail.value && demoMode ? demoMetrics.suspensionInfo : null;
   const databaseSql = detail.value ? sqlExample(detail.value) : null;
+  const unlockedAt = detail.value && demoMode ? demoMetrics.unlockedAt : null;
+  const departedMembers = detail.value && demoMode ? demoMetrics.departedMembers : [];
+  const storageWarning = Boolean(detail.value && detail.value.storage.owner_limit_gb > 0 && detail.value.storage.owner_total_used_gb / detail.value.storage.owner_limit_gb >= 0.8);
+  const memberReadOnly = Boolean(detail.value && detail.value.owner.type === 'team' && !detail.value.permissions.rotate_password && !detail.value.permissions.delete);
   const databaseListPath = (database: DatabaseDetail) => database.owner.type === 'team'
     ? `/databases?owner=${encodeURIComponent(database.owner.id)}`
     : '/databases';
@@ -324,12 +355,22 @@ export default function DatabaseDetailPage() {
     <StudentShell activeItem="database" scopeLabel={detail.value?.owner.type === 'team' ? `${detail.value.owner.name} · 팀` : '내 Resources'} scopeOptions={scopeOptions} userName={user?.name ?? '사용자'} onNavigate={navigateFromShell} onCreateTeam={() => navigate('/teams/new')} onOpenStatus={() => navigate('/status')} onSelectScope={() => undefined} onSearch={() => undefined} onOpenNotifications={() => undefined}>
       <Page>
         <Breadcrumb type="button" onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database</Breadcrumb>
-        {detail.loading && !detail.value ? <LoadingCard height={300} /> : detail.error && !detail.value ? (
+        {detail.loading && !detail.value ? <LoadingCard height={300} /> : loadFailed && !detail.value ? (
+          <>
+            <Summary aria-label="Database 요약">
+              <ErrorCard onRetry={() => setRetry(value => value + 1)} />
+              <ErrorCard onRetry={() => setRetry(value => value + 1)} />
+              <ErrorCard onRetry={() => setRetry(value => value + 1)} />
+            </Summary>
+            <TallErrorCard onRetry={() => setRetry(value => value + 1)} />
+            <ErrorCard onRetry={() => setRetry(value => value + 1)} />
+            <ErrorCard onRetry={() => setRetry(value => value + 1)} />
+          </>
+        ) : detail.error && !detail.value ? (
           <Card>
             <CardHeading>Database를 찾을 수 없습니다</CardHeading>
-            <HelpText>삭제됐거나 볼 수 있는 권한이 없습니다. 계약상 두 경우를 구분하지 않습니다.</HelpText>
-            <ErrorCard onRetry={() => setRetry(value => value + 1)} />
-            <Button variant="secondary" icon={<Octicon name="arrow-left" size={16} />} onClick={() => navigate(detail.value ? databaseListPath(detail.value) : '/databases')}>Database 목록</Button>
+            <HelpText>삭제됐거나 볼 수 있는 권한이 없습니다. 7일 안에 삭제한 Database는 문의로 되살릴 수 있습니다.</HelpText>
+            <ActionRow><Button variant="primary" icon={<Octicon name="database" size={16} />} onClick={() => navigate('/databases')}>Database 목록</Button></ActionRow>
           </Card>
         ) : detail.value && (
           <>
@@ -343,13 +384,17 @@ export default function DatabaseDetailPage() {
               <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/backups`)}>백업</Tab>
               <Tab type="button" onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>설정</Tab>
             </Tabs>
-            {detail.value.write_locked && <Banner title="용량을 넘어 쓰기가 막혔습니다" description={`소유자 전체 사용량 ${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB입니다. 읽기 및 삭제는 데이터베이스에서 허용됩니다.`} tone="danger" icon={<Octicon name="alert" size={20} />} />}
-            {detail.value.status === 'suspended' && <Banner title={suspensionInfo ? `정지됐습니다 · ${suspensionInfo.deleteInDays}일 뒤 삭제됩니다` : 'Database가 정지됐습니다'} description={suspensionInfo ? `${dateTime(detail.value.expires_at)}에 만료돼 접속이 막혔습니다. ${dateTime(suspensionInfo.deleteAt)} 전에 연장하면 다시 쓸 수 있습니다.` : `만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
+            {memberReadOnly && <Banner title="일반 팀원으로 보고 있습니다" description="접속 정보, 쿼리 콘솔, 백업 내려받기, 사용 기간 연장을 할 수 있습니다. 복원·비밀번호 교체·삭제는 팀장 또는 DevOps가 합니다." tone="neutral" icon={<Octicon name="shield" size={20} />} />}
+            {detail.value.write_locked ? <Banner title="용량을 넘어 쓰기가 막혔습니다" description="읽기와 DELETE · TRUNCATE · DROP TABLE은 할 수 있습니다. 지워도 크기가 바로 줄지 않을 수 있습니다." tone="danger" icon={<Octicon name="alert" size={20} />} action={<Button variant="secondary" icon={<Octicon name="book" size={16} />} onClick={() => navigate('/docs')}>용량 줄이는 방법</Button>} />
+              : storageWarning ? <Banner title="용량을 80% 넘게 쓰고 있습니다" description={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB · ${formatNumber(detail.value.storage.owner_limit_gb)} GB를 넘으면 쓰기가 막힙니다. 쓰지 않는 데이터를 정리해 주세요.`} tone="warning" icon={<Octicon name="alert" size={20} />} /> : null}
+            {!detail.value.write_locked && unlockedAt && <Banner title="다시 쓸 수 있습니다" description={`용량이 ${formatNumber(detail.value.storage.owner_limit_gb)} GB 아래로 내려가서 쓰기 금지를 풀었습니다.`} tone="primary" icon={<Octicon name="check-circle" size={20} />} />}
+            {detail.value.status === 'suspended' && <Banner title={suspensionInfo ? `정지됐습니다 · ${suspensionInfo.deleteInDays}일 뒤 삭제됩니다` : 'Database가 정지됐습니다'} description={suspensionInfo ? `${dateTime(detail.value.expires_at)}에 만료돼 접속이 막혔습니다. ${dateTime(suspensionInfo.deleteAt)} 전에 연장하면 다시 쓸 수 있습니다.` : `만료일은 ${dateTime(detail.value.expires_at)}입니다. 삭제까지 남은 기간은 API에서 제공하지 않습니다.`} tone="danger" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="secondary" icon={<Octicon name="calendar" size={16} />} disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
+            {departedMembers.length > 0 && <Banner title="비밀번호 교체를 권합니다" description={`${departedMembers.join(', ')} 님이 팀을 나갔습니다. 이 Database의 비밀번호를 알고 있을 수 있습니다.`} tone="warning" icon={<Octicon name="key" size={20} />} action={detail.value.permissions.rotate_password ? <Button variant="secondary" icon={<Octicon name="sync" size={16} />} onClick={() => navigate(`/databases/${encodeURIComponent(detail.value!.grn)}/settings`)}>비밀번호 교체</Button> : undefined} />}
             {daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && detail.value.status !== 'suspended' && <Banner title={`만료까지 ${daysLeft}일 남았습니다`} description={`만료 시각은 ${dateTime(detail.value.expires_at)}입니다.`} tone="primary" icon={<Octicon name="clock" size={20} />} action={detail.value.permissions.extend ? <Button variant="primary" disabled={isExtending} onClick={() => void extend()}>{isExtending ? '연장 중' : '사용 기간 연장'}</Button> : undefined} />}
             {extendedUntil && <Banner title="사용 기간을 연장했습니다" description={`${dateTime(extendedUntil)}까지 사용할 수 있습니다.`} tone="primary" icon={<Octicon name="check-circle" size={20} />} />}
             {extendError && <ErrorCard size="compact" onRetry={() => void extend()} />}
             <Summary aria-label="Database 요약">
-              <FlexibleUsageCard label="사용 용량" icon={<Octicon name="graph" size={16} />} value={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB`} caption="내 Database를 모두 합해 세요" meter={{ value: detail.value.storage.owner_limit_gb > 0 ? Math.min(100, detail.value.storage.owner_total_used_gb / detail.value.storage.owner_limit_gb * 100) : 0, tone: detail.value.write_locked ? 'danger' : 'primary', label: 'Database 전체 용량 사용량' }} />
+              <FlexibleUsageCard label="사용 용량" icon={<Octicon name="graph" size={16} />} value={`${formatNumber(detail.value.storage.owner_total_used_gb)} / ${formatNumber(detail.value.storage.owner_limit_gb)} GB`} caption="내 Database를 모두 합해 세요" meter={{ value: detail.value.storage.owner_limit_gb > 0 ? Math.min(100, detail.value.storage.owner_total_used_gb / detail.value.storage.owner_limit_gb * 100) : 0, tone: detail.value.write_locked ? 'danger' : storageWarning ? 'warning' : 'primary', label: 'Database 전체 용량 사용량' }} />
               <FlexibleUsageCard label="동시 연결" icon={<Octicon name="link" size={16} />} value={`${currentConnections ?? '—'} / ${formatNumber(detail.value.max_connections)}`} caption={currentConnections !== null ? `계정당 ${formatNumber(detail.value.max_connections)}개까지 · 넘으면 거절됩니다` : '현재 연결 수는 API에서 제공하지 않습니다'} />
               <FlexibleUsageCard label="최근 백업" icon={<Octicon name="history" size={16} />} value={backups.loading ? '불러오는 중' : backups.error ? '확인 불가' : latestBackup ? dateTime(latestBackup.created_at) : '백업 없음'} caption={latestBackup ? `자동 백업 · ${formatNumber(latestBackup.size_mb)} MB · 7일 보관` : backups.error ? '백업 목록을 불러오지 못했습니다' : '매일 자동 백업 · 7일 보관'} />
             </Summary>

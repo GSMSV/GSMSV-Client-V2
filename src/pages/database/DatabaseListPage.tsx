@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import styled from 'styled-components';
 import { listDatabases, type DatabaseStatus, type DatabaseSummary } from '../../entities/database';
 import { getMyDatabaseQuota, type DatabaseQuota } from '../../entities/quota';
 import { getSessionUser } from '../../entities/session';
 import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
-import { isDemoMode } from '../../shared/demo';
+import { consumeDemoFailure, isDemoMode, waitForDemoLatency } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { UsageCard } from '../../shared/ui/data-display';
 import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
@@ -265,6 +265,8 @@ export default function DatabaseListPage() {
   const [teams, setTeams] = useState<Loadable<TeamSummary[]>>(initialLoadable);
   const [currentTeam, setCurrentTeam] = useState<Loadable<TeamDetail>>(initialLoadable);
   const [scopeRetryKey, setScopeRetryKey] = useState(0);
+  // ?demoError=database-list: 목록과 사용량 카드가 함께 실패하는 42-02 상태를 만든다.
+  const demoListFailedRef = useRef(false);
 
   const openDatabase = (database: DatabaseSummary) => navigate(`/databases/${encodeURIComponent(database.grn)}`);
 
@@ -272,6 +274,13 @@ export default function DatabaseListPage() {
     setDatabases(current => ({ ...current, loading: true, error: false }));
     try {
       if (demoMode) {
+        await waitForDemoLatency(signal);
+        if (signal.aborted) return;
+        if (consumeDemoFailure('database-list')) {
+          demoListFailedRef.current = owner === 'me';
+          setDatabases({ value: null, loading: false, error: true });
+          return;
+        }
         const { listDemoDatabases } = await import('../../entities/database/demo');
         const items = listDemoDatabases(owner);
         if (!signal.aborted) setDatabases({ value: items, loading: false, error: false });
@@ -288,6 +297,13 @@ export default function DatabaseListPage() {
     setQuota(current => ({ ...current, loading: true, error: false }));
     try {
       if (demoMode) {
+        await waitForDemoLatency(signal);
+        if (signal.aborted) return;
+        if (demoListFailedRef.current) {
+          demoListFailedRef.current = false;
+          setQuota({ value: null, loading: false, error: true });
+          return;
+        }
         const { getDemoDatabaseQuota } = await import('../../entities/database/demo');
         if (!signal.aborted) setQuota({ value: getDemoDatabaseQuota(), loading: false, error: false });
         return;
@@ -451,8 +467,10 @@ export default function DatabaseListPage() {
         </HeadingGroup>
 
         {!isTeamScope && <ResourceListSummary aria-label="Database 사용량">
-          {quota.loading ? (
+          {quota.loading && !quota.value ? (
             <><SummaryLoading height={174} /><SummaryLoading height={174} /><SummaryLoading height={174} /></>
+          ) : quota.error ? (
+            <><ErrorCard onRetry={() => setQuotaRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setQuotaRetryKey(value => value + 1)} /><ErrorCard onRetry={() => setQuotaRetryKey(value => value + 1)} /></>
           ) : (
             <>
               <FlexibleUsageCard
@@ -483,7 +501,7 @@ export default function DatabaseListPage() {
           <SectionTitle>{isTeamScope ? `${currentTeamName ?? '팀'} Database` : '내 Database'}</SectionTitle>
           {teams.error && <ScopeError role="alert">팀 범위를 불러오지 못했습니다.<Button variant="ghost" onClick={() => setScopeRetryKey(value => value + 1)}>다시 시도</Button></ScopeError>}
           {currentTeam.error && <ScopeError role="alert">팀 정보를 불러오지 못했습니다. 팀 접근 권한을 확인해 주세요.</ScopeError>}
-          {databases.loading ? (
+          {databases.loading && !databases.value ? (
             <ResourceListCards><LoadingCard width="calc((100% - 32px) / 3)" height={254} /></ResourceListCards>
           ) : databases.error ? (
             <DatabaseListError onRetry={() => setRetryKey(value => value + 1)} />

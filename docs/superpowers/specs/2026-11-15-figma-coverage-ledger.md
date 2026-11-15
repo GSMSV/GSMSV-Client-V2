@@ -52,7 +52,7 @@ Counts cover Product frames, States panels and Flows nodes together. "Gap" means
 | Auth/Home | 4/4 | 4/4 | 28/28 (+2 orphan text, N/A) | 36 | 0 |
 | VM (A+B) | 10/12 | 19/49 | 39/97 | 68 | 90 (38) |
 | Serverless | 8/8 | 26/26 | 57/57 | 91 | 0 (0) |
-| Database (incl. 49) | 7/8 | 10/21 | 32/53 | 49 | 33 (0) |
+| Database (incl. 49) | 7/8 | 21/21 | 50/53 | 78 | 4 (0) |
 | Apps | 13/13 | 27/27 | 63/75 | 103 | 12 (0) |
 | Teams | 5/5 | 13/13 | 32/32 | 50 | 0 |
 | Admin | 6/6 | 9/9 | 40/40 | 55 | 0 |
@@ -434,7 +434,7 @@ Product: 8 total (OK 8 / non-OK 0); States panels: 26 total (OK 26 / non-OK 0); 
 
 ### Database
 
-Mock data: `src/entities/database/model/demoDatabase.ts`. The seed has welcome-db, quota-locked-db (write_locked), suspended-welcome-db (suspended) and connect-db (demo-team). `listDemoDatabases`/`getDemoDatabaseQuota` (L244-273) **exclude** quota-locked-db and suspended-welcome-db, so no UI path links to them. They open only by direct URL (`/databases/quota-locked-db`, `/databases/suspended-welcome-db`). There is no demo loading delay or failure toggle: loading renders only during the dynamic-import tick, and error renders only on an unknown id.
+Mock data: `src/entities/database/model/demoDatabase.ts`. Personal scope seeds only welcome-db (matches 42). Team scope (demo-team) seeds connect-db, connect-legacy-db (suspended) and connect-stats-db (member permissions). The old hidden personal fixtures quota-locked-db / suspended-welcome-db are migrated away. Usage states are natural: query-console INSERT/UPDATE adds 0.26 GB and DELETE/TRUNCATE/DROP TABLE frees 0.26 GB (`applyDemoDatabaseWrite`), so welcome-db goes 0.3 → 0.56 → 0.82 (80% banner) → 1.08 GB (write-locked) and back (다시 쓸 수 있습니다). Loaders await the 600 ms demo latency; `?demoError=` scopes: database-list, database-new, database-issue, database, database-query, database-backups, database-settings, database-dedicated.
 
 #### Product screens
 | # | Figma frame | Node | Size | Route(s) | Component | Status | Notes |
@@ -445,93 +445,93 @@ Mock data: `src/entities/database/model/demoDatabase.ts`. The seed has welcome-d
 | 45 | Database 쿼리 콘솔 | 607:7369 | 1440x1080 | /databases/:databaseId/query (demo-only) | pages/database/DatabaseQueryDemoPage.tsx | OK | Uses WorkflowLayout shell; redirects dedicated DBs to detail (L309) |
 | 46 | Database 백업 | 607:7757 | 1440x1080 | /databases/:databaseGrn/backups | pages/database/DatabaseBackupsPage.tsx | OK | Backup table with 내려받기/복원 |
 | 47 | Database 설정 | 607:8218 | 1440x1080 | /databases/:databaseGrn/settings | pages/database/DatabaseSettingsPage.tsx | OK | Rename, password rotation, delete |
-| 48 | 전용형 Database 신청 | 608:7781 | 1440x1338 | /teams/:teamId/databases/dedicated/new, /databases/dedicated/new (demo-only) | pages/database/DedicatedDatabaseRequestPage.tsx | PARTIAL | Seeded request db-request-1 (GSM Connect, 검토 중) means first visit shows the 48-01 state with 신청 disabled, not the base form |
+| 48 | 전용형 Database 신청 | 608:7781 | 1440x1338 | /teams/:teamId/databases/dedicated/new, /databases/dedicated/new (demo-only) | pages/database/DedicatedDatabaseRequestPage.tsx | PARTIAL | The seeded GSM Connect request (한도윤 · 검토 중) must stay because Figma 49 shows it pending, so the first visit shows 48-01 instead of the empty form. The empty form appears after the admin rejects (button "고쳐서 다시 신청") or for a team with no request |
 | 49 | 관리자 승인 · 전용형 Database | 608:8111 | 1440x1586 | /admin/database-approvals (demo-only, admin role) | pages/admin/AdminDatabaseApprovalsDemoPage.tsx | OK | Table, approve card, reject card, stats |
 
 #### States & dialogs
 | States frame (node) | Panel | Panel node | Component / state | Mock trigger | Status | Notes |
 |---|---|---|---|---|---|---|
 | 49 · Database 상태 (610:2677) | Database를 더 발급할 수 없어요 | 610:2771 | DatabaseCreatePage dialog `count` (L365,451) | Create one personal DB (quota 1/2 → 2/2), then return to /databases/new and click 발급 | OK | Copy is one paragraph; no "팀을 만들어 팀 Database" bullet |
-| 610:2677 | 용량을 먼저 줄여 주세요 | 610:2810 | dialog `storage` (L366,453) | none: writeLocked comes from listDemoDatabases (excludes quota-locked-db); storage 0.3/1 GB | UNREACHABLE | Fix the demo list/quota to include the locked fixture |
-| 610:2677 | 팀이 승인되면 발급할 수 있어요 | 610:2851 | dialog `notApproved` (L367,456) + inline Notice (L498) | /databases/new?owner=demo-team (team pending): 발급 is disabled, so the dialog opens only by pressing Enter in the name field | OK | Title "팀 승인이 필요합니다" differs from design |
-| 610:2677 | 발급하지 못했어요 | 610:2893 | dialog `failure` (L389,457) | only if createDemoDatabase throws (localStorage write fails) | UNREACHABLE | No demo failure toggle |
-| 610:2677 | PostgreSQL은 준비 중이에요 | 610:2934 | dialog `postgres` (L454,534) | in demo mode the PostgreSQL button just selects PG and creation proceeds | UNREACHABLE | Dialog only appears outside demo mode |
-| 610:2677 | Database를 찾을 수 없어요 | 610:3121 | DatabaseDetailPage not-found Card (L327-333) | visit /databases/unknown-id | OK | Card also embeds a generic ErrorCard |
-| 610:2677 | 용량을 80% 넘게 쓰고 있어요 | 610:3136 | — | — | MISSING | No ≥80% banner in Detail; only notification text (notifications.ts:33) |
-| 610:2677 | 용량을 넘어 쓰기가 막혔어요 | 610:3154 | Detail Banner when write_locked (L346) | direct URL /databases/quota-locked-db only | UNREACHABLE | Fixture is never listed or linked |
-| 610:2677 | 다시 쓸 수 있어요 | 610:3174 | — | — | MISSING | No "unlocked" banner or transition |
-| 610:2677 | 정지됐어요 · 3일 뒤 삭제돼요 | 610:3197 | Detail suspended Banner + 사용 기간 연장 (L347) | direct URL /databases/suspended-welcome-db only | UNREACHABLE | Fixture excluded from list |
-| 610:2677 | 일반 팀원으로 보고 있어요 | 610:3219 | — | — | MISSING | Exists for VM/Apps, not Database; connect-db gives full permissions |
-| 610:2677 | 비밀번호 교체를 권해요 | 610:3237 | — | — | MISSING | No rotation-recommended banner |
+| 610:2677 | 용량을 먼저 줄여 주세요 | 610:2810 | DatabaseCreatePage dialog `storage` | Lock welcome-db: in its query console run `INSERT …` three times (0.3 → 0.56 → 0.82 → 1.08 GB), then /databases/new → 발급 | OK | Figma copy, usage line and 용량 줄이는 방법 / Database 목록 buttons |
+| 610:2677 | 팀이 승인되면 발급할 수 있어요 | 610:2851 | dialog `notApproved` + inline Notice | /databases/new?owner=demo-team while the team is pending → enter a name → 발급 (button no longer disabled for pending teams) | OK | Title and 팀 설정 button match Figma |
+| 610:2677 | 발급하지 못했어요 | 610:2893 | dialog `failure` (닫기 / 다시 시도) | /databases/new?demo=1&demoError=database-issue → 발급; 다시 시도 succeeds | OK | `consumeDemoFailure('database-issue')` |
+| 610:2677 | PostgreSQL은 준비 중이에요 | 610:2934 | dialog `postgres`; engine button reads "PostgreSQL · 준비 중" | /databases/new → PostgreSQL (demo and live behave the same) | OK | |
+| 610:2677 | Database를 찾을 수 없어요 | 610:3121 | DatabaseDetailPage not-found Card | visit /databases/unknown-id | OK | Figma copy (7일 안 문의 복구) and Database 목록 button; no embedded ErrorCard |
+| 610:2677 | 용량을 80% 넘게 쓰고 있어요 | 610:3136 | pages/database/DatabaseDetailPage.tsx warning Banner (owner total ≥ 80%) | welcome-db query console: `INSERT …` twice → 0.82 / 1 GB | OK | Writes change usage through `applyDemoDatabaseWrite` |
+| 610:2677 | 용량을 넘어 쓰기가 막혔어요 | 610:3154 | pages/database/DatabaseDetailPage.tsx danger Banner + 용량 줄이는 방법 | third `INSERT` (1.08 / 1 GB) locks every personal Database | OK | Legacy hidden fixture quota-locked-db removed |
+| 610:2677 | 다시 쓸 수 있어요 | 610:3174 | pages/database/DatabaseDetailPage.tsx success Banner (`unlockedAt`) | while locked, run `DELETE …` / `TRUNCATE …` / `DROP TABLE …` once → usage drops under 1 GB | OK | Cleared on the next growth |
+| 610:2677 | 정지됐어요 · 3일 뒤 삭제돼요 | 610:3197 | pages/database/DatabaseDetailPage.tsx suspended Banner + 사용 기간 연장 | /databases?owner=demo-team → connect-legacy-db (suspended team fixture) | OK | Legacy hidden suspended-welcome-db removed |
+| 610:2677 | 일반 팀원으로 보고 있어요 | 610:3219 | pages/database/DatabaseDetailPage.tsx neutral Banner when a team Database denies rotate/delete | /databases?owner=demo-team → connect-stats-db (created by 한도윤, member permissions) | OK | Settings hides rename/rotate/delete; backups hide 복원 |
+| 610:2677 | 비밀번호 교체를 권해요 | 610:3237 | pages/database/DatabaseDetailPage.tsx warning Banner + 비밀번호 교체 | remove 윤채원 in /teams/demo-team/settings → open connect-db; rotating the password clears it | OK | `knownMembers` vs current team members |
 | 610:2677 | 비밀번호를 교체할까요? | 610:3261 | Settings rotation Dialog (L296-302) | /databases/:grn/settings → 비밀번호 교체 | OK | welcome-db shows "welcome-api 함수" line |
 | 610:2677 | 새 비밀번호를 만들었어요 | 610:3306 | Settings rotationResult Dialog (L303-310) | confirm 교체 in the dialog above | OK | |
 | 610:2677 | welcome-db를 삭제할까요? | 610:3372 | DeleteConfirmDialog (L311-329) | settings → Database 삭제 | OK | Requires typing the name; redirects to list after a delay |
 | 610:2677 | 9월 28일 04:00 백업으로 되돌릴까요? | 610:3397 | Backups DeleteConfirmDialog (L337-356) | /backups → 복원 on a row | OK | |
 | 610:2677 | 쿼리가 45초를 넘어 멈췄어요 | 610:3428 | Query Banner outcome `timeout` (L237-248,323) | type the hidden comment `-- demo:timeout` and 실행, then wait 45 s | OK | Trigger is undiscoverable |
 | 610:2677 | 결과를 1,000행까지만 보여 줘요 | 610:3446 | Query Banner `row-cap` (L250,324) | hidden comment `-- demo:row-cap` + 실행 | OK | Trigger is undiscoverable |
-| 610:2677 | 쓰기 금지 중이라 실행하지 않았어요 | 610:3468 | Query Banner (L229-235,322) | needs /databases/quota-locked-db/query (direct URL) + INSERT/UPDATE | UNREACHABLE | Banner shows statically for locked DBs, not only after running |
+| 610:2677 | 쓰기 금지 중이라 실행하지 않았어요 | 610:3468 | Query Banner outcome `write-locked` (only after running) | lock welcome-db (three INSERTs), then run another INSERT/UPDATE | OK | |
 | 610:2677 | 전용형 신청을 보냈어요 | 610:3486 | DedicatedDatabaseRequestPage pending Banner (L96) | first visit (seeded pending), or after 신청 | OK | |
-| 610:2677 | 전용형 신청이 거절됐어요 | 610:3508 | 신청 결과 card: 거절 badge + "거절 사유" Alert (L120-123) | admin rejects at /admin/database-approvals, then reopen 48 | PARTIAL | No banner titled "전용형 신청이 거절됐어요"; button changes to "고쳐서 다시 신청" |
+| 610:2677 | 전용형 신청이 거절됐어요 | 610:3508 | DedicatedDatabaseRequestPage danger Banner "사유: …" + 고쳐서 다시 신청 | admin rejects at /admin/database-approvals, then reopen 48 | OK | Banner action focuses 사용 목적 |
 
 #### Flows
 | Flow frame | Node | Transition specified | Code behavior | Status |
 |---|---|---|---|---|
 | 42 · Database 목록 | 693:45532 | entry: sidebar Database → 42 | StudentShell.tsx:115 → /databases (or ?owner=team) | OK |
-| 42-01 · 로딩 | 741:59806 | 42 loading skeleton | LoadingCards (L455,487) during dynamic-import tick only | OK |
-| 42-02 · 오류 | 747:67157 | 42 load error | DatabaseListError (L489) only if import throws; demo list never fails | UNREACHABLE |
+| 42-01 · 로딩 | 741:59806 | 42 loading skeleton | LoadingCards during the 600 ms demo latency | OK |
+| 42-02 · 오류 | 747:67157 | 42 load error | `?demoError=database-list` → three usage ErrorCards + list ErrorCard; retry succeeds | OK |
 | 42-03 · 호버 · 새 Database | 693:45564 | click 새 Database → 43 | navigate('/databases/new') (L449; team L445) | OK |
 | 43 · Database 발급 | 693:45754 | entry: 42 새 Database / home "Database 발급" | /databases/new renders | OK |
 | 43-01 · 더 발급할 수 없어요 | 693:45791 | 발급 at quota → count dialog | after 1 creation, 2/2 → dialog `count` | OK |
-| 43-02 · 용량을 먼저 줄여 주세요 | 693:45983 | 발급 while write-locked → storage dialog | writeLocked never true in demo (locked fixture excluded) | UNREACHABLE |
-| 43-03 · 팀이 승인되면 | 693:46173 | 발급 on pending team → dialog | demo-team pending: button disabled + inline notice; dialog via Enter only | OK |
-| 43-04 · 발급하지 못했어요 | 693:46364 | failed create → failure dialog | only on localStorage failure | UNREACHABLE |
-| 43-05 · PostgreSQL은 준비 중 | 693:46554 | click PostgreSQL → dialog | demo selects PG and creates a PG DB (L533-534) | UNREACHABLE |
-| 43-06 · 로딩 | 741:59992 | 43 loading | usage LoadingCards (L501) during import tick | OK |
-| 43-07 · 오류 | 747:67371 | 43 load error | ErrorCard (L521) only if import fails | UNREACHABLE |
+| 43-02 · 용량을 먼저 줄여 주세요 | 693:45983 | 발급 while write-locked → storage dialog | lock welcome-db via three console INSERTs, then 발급 | OK |
+| 43-03 · 팀이 승인되면 | 693:46173 | 발급 on pending team → dialog | demo-team pending: 발급 click opens the dialog | OK |
+| 43-04 · 발급하지 못했어요 | 693:46364 | failed create → failure dialog | `?demoError=database-issue` | OK |
+| 43-05 · PostgreSQL은 준비 중 | 693:46554 | click PostgreSQL → dialog | dialog `postgres` in demo too | OK |
+| 43-06 · 로딩 | 741:59992 | 43 loading | usage LoadingCards during demo latency | OK |
+| 43-07 · 오류 | 747:67371 | 43 load error | `?demoError=database-new` | OK |
 | 43-08 · 호버 · 발급 | 693:46736 | click 발급 → 44 detail | createDemoDatabase → navigate /databases/:grn (L385-394); status creating→active after 2 s | OK |
 | 44 · 상세 · 접속 정보 | 693:46912 | entry: 42 card 열기 / home "Database 관리" | navigate /databases/:grn (List L269) | OK |
-| 44-01 · 80% 넘게 | 693:46997 | detail with ≥80% warning banner | not implemented | MISSING |
-| 44-02 · 쓰기가 막혔어요 | 693:47210 | detail write-locked banner | Banner L346; quota-locked-db only by direct URL | UNREACHABLE |
-| 44-03 · 다시 쓸 수 있어요 | 693:47421 | unlocked banner | not implemented | MISSING |
-| 44-04 · 정지됐어요 · 3일 뒤 삭제 | 693:47642 | suspended banner + 연장 | Banner L347; suspended-welcome-db only by direct URL | UNREACHABLE |
-| 44-05 · 일반 팀원으로 | 693:47843 | member read-only banner | not implemented for Database | MISSING |
-| 44-06 · 비밀번호 교체를 권해요 | 693:48064 | rotation-recommended banner | not implemented | MISSING |
+| 44-01 · 80% 넘게 | 693:46997 | detail with ≥80% warning banner | welcome-db after two console INSERTs | OK |
+| 44-02 · 쓰기가 막혔어요 | 693:47210 | detail write-locked banner | welcome-db after three console INSERTs | OK |
+| 44-03 · 다시 쓸 수 있어요 | 693:47421 | unlocked banner | DELETE/TRUNCATE/DROP once while locked | OK |
+| 44-04 · 정지됐어요 · 3일 뒤 삭제 | 693:47642 | suspended banner + 연장 | team list → connect-legacy-db | OK |
+| 44-05 · 일반 팀원으로 | 693:47843 | member read-only banner | team list → connect-stats-db | OK |
+| 44-06 · 비밀번호 교체를 권해요 | 693:48064 | rotation-recommended banner | remove 윤채원 from the team → connect-db | OK |
 | 44-07 · 찾을 수 없어요 | 693:48257 | unknown id → not-found | not-found card L327-333 via /databases/unknown | OK |
-| 44-08 · 로딩 | 739:52871 | 44 loading | LoadingCard height 300 (L327) during import tick; single card, not full skeleton | OK |
-| 44-09 · 오류 | 745:61653 | 44 load error | demo error path is the same as not-found (44-07); no separate error view | UNREACHABLE |
+| 44-08 · 로딩 | 739:52871 | 44 loading | LoadingCard during demo latency | OK |
+| 44-09 · 오류 | 745:61653 | 44 load error | `?demoError=database` → ErrorCards (separate from not-found) | OK |
 | 44-10 · 호버 · 쿼리 콘솔 | 693:48443 | click 쿼리 콘솔 tab → 45 | navigate /databases/:grn/query (L342; shared only) | OK |
 | 45 · 쿼리 콘솔 | 693:48731 | entry: 44/46/47 쿼리 콘솔 tab | demo route renders DatabaseQueryDemoPage | OK |
 | 45-01 · 45초를 넘어 | 693:48819 | 실행 → timeout banner | `-- demo:timeout` comment, then 45 s | OK |
 | 45-02 · 1,000행까지만 | 693:49014 | 실행 → row-cap banner | `-- demo:row-cap` comment | OK |
-| 45-03 · 쓰기 금지 중 | 693:49201 | INSERT on locked DB → banner | needs quota-locked-db direct URL | UNREACHABLE |
-| 45-04 · 로딩 | 741:60156 | 45 loading skeleton | only subtitle "Database 확인 중" (L313); no skeleton; Suspense fallback null | MISSING |
-| 45-05 · 오류 | 747:67556 | 45 load error | loadError Banner (L320) only if import rejects | UNREACHABLE |
+| 45-03 · 쓰기 금지 중 | 693:49201 | INSERT on locked DB → banner | welcome-db locked by console INSERTs, then INSERT | OK |
+| 45-04 · 로딩 | 741:60156 | 45 loading skeleton | two LoadingCards during demo latency | OK |
+| 45-05 · 오류 | 747:67556 | 45 load error | `?demoError=database-query` → two ErrorCards | OK |
 | 45-06 · 호버 · 실행 | 693:49373 | click 실행 → results | runQuery parses SELECT and updates the table (L219-305) | OK |
 | 46 · 백업 | 693:51614 | entry: 백업 tab | navigate /backups (Detail L343) | OK |
 | 46-01 · 백업으로 되돌릴까요? | 693:51749 | 복원 → confirm dialog | openRestore → DeleteConfirmDialog | OK |
-| 46-02 · 로딩 | 741:60334 | 46 loading | LoadingCard (L298/317) during import tick | OK |
-| 46-03 · 오류 | 747:67748 | 46 load error | BackupError ErrorCard via unknown id (L298-299) | OK |
+| 46-02 · 로딩 | 741:60334 | 46 loading | LoadingCard during demo latency | OK |
+| 46-03 · 오류 | 747:67748 | 46 load error | `?demoError=database-backups` (or unknown id) | OK |
 | 46-04 · 호버 · 내려받기 | 693:51982 | click 내려받기 → file download | demo gzip blob download (L224-246) | OK |
 | 47 · 설정 | 693:52237 | entry: 설정 tab | navigate /settings | OK |
 | 47-01 · 비밀번호를 교체할까요? | 693:52297 | 비밀번호 교체 → confirm | setShowRotationDialog (L284) | OK |
 | 47-02 · 새 비밀번호를 만들었어요 | 693:52510 | confirm 교체 → result dialog | rotationResult dialog (L303) | OK |
 | 47-03 · welcome-db를 삭제할까요? | 693:52764 | Database 삭제 → confirm | DeleteConfirmDialog (L311) | OK |
-| 47-04 · 로딩 | 741:60525 | 47 loading | LoadingCard (L260) during import tick | OK |
-| 47-05 · 오류 | 747:67946 | 47 load error | ErrorCard via unknown id (L260) | OK |
+| 47-04 · 로딩 | 741:60525 | 47 loading | LoadingCard during demo latency | OK |
+| 47-05 · 오류 | 747:67946 | 47 load error | `?demoError=database-settings` (or unknown id) | OK |
 | 47-06 · 호버 · 비밀번호 교체 | 693:52969 | click 비밀번호 교체 → 47-01 | opens rotation dialog | OK |
 | 48 · 전용형 신청 | 693:53150 | entry: 42 team scope → 전용형 신청 | List L436 (leader/devops) → /teams/demo-team/databases/dedicated/new | OK |
 | 48-01 · 신청을 보냈어요 | 693:53245 | after 신청 → pending banner | Banner L96 (shown immediately from seed) | OK |
-| 48-02 · 신청이 거절됐어요 | 693:53450 | rejected state | badge + "거절 사유" Alert after admin reject; no dedicated banner | PARTIAL |
-| 48-03 · 로딩 | 741:60683 | 48 loading | synchronous localStorage; Suspense fallback null | MISSING |
-| 48-04 · 오류 | 747:68125 | 48 load error | no error rendering | MISSING |
-| 48-05 · 호버 · 신청 | 693:53628 | click 신청 → 48-01 | submitRequest works (L58-86), but the seeded pending request disables the button until admin rejects (then "고쳐서 다시 신청") | PARTIAL |
+| 48-02 · 신청이 거절됐어요 | 693:53450 | rejected state | danger Banner + 고쳐서 다시 신청 after admin reject | OK |
+| 48-03 · 로딩 | 741:60683 | 48 loading | LoadingCards during demo latency | OK |
+| 48-04 · 오류 | 747:68125 | 48 load error | `?demoError=database-dedicated` → ErrorCards | OK |
+| 48-05 · 호버 · 신청 | 693:53628 | click 신청 → 48-01 | submitRequest works; the seeded pending request (needed by Figma 49) disables 신청 until the admin rejects, then "고쳐서 다시 신청" submits | PARTIAL |
 | 49 · 관리자 승인 | 693:53847 | entry: admin nav 승인 / team-approvals tab | WorkflowLayout L384; AdminTeamApprovals L161 → /admin/database-approvals | OK |
-| 49-01 · 로딩 | 741:60870 | 49 loading | synchronous; no loading render | MISSING |
-| 49-02 · 오류 | 747:68333 | 49 load error | no error rendering | MISSING |
+| 49-01 · 로딩 | 741:60870 | 49 loading | Admin domain (AdminDatabaseApprovalsDemoPage); not changed here | MISSING |
+| 49-02 · 오류 | 747:68333 | 49 load error | Admin domain (AdminDatabaseApprovalsDemoPage); not changed here | MISSING |
 | 49-03 · 호버 · 승인 | 693:53944 | click 승인 → approved, DB created | approve() creates dedicated DB, notification, success notice, filter=done | OK |
 
 #### Counts
-Product: 8 total (OK 7 / non-OK 1 PARTIAL); States panels: 21 total (OK 10 / non-OK 11: PARTIAL 1, UNREACHABLE 6, MISSING 4); Flows: 53 total (OK 32 / non-OK 21: PARTIAL 2, UNREACHABLE 10, MISSING 9). No PENDING-PR items (#143/#144 don't touch Database states).
+Product: 8 total (OK 7 / PARTIAL 1); States panels: 21 total (OK 21); Flows: 53 total (OK 50 / PARTIAL 1, MISSING 2 owned by Admin: 49-01, 49-02).
 
 ### Apps
 
@@ -1006,24 +1006,9 @@ All Serverless gaps were closed on `codex/figma-serverless`; see the Serverless 
 
 ### Database
 
-- `608:7781` 48 전用형 신청 — PARTIAL: seeded pending request means the base form (신청 enabled) never shows on first visit. Files: `src/entities/demo-workflows/model/demoData.ts:109-113`
-- `610:2810` / `693:45983` 용량을 먼저 줄여 주세요 — UNREACHABLE: Create page uses listDemoDatabases/getDemoDatabaseQuota, which exclude quota-locked-db, so writeLocked/storage never trip. Files: `src/pages/database/DatabaseCreatePage.tsx:340,366`, `src/entities/database/model/demoDatabase.ts:244-273`
-- `610:2893` / `693:46364` 발급하지 못했어요 — UNREACHABLE: no demo failure trigger. Files: `src/pages/database/DatabaseCreatePage.tsx:376-391`
-- `610:2934` / `693:46554` PostgreSQL은 준비 중 — UNREACHABLE: demo mode lets PostgreSQL be selected and created. Files: `src/pages/database/DatabaseCreatePage.tsx:529-535`
-- `610:3136` / `693:46997` 80% 넘게 — MISSING: no ≥80% banner on detail. Files: `src/pages/database/DatabaseDetailPage.tsx`
-- `610:3154` / `693:47210` 쓰기가 막혔어요 — UNREACHABLE: banner exists (L346) but quota-locked-db is not listed or linked. Files: `src/entities/database/model/demoDatabase.ts:246`
-- `610:3174` / `693:47421` 다시 쓸 수 있어요 — MISSING. Files: `src/pages/database/DatabaseDetailPage.tsx`
-- `610:3197` / `693:47642` 정지됐어요 · 3일 뒤 삭제 — UNREACHABLE: banner exists (L347); suspended-welcome-db only by direct URL. Files: `src/entities/database/model/demoDatabase.ts:246`
-- `610:3219` / `693:47843` 일반 팀원으로 보고 있어요 — MISSING on Database (connect-db grants all permissions). Files: `src/pages/database/DatabaseDetailPage.tsx`, `demoDatabase.ts:61`
-- `610:3237` / `693:48064` 비밀번호 교체를 권해요 — MISSING. Files: `src/pages/database/DatabaseDetailPage.tsx`
-- `610:3468` / `693:49201` 쓰기 금지 중이라 실행하지 않았어요 — UNREACHABLE: needs locked DB (direct URL only). Files: `src/pages/database/DatabaseQueryDemoPage.tsx:229-235,322`
-- `610:3508` / `693:53450` 전용형 신청이 거절됐어요 — PARTIAL: shown as badge + Alert, no banner. Files: `src/pages/database/DedicatedDatabaseRequestPage.tsx:120-123`
-- `693:53628` 48-05 호버 · 신청 — PARTIAL: button disabled by seeded pending request until admin rejects. Files: `DedicatedDatabaseRequestPage.tsx:98`
-- `745:61653` 44-09 오류 — UNREACHABLE: demo error collapses into the not-found card. Files: `DatabaseDetailPage.tsx:142-152,327`
-- `747:67157` 42-02, `747:67371` 43-07, `747:67556` 45-05 오류 — UNREACHABLE: only on a dynamic-import failure; no demo failure toggle. Files: `DatabaseListPage.tsx:271-285`, `DatabaseCreatePage.tsx:291-310`, `DatabaseQueryDemoPage.tsx:183-204`
-- `741:60156` 45-04 로딩 — MISSING: no skeleton, only subtitle text. Files: `DatabaseQueryDemoPage.tsx:313`
-- `741:60683` 48-03, `747:68125` 48-04, `741:60870` 49-01, `747:68333` 49-02 — MISSING: synchronous localStorage pages with no loading or error rendering. Files: `DedicatedDatabaseRequestPage.tsx`, `AdminDatabaseApprovalsDemoPage.tsx`
-- Note (OK but weak): 45-01/45-02 trigger only by the undiscoverable SQL comments `-- demo:timeout` / `-- demo:row-cap`. The loading frames counted OK render only for the dynamic-import tick (no demo delay).
+- `608:7781` 48 전용형 신청 / `693:53628` 48-05 — PARTIAL (kept on purpose): Figma 49 needs the seeded GSM Connect request in 검토 중, and 48 reads the same request store, so the first visit to 48 shows 48-01 (신청 disabled). After the admin rejects, the form is editable again and "고쳐서 다시 신청" submits. Files: `src/entities/demo-workflows/model/demoData.ts`
+- `741:60870` 49-01, `747:68333` 49-02 — MISSING, owned by the Admin domain (`src/pages/admin/AdminDatabaseApprovalsDemoPage.tsx`).
+- All other Database gaps fixed (codex/figma-database).
 
 ### Apps
 
