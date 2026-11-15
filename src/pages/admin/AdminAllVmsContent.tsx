@@ -105,6 +105,27 @@ const FilterActions = styled.div`
   justify-content: flex-end;
 `;
 
+// Figma 28: 새로고침은 보기 탭과 같은 줄 오른쪽 끝에 놓인다.
+const TabsAction = styled.div`
+  margin-left: auto;
+`;
+
+// Figma 28 VM 목록: 관리 열의 "상세 열기"는 행 높이를 키우지 않는 글자 버튼이다.
+const RowAction = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
+`;
+
 const TableViewport = styled.div`
   width: 100%;
   overflow-x: auto;
@@ -162,6 +183,12 @@ const RowSelect = styled.button`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 2px; }
 `;
 
+// 공용 Pagination은 6쪽을 모두 펼쳐 390px에서 넘치므로 카드 안에서만 가로 스크롤한다.
+const PaginationViewport = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
 const MissingValue = styled.span`
   color: ${({ theme }) => theme.colors.faint};
 `;
@@ -211,23 +238,56 @@ const DetailTitle = styled.h2`
 const DetailRows = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 `;
 
+// Figma 28 선택한 VM 카드: 이름(캡션) 아래에 값을 쌓는다.
 const DetailRow = styled.div`
   display: flex;
   min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  color: ${({ theme }) => theme.colors.muted};
+  flex-direction: column;
+  gap: 4px;
+  color: ${({ theme }) => theme.colors.faint};
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
 const DetailValue = styled.span`
   overflow-wrap: anywhere;
   color: ${({ theme }) => theme.colors.text};
-  text-align: right;
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+// Figma 28 "Node별 보기에서 확인": 목록에 소유 정보가 없는 VM을 아이콘·설명·배지·버튼으로 보여 준다.
+const OrphanItem = styled.article`
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const OrphanIcon = styled.span`
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.primary};
+`;
+
+const OrphanCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+`;
+
+const OrphanName = styled.strong`
+  color: ${({ theme }) => theme.colors.text};
+  font: 500 14px/20px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const OrphanText = styled.span`
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
 `;
 
 const DetailActions = styled.div`
@@ -254,7 +314,7 @@ const pageSize = 4;
 function getStatusTone(status: string): 'neutral' | 'primary' | 'warning' | 'danger' {
   const normalized = status.trim().toLocaleLowerCase();
   if (['running', '실행 중'].includes(normalized)) return 'primary';
-  if (['expired', '만료'].includes(normalized)) return 'danger';
+  if (normalized === 'expired' || normalized.startsWith('만료')) return 'danger';
   if (['pending', '대기'].includes(normalized)) return 'warning';
   return 'neutral';
 }
@@ -331,10 +391,10 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
       if (nodeFilter !== 'all' && row.node !== nodeFilter) return false;
       if (statusFilter !== 'all' && row.status !== statusFilter) return false;
       if (!query) return true;
-      return [row.name, row.ownerEmail, row.grn ?? '', String(row.vmid ?? '')]
+      return [row.name, row.ownerEmail, row.grn ?? '', String(row.vmid ?? ''), demoVmDetails?.[row.grn ?? '']?.purpose ?? '']
         .some(value => value.toLocaleLowerCase().includes(query));
     });
-  }, [allRows, expiringGrns, expiringOnly, nodeFilter, search, statusFilter]);
+  }, [allRows, demoVmDetails, expiringGrns, expiringOnly, nodeFilter, search, statusFilter]);
   const pageCount = Math.ceil(filteredRows.length / pageSize);
   const safePage = pageCount === 0 ? 1 : Math.min(page, pageCount);
   const visibleRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
@@ -344,6 +404,9 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
   const selectedNodeVm = selectedRow?.nodeVm ?? selectedNodeState?.items.find(item => selectedRow.grn && item.grn === selectedRow.grn)
     ?? selectedNodeState?.items.find(item => selectedRow.vmid != null && item.vmid === selectedRow.vmid && !item.grn);
   const selectedNode = nodes.find(node => node.node === selectedRow?.node);
+  const unownedNodeVms = nodes.flatMap(node => (nodeVmStates[node.node]?.items ?? [])
+    .filter(item => item.classification !== 'managed')
+    .map(item => ({ node: node.node, item })));
   const scopedNodes = nodeFilter === 'all' ? nodes : nodes.filter(node => node.node === nodeFilter);
   const nodeListsLoading = nodeMode && scopedNodes.some(node => node.online && nodeVmStates[node.node]?.loading);
   const nodeListsWithErrors = nodeMode ? scopedNodes.filter(node => !node.online || nodeVmStates[node.node]?.error || nodeVmStates[node.node]?.unavailable) : [];
@@ -422,7 +485,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
         <Tab type="button" $active={nodeMode} aria-current={nodeMode ? 'page' : undefined} onClick={() => { changeViewMode(true); clearExpiringFilter(); }}>
           Node별 보기
         </Tab>
-        <FilterActions><Button variant="secondary" icon={getIcon('sync')} onClick={onRefresh} disabled={refreshDisabled}>새로고침</Button></FilterActions>
+        <TabsAction><Button variant="secondary" icon={getIcon('sync')} onClick={onRefresh} disabled={refreshDisabled}>새로고침</Button></TabsAction>
       </Tabs>
 
       <Surface>
@@ -432,7 +495,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
             <TextField
               label="검색"
               value={searchDraft}
-              placeholder="VM 이름, 소유자 이메일 또는 GRN"
+              placeholder="VM 이름, 소유자 이메일 또는 사용 목적"
               onChange={event => setSearchDraft(event.currentTarget.value)}
             />
           </FilterField>
@@ -466,13 +529,13 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
                 <TableRow role="row" key={row.key} $selected={selectedRow?.key === row.key}>
                   <Cell role="cell"><RowSelect type="button" aria-label={`${row.name}, ${row.ownerEmail} 선택`} aria-pressed={selectedRow?.key === row.key} onClick={() => setSelectedKey(row.key)}>{row.name} · {row.resource?.owner_email === 'GSM Connect' ? '팀 GSM Connect' : row.ownerEmail}</RowSelect></Cell>
                   <Cell role="cell" $muted>{row.node ?? '—'}</Cell>
-                  <Cell role="cell" title={row.status}><StatusBadge tone={getStatusTone(row.status)}>{row.status}</StatusBadge></Cell>
+                  <Cell role="cell" title={row.status} $primary={getStatusTone(row.status) === 'primary'} $danger={getStatusTone(row.status) === 'danger'} $muted={getStatusTone(row.status) === 'neutral'}>{row.status}</Cell>
                   <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.expiresAt?.slice(0, 10) ?? <MissingValue title="현재 VM API 응답에 만료일이 없습니다">—</MissingValue>}</Cell>
                   <Cell role="cell" $muted>{demoVmDetails?.[row.grn ?? '']?.purpose ?? <MissingValue title="현재 VM API 응답에 사용 목적이 없습니다">—</MissingValue>}</Cell>
-                  <Cell role="cell"><Button variant="ghost" icon={getIcon('arrow-right')} onClick={() => {
+                  <Cell role="cell" $primary={selectedRow?.key === row.key}><RowAction type="button" onClick={() => {
                     setSelectedKey(row.key);
                     if (row.resource) onOpenDetails?.(row.resource.grn);
-                  }}>상세 열기</Button></Cell>
+                  }}>{getIcon('arrow-right')}상세 열기</RowAction></Cell>
                 </TableRow>
               ))}
             </Table>
@@ -486,12 +549,12 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
           </EmptyState>
         )}
         {filteredRows.length > 0 && (
-          <Pagination
+          <PaginationViewport><Pagination
             page={safePage}
             pageCount={pageCount}
             summary={`${filteredRows.length}개 중 ${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, filteredRows.length)}`}
             onPageChange={changePage}
-          />
+          /></PaginationViewport>
         )}
       </Surface>
 
@@ -503,12 +566,12 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
               <DetailRows>
                 <DetailRow><span>소유자</span><DetailValue>{selectedDetails ? selectedRow.ownerEmail.includes('@') ? `${selectedDetails.ownerName} · ${selectedRow.ownerEmail}` : selectedDetails.ownerName : selectedRow.ownerEmail}</DetailValue></DetailRow>
                 <DetailRow><span>전원 상태</span><DetailValue>{selectedRow.resource?.power_state === 'running' ? '실행 중' : selectedRow.resource?.power_state === 'stopped' ? '정지' : selectedRow.resource?.power_state ?? '—'}{selectedRow.node ? ` · ${selectedRow.node}` : ''}</DetailValue></DetailRow>
-                <DetailRow><span>Resources</span><DetailValue>{selectedDetails ? `${selectedDetails.tier} · ${selectedDetails.vcpu} vCPU / ${selectedDetails.ramGb}GB / ${selectedDetails.diskGb}GB` : <Unsupported title="현재 관리자 VM API에서 리소스 사양을 제공하지 않습니다">API에서 제공하지 않음</Unsupported>}</DetailValue></DetailRow>
+                <DetailRow><span>Resources</span><DetailValue>{selectedDetails ? `${selectedDetails.vcpu} vCPU · RAM ${selectedDetails.ramGb} GB · SSD ${selectedDetails.diskGb} GB` : <Unsupported title="현재 관리자 VM API에서 리소스 사양을 제공하지 않습니다">API에서 제공하지 않음</Unsupported>}</DetailValue></DetailRow>
               </DetailRows>
               <DetailActions>
                 <Button variant="secondary" icon={getIcon('server')} disabled={!selectedRow.resource || !onOpenDetails} title={!onOpenDetails ? 'VM 상세 관리 API가 없습니다.' : undefined} onClick={() => { if (selectedRow.resource) onOpenDetails?.(selectedRow.resource.grn); }}>상세 관리</Button>
                 <Button variant="secondary" icon={getIcon('stop')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'stopped'} title={!onDemoPowerAction ? 'VM 종료 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'stopped')}>종료</Button>
-                <Button variant="secondary" icon={getIcon('sync')} disabled={!selectedRow.resource || !onDemoPowerAction || selectedRow.resource.power_state === 'running'} title={!onDemoPowerAction ? 'VM 재시작 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'running')}>재시작</Button>
+                <Button variant="secondary" icon={getIcon('sync')} disabled={!selectedRow.resource || !onDemoPowerAction} title={!onDemoPowerAction ? 'VM 재시작 API가 없습니다.' : undefined} onClick={() => selectedRow.grn && onDemoPowerAction?.(selectedRow.grn, 'running')}>재시작</Button>
               </DetailActions>
             </>
           ) : <Helper>검색 조건에 맞는 VM을 선택하면 계약된 정보를 표시합니다.</Helper>}
@@ -516,7 +579,18 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
 
         <DetailCard aria-label="Node별 보기에서 확인">
           <DetailTitle>Node별 보기에서 확인</DetailTitle>
-          {!selectedRow ? <Helper>VM을 선택하면 해당 Node의 목록을 확인합니다.</Helper>
+          {unownedNodeVms.length > 0 ? unownedNodeVms.map(({ node, item }) => (
+            <OrphanItem key={`${node}:${item.vmid}`}>
+              <OrphanIcon>{getIcon('alert')}</OrphanIcon>
+              <OrphanCopy>
+                <OrphanName>{item.proxmox_name} · {getClassificationLabel(item.classification)}</OrphanName>
+                <OrphanText>{item.classification === 'orphan' ? '가상화 서버에는 있지만 서비스의 소유 정보가 없는 VM입니다.' : '가상화 서버에는 있지만 서비스에서 관리하지 않는 VM입니다.'}</OrphanText>
+                <Helper>{node} · {item.grn ? `VMID ${item.vmid}` : 'Node별 보기에만 표시'}</Helper>
+                <StatusBadge tone="neutral">{item.classification === 'orphan' ? '고아' : '미관리'}</StatusBadge>
+                <FilterActions><Button variant="secondary" icon={getIcon('server')} onClick={() => { changeViewMode(true, node, `${node}:${item.vmid}`); clearExpiringFilter(); }}>Node별 보기</Button></FilterActions>
+              </OrphanCopy>
+            </OrphanItem>
+          )) : !selectedRow ? <Helper>VM을 선택하면 해당 Node의 목록을 확인합니다.</Helper>
             : selectedNodeState?.unavailable ? <Helper>Node 정보를 확인할 수 없어 VM 목록을 불러오지 않았습니다.</Helper>
               : selectedNodeState?.loading ? <Helper>Node의 VM 목록을 불러오는 중입니다.</Helper>
                 : selectedNodeState?.error ? <Helper>Node의 VM 목록을 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</Helper>
@@ -531,7 +605,7 @@ export function AdminAllVmsContent({ resources, nodes, nodeVmStates, expiringGrn
                   ) : <Helper>이 VM의 Node 분류 정보를 찾을 수 없습니다.</Helper>}
         </DetailCard>
       </DetailGrid>
-      {demoVmDetails ? <Helper>현재 화면은 저장소에 반영되는 로컬 미리보기 데이터입니다.</Helper> : <Helper>만료일·사용 목적·사양과 VM 조작은 현재 관리자 API 응답에 포함되지 않습니다.</Helper>}
+      {demoVmDetails ? null : <Helper>만료일·사용 목적·사양과 VM 조작은 현재 관리자 API 응답에 포함되지 않습니다.</Helper>}
     </Page>
   );
 }

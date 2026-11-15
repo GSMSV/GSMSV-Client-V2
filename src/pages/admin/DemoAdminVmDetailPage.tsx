@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { getDemoInfraSnapshot, saveDemoInfraSnapshot, type DemoInfraSnapshot } from '../../entities/infra-node/demo';
@@ -6,17 +6,11 @@ import { addDemoNotification } from '../../entities/notification';
 import { getDemoVmState } from '../../entities/vm';
 import { Button } from '../../shared/ui/controls';
 import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
-import { ModalSurface } from '../../shared/ui/feedback';
-import { Octicon } from '../../shared/ui/icons';
-import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Stat, Stats, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
+import { Banner, ModalSurface } from '../../shared/ui/feedback';
+import { Octicon, type OcticonName } from '../../shared/ui/icons';
+import { AdminStat, AdminStats } from './adminDemoUi';
+import { Alert, Card, CardHeader, Field, Heading, Hint, Input, Muted, PageStack, SectionTitle, Textarea, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
-const Expiry = styled.div`
-  padding: 16px;
-  border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.primarySoft};
-  color: ${({ theme }) => theme.colors.primary};
-  font: 400 14px/22px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
-`;
 const InfoGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -26,22 +20,57 @@ const InfoGrid = styled.div`
     grid-template-columns: minmax(0, 1fr);
   }
 `;
-const InfoItem = styled.div`
+// Figma 31: 운영 정보·사용 기간·SSH 접속 정보는 아이콘 + 이름/값 + 글자 버튼 줄이며 구분선이 없다.
+const IconRows = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 16px;
 `;
+const IconRowFrame = styled.div`
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: ${({ theme }) => theme.colors.muted};
+`;
+const IconRowCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+`;
+const IconRowLabel = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+const IconRowValue = styled.span`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+function IconRow({ icon, label, value, action }: { icon: OcticonName; label: string; value: string; action?: ReactNode }) {
+  return <IconRowFrame><Octicon name={icon} size={16} /><IconRowCopy><IconRowLabel>{label}</IconRowLabel><IconRowValue>{value}</IconRowValue></IconRowCopy>{action}</IconRowFrame>;
+}
+const CommandTitle = styled(SectionTitle)`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  > svg { color: ${({ theme }) => theme.colors.primary}; }
+`;
+// Figma 31 SSH 명령어: 줄 번호가 붙은 어두운 코드 상자.
 const Code = styled.code`
-  display: block;
+  display: flex;
   max-width: 100%;
+  gap: 24px;
   overflow-x: auto;
   white-space: pre;
-  padding: 16px;
+  padding: 12px 16px;
   border-radius: ${({ theme }) => theme.radii.base}px;
-  background: ${({ theme }) => theme.colors.raised};
+  background: ${({ theme }) => theme.colors.canvas};
   color: ${({ theme }) => theme.colors.text};
   font: 400 13px/22px 'DM Mono', monospace;
+  > span:first-child { color: ${({ theme }) => theme.colors.faint}; user-select: none; }
 `;
 const Actions = styled.div`
   display: flex;
@@ -161,6 +190,12 @@ export default function DemoAdminVmDetailPage() {
     ? getDemoVmState().vms.find(item => item.name === vm.name)
     : undefined, [vm]);
   const running = vm?.power_state === 'running';
+  const expiryNotice = details ? (() => {
+    const [date, time = '14:00'] = details.expiresAt.split(' ');
+    const [year, month, day] = date.split('.').map(Number);
+    const extended = new Date(Date.UTC(year, month - 1, day + 14));
+    return `${month}월 ${day}일 ${time}에 만료됩니다. 지금 연장하면 ${extended.getUTCMonth() + 1}월 ${extended.getUTCDate()}일 ${time}까지 사용할 수 있습니다.`;
+  })() : '';
   const expiryDays = details
     ? Math.ceil((Date.parse(`${details.expiresAt.slice(0, 10).replaceAll('.', '-')}T00:00:00Z`) - Date.parse('2026-09-29T00:00:00Z')) / 86_400_000)
     : 0;
@@ -247,7 +282,7 @@ export default function DemoAdminVmDetailPage() {
     </PageStack></WorkflowLayout></DemoOnlyGate>;
   }
 
-  const actionIcon = (name: 'stop' | 'sync' | 'trashcan' | 'copy' | 'book' | 'eye' | 'server' | 'history' | 'globe' | 'file-code') => <Octicon name={name} size={16} />;
+  const actionIcon = (name: OcticonName) => <Octicon name={name} size={16} />;
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="전체 VM"><PageStack>
     <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / {vm.name}</p>
@@ -256,40 +291,46 @@ export default function DemoAdminVmDetailPage() {
       <TitleGroup><Title>{vm.name}</Title><Muted>{details.ownerName}의 {vm.name} · 관리자 조회</Muted></TitleGroup>
       <Actions>
         <Button variant="secondary" icon={actionIcon('stop')} disabled={!running} onClick={() => changePower('stopped')}>정상 종료</Button>
-        <Button variant="secondary" icon={actionIcon('sync')} disabled={running} onClick={() => changePower('running')}>재시작</Button>
+        <Button variant="secondary" icon={actionIcon('sync')} onClick={() => changePower('running')}>재시작</Button>
         <Button variant="danger" icon={actionIcon('trashcan')} onClick={() => { setConfirmName(''); setDeleteReason(''); setShowDelete(true); }}>관리자 삭제</Button>
       </Actions>
     </Heading>
     {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[[104, 104, 104], [188, 188], 188, 152]} label="VM 정보를 불러오는 중" /> : <>
-    <Expiry>◷　{expiryDays <= 0 ? '만료되었습니다' : `만료까지 ${expiryDays}일 남았어요`}<br /><Muted>{details.expiresAt} (KST) · 로컬 미리보기 데이터</Muted></Expiry>
-    <Stats>
-      <Stat>CPU<strong>{details.vcpu} vCPU</strong><Muted>{details.tier === 'Standard' ? '일반 Node' : details.tier}</Muted></Stat>
-      <Stat>메모리<strong>{details.ramGb} GB</strong><Muted>할당 메모리</Muted></Stat>
-      <Stat>디스크<strong>{details.diskGb} GB</strong><Muted>{details.os}</Muted></Stat>
-    </Stats>
+    <Banner tone={expiryDays <= 0 ? 'danger' : 'primary'} icon={<Octicon name="clock" size={20} />} title={expiryDays <= 0 ? '만료되었습니다' : `만료까지 ${expiryDays}일 남았습니다`} description={expiryNotice} />
+    <AdminStats>
+      <AdminStat icon="cpu" label="CPU" value={`${details.vcpu} vCPU`} caption={details.tier === 'Standard' ? '일반 Node' : details.tier} />
+      <AdminStat label="메모리" value={`${details.ramGb} GB`} caption="할당 메모리" />
+      <AdminStat icon="database" label="디스크" value={`${details.diskGb} GB`} caption={details.os} />
+    </AdminStats>
     <InfoGrid>
       <Card>
         <CardHeader><SectionTitle>운영 정보</SectionTitle></CardHeader>
-        <ValueRow><ValueLabel><Hint>사용 목적</Hint><Muted>{details.purpose}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('file-code')} onClick={() => { setPurposeDraft(details.purpose); setPanel('purpose'); }}>수정</Button></ValueRow>
-        <ValueRow><ValueLabel><Hint>자동 Snapshot</Hint><Muted>{details.autoSnapshot ? `켜짐 · 최신 ${details.retainedSnapshots}개 보관` : '꺼짐'}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('history')} onClick={() => setPanel('snapshot')}>관리</Button></ValueRow>
-        <ValueRow><ValueLabel><Hint>Network</Hint><Muted>외부 포트 {details.externalPorts}/{details.externalPortLimit} · HTTPS Domain {details.httpsDomains}/{details.httpsDomainLimit}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('globe')} disabled={!networkVm} title={!networkVm ? '이 VM의 Network 정보는 로컬 미리보기에서 제공되지 않습니다.' : undefined} onClick={() => { if (networkVm) navigate(`/vms/${encodeURIComponent(networkVm.grn)}/network`); }}>관리</Button></ValueRow>
+        <IconRows>
+          <IconRow icon="file-code" label="사용 목적" value={details.purpose} action={<Button variant="ghost" icon={actionIcon('pencil')} onClick={() => { setPurposeDraft(details.purpose); setPanel('purpose'); }}>수정</Button>} />
+          <IconRow icon="history" label="자동 Snapshot" value={details.autoSnapshot ? `켜짐 · 최신 ${details.retainedSnapshots}개 보관` : '꺼짐'} action={<Button variant="ghost" icon={actionIcon('chevron-right')} onClick={() => setPanel('snapshot')}>관리</Button>} />
+          <IconRow icon="globe" label="Network" value={`외부 포트 ${details.externalPorts}/${details.externalPortLimit} · HTTPS Domain ${details.httpsDomains}/${details.httpsDomainLimit}`} action={<Button variant="ghost" icon={actionIcon('chevron-right')} disabled={!networkVm} title={!networkVm ? '이 VM의 Network 정보는 로컬 미리보기에서 제공되지 않습니다.' : undefined} onClick={() => { if (networkVm) navigate(`/vms/${encodeURIComponent(networkVm.grn)}/network`); }}>관리</Button>} />
+        </IconRows>
       </Card>
       <Card>
         <CardHeader><SectionTitle>사용 기간</SectionTitle></CardHeader>
-        <InfoItem><Hint>생성일</Hint><Muted>{details.createdAt} (KST)</Muted></InfoItem>
-        <InfoItem><Hint>만료일</Hint><Muted>{details.expiresAt} (KST)</Muted></InfoItem>
-        <InfoItem><Hint>가동 시간</Hint><Muted>{details.uptime}</Muted></InfoItem>
+        <IconRows>
+          <IconRow icon="calendar" label="생성일" value={`${details.createdAt} (KST)`} />
+          <IconRow icon="clock" label="만료일" value={`${details.expiresAt} (KST)`} />
+          <IconRow icon="pulse" label="가동 시간" value={details.uptime} />
+        </IconRows>
       </Card>
     </InfoGrid>
     <Card>
       <CardHeader><SectionTitle>SSH 접속 정보</SectionTitle></CardHeader>
-      <ValueRow><ValueLabel><Hint>SSH 계정</Hint><Muted>{details.sshUser}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('copy')} onClick={() => void copyValue(details.sshUser, 'SSH 계정')}>복사</Button></ValueRow>
-      <ValueRow><ValueLabel><Hint>내부 IP</Hint><Muted>{details.internalIp}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('copy')} onClick={() => void copyValue(details.internalIp, '내부 IP')}>복사</Button></ValueRow>
-      <ValueRow><ValueLabel><Hint>초기 비밀번호</Hint><Muted>{showPassword ? details.initialPassword : '••••••••••••'}</Muted></ValueLabel><Button variant="secondary" icon={actionIcon('eye')} onClick={() => setShowPassword(value => !value)}>{showPassword ? '숨기기' : '표시'}</Button></ValueRow>
+      <IconRows>
+        <IconRow icon="person" label="SSH 계정" value={details.sshUser} action={<Button variant="ghost" icon={actionIcon('copy')} onClick={() => void copyValue(details.sshUser, 'SSH 계정')}>복사</Button>} />
+        <IconRow icon="server" label="내부 IP" value={details.internalIp} action={<Button variant="ghost" icon={actionIcon('copy')} onClick={() => void copyValue(details.internalIp, '내부 IP')}>복사</Button>} />
+        <IconRow icon="key" label="초기 비밀번호" value={showPassword ? details.initialPassword : '••••••••••••'} action={<Button variant="ghost" icon={actionIcon('eye')} onClick={() => setShowPassword(value => !value)}>{showPassword ? '숨기기' : '표시'}</Button>} />
+      </IconRows>
     </Card>
     <Card>
-      <CardHeader><SectionTitle><Octicon name="terminal" size={16} /> SSH 명령어</SectionTitle></CardHeader>
-      <Code>{details.sshCommand}</Code>
+      <CardHeader><CommandTitle><Octicon name="terminal" size={20} />SSH 명령어</CommandTitle></CardHeader>
+      <Code><span>1</span><span>{details.sshCommand}</span></Code>
       <SshActions>
         <Hint>실제 SSH 매핑: 외부 {details.sshCommand.match(/-p (\d+)/)?.[1] ?? '—'} → 내부 22 · 터미널에 붙여넣어 접속하세요.</Hint>
         <SshButtons>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { DemoPagePlaceholder, useDemoPageLoad } from '../demo-workflows/ui/DemoPageState';
 import { getDemoProfile, updateDemoProfile } from '../../entities/profile';
@@ -6,23 +6,93 @@ import { addDemoNotification } from '../../entities/notification';
 import { AccountDialog, DialogCopy } from '../../features/settings/demo-account';
 import { getDemoAccountRecords, getDemoAccounts, getDemoAdminEmergencyAccess, getDemoAdminGrantCandidates, getDemoGraduationDate, grantDemoAdminRole, revokeDemoAdminRole, saveDemoAccounts, saveDemoAdminEmergencyAccess, saveDemoGraduationDate, type DemoAccount, type DemoAdminRevokeResult } from '../../entities/demo-workflows';
 import { Button, DateField, SelectField, TextField } from '../../shared/ui/controls';
-import { Octicon } from '../../shared/ui/icons';
+import { Octicon, type OcticonName } from '../../shared/ui/icons';
+import { Pagination } from '../../shared/ui/data-display/Pagination';
 import { Alert, Card, CardHeader, Heading, Hint, Muted, PageStack, SectionTitle, Table, TableWrap, Title, TitleGroup, WorkflowLayout, DemoOnlyGate } from '../demo-workflows/ui/WorkflowLayout';
 
-const ExternalAccountGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+// Figma 30 외부 계정: 링크 아이콘 + 이름/값, 연결된 계정 줄에만 "연결 강제 해제".
+const ExternalAccountList = styled.div`
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  margin-top: 20px;
+  margin-top: 16px;
+`;
+
+const ExternalAccountRow = styled.div`
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  color: ${({ theme }) => theme.colors.muted};
 
   @media (max-width: 560px) {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-
-    > button { width: 100%; }
+    grid-template-columns: 16px minmax(0, 1fr);
+    > button { grid-column: 1 / -1; width: 100%; }
   }
 `;
+
+const ExternalAccountCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+
+  span:first-child {
+    color: ${({ theme }) => theme.colors.faint};
+    font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+  }
+  span:last-child {
+    color: ${({ theme }) => theme.colors.text};
+    font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  }
+`;
+
+// Figma 30 보호 규칙 카드: 아이콘 상자 → 제목 → 설명 → 오른쪽 정렬 버튼.
+const RuleGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: start;
+  gap: 16px;
+`;
+
+const RuleCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+const RuleIcon = styled.span`
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.text};
+`;
+
+const RuleTitle = styled.h3`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const RuleCopy = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+const RuleActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+`;
+
+function RuleCard({ icon, title, copy, children }: { icon: OcticonName; title: string; copy: string; children: ReactNode }) {
+  return <Card><RuleCardBody><RuleIcon><Octicon name={icon} size={16} /></RuleIcon><RuleTitle>{title}</RuleTitle><RuleCopy>{copy}</RuleCopy><RuleActions>{children}</RuleActions></RuleCardBody></Card>;
+}
 
 export default function DemoAdminAccountsPage() {
   const [accounts, setAccounts] = useState(() => getDemoAccounts());
@@ -213,15 +283,25 @@ export default function DemoAdminAccountsPage() {
   }
 
   return <DemoOnlyGate admin><WorkflowLayout admin activeAdminItem="관리자 점검"><PageStack>
-    <p style={{ margin: 0, color: '#a8a2af', fontSize: 12 }}>관리자 / 관리자 계정 점검</p>
-    <Heading><TitleGroup><Title>관리자 계정 점검</Title><Muted>학교 정보·역할·소속 팀과 외부 계정 연결 상태를 확인하세요.</Muted></TitleGroup><Button icon={<Octicon name="plus" size={16} />} disabled={pageLoad.status !== 'ready'} onClick={openGrantDialog}>관리자 지정</Button></Heading>
+    <Hint style={{ margin: 0 }}>관리자 / 관리자 계정 점검</Hint>
+    <Heading><TitleGroup><Title>관리자 계정 점검</Title><Muted>학교 정보·역할·소속 팀과 외부 계정 연결 상태를 확인하세요.</Muted></TitleGroup><Button variant="secondary" icon={<Octicon name="plus" size={16} />} disabled={pageLoad.status !== 'ready'} onClick={openGrantDialog}>관리자로 지정</Button></Heading>
     {pageLoad.status !== 'ready' ? <DemoPagePlaceholder status={pageLoad.status} onRetry={pageLoad.retry} rows={[274, 172, { title: '확정이 필요한 보호 규칙' }, [164, 164, 180]]} label="계정 정보를 불러오는 중" /> : <>
     {notice && <Alert $tone="success" role="status"><Octicon name="info" size={16} />{notice}</Alert>}
-    <Card><CardHeader><SectionTitle>계정 목록</SectionTitle></CardHeader><TableWrap><Table><thead><tr><th>이름 · 학번</th><th>학교 이메일</th><th>역할</th><th>소속 팀</th><th>GitHub</th><th>Discord</th></tr></thead><tbody>{accounts.map((account) => <tr key={account.id} aria-selected={account.id === current?.id} onClick={() => setSelectedId(account.id)}><td>{account.name} · {account.studentId}</td><td>{account.email}</td><td>{account.role}</td><td>{account.team}</td><td>{account.github}</td><td>{account.discord}</td></tr>)}</tbody></Table></TableWrap><Hint>{accounts.length}개 중 1–{accounts.length}</Hint></Card>
+    <Card><CardHeader><SectionTitle>계정 목록</SectionTitle></CardHeader><TableWrap><Table><thead><tr><th>이름 · 학번</th><th>학교 이메일</th><th>역할</th><th>소속 팀</th><th>GitHub</th><th>Discord</th></tr></thead><tbody>{accounts.map((account) => <tr key={account.id} aria-selected={account.id === current?.id} onClick={() => setSelectedId(account.id)}><td>{account.name} · {account.studentId}</td><td>{account.email}</td><td>{account.role}</td><td>{account.team}</td><td>{account.github}</td><td>{account.discord}</td></tr>)}</tbody></Table></TableWrap><div style={{ marginTop: 16 }}><Pagination page={1} pageCount={1} summary={`${accounts.length}개 중 1–${accounts.length}`} onPageChange={() => undefined} /></div></Card>
     {current && <Card><CardHeader><SectionTitle>{current.name} · 외부 계정</SectionTitle>{current.role === '관리자' && <Button variant="danger" icon={<Octicon name="shield" size={16} />} onClick={() => openRevokeDialog(current)}>권한 회수</Button>}</CardHeader><Muted>학교 정보는 DataGSM에서 와서 여기서 고칠 수 없습니다. 연결을 강제로 해제하면 그 사람이 다시 연결해야 합니다.</Muted>
-      <ExternalAccountGrid><div><Hint>GitHub</Hint><Muted>{current.github} · {current.github === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.github === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('github')}>연결 강제 해제</Button><div><Hint>Discord</Hint><Muted>{current.discord} · {current.discord === '연결 안 됨' ? '연결 안 됨' : '연결됨'}</Muted></div><Button variant="danger" disabled={current.discord === '연결 안 됨'} icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect('discord')}>연결 강제 해제</Button></ExternalAccountGrid>
+      <ExternalAccountList>
+        {([['github', 'GitHub', current.github], ['discord', 'Discord', current.discord]] as const).map(([provider, label, value]) => <ExternalAccountRow key={provider}>
+          <Octicon name="link" size={16} />
+          <ExternalAccountCopy><span>{label}</span><span>{value === '연결 안 됨' ? '연결 안 됨' : `${value} · 연결됨`}</span></ExternalAccountCopy>
+          {value !== '연결 안 됨' && <Button variant="danger" icon={<Octicon name="x" size={16} />} onClick={() => showDisconnect(provider)}>연결 강제 해제</Button>}
+        </ExternalAccountRow>)}
+      </ExternalAccountList>
     </Card>}
-    <SectionTitle>확정이 필요한 보호 규칙</SectionTitle><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap: 16 }}><Card><Octicon name="lock" size={20} /><SectionTitle style={{ marginTop: 16 }}>자기 권한 보호</SectionTitle><Muted>현재 로그인한 관리자는 자신의 권한을 회수할 수 없습니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" onClick={() => { const actor = admins.find(account => account.id === 'account-4'); if (actor) openRevokeDialog(actor); }}>권한 회수</Button></div></Card><Card><Octicon name="people" size={20} /><SectionTitle style={{ marginTop: 16 }}>마지막 관리자 보호</SectionTitle><Muted>관리자가 한 명만 남았다면 권한 회수를 막습니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" disabled={admins.length !== 1} onClick={openLastAdminProtection}>권한 회수</Button></div></Card><Card><Octicon name="checklist" size={20} /><SectionTitle style={{ marginTop: 16 }}>졸업 후 계정 점검</SectionTitle><Muted>졸업한 관리자의 접근은 유지됩니다. 인수인계 이후의 회수 절차가 필요합니다.</Muted><div style={{ marginTop: 16 }}><Button variant="secondary" onClick={openGraduationDialog}>회수 절차 검토</Button></div></Card></div>
+    <SectionTitle>확정이 필요한 보호 규칙</SectionTitle><RuleGrid>
+      <RuleCard icon="lock" title="자기 권한 보호" copy="현재 로그인한 관리자는 자신의 권한을 회수할 수 없습니다."><Button variant="secondary" icon={<Octicon name="shield" size={16} />} onClick={() => { const actor = admins.find(account => account.id === 'account-4'); if (actor) openRevokeDialog(actor); }}>권한 회수</Button></RuleCard>
+      <RuleCard icon="people" title="마지막 관리자 보호" copy="관리자가 한 명만 남았다면 권한 회수를 막습니다."><Button variant="secondary" icon={<Octicon name="shield" size={16} />} disabled={admins.length !== 1} onClick={openLastAdminProtection}>권한 회수</Button></RuleCard>
+      <RuleCard icon="checklist" title="졸업 후 계정 점검" copy="졸업한 관리자의 접근은 유지됩니다. 인수인계 이후의 회수 절차가 필요합니다."><Button variant="secondary" icon={<Octicon name="shield" size={16} />} onClick={openGraduationDialog}>회수 절차 검토</Button></RuleCard>
+    </RuleGrid>
     {graduationOpen && <AccountDialog title="졸업일 등록" icon="calendar" description={'· 3학년 사용자에게 D-30, D-7에 안내합니다.\n· 졸업 처리 후 개인 VM·함수는 3일 뒤 삭제됩니다.'} onDismiss={() => setGraduationOpen(false)} actions={<Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!graduationDateDraft} onClick={saveGraduationSchedule}>저장</Button>}>
       <DateField label="졸업일" value={graduationDateDraft} onChange={value => { setGraduationDateDraft(value); setGraduationError(''); }} />
       {graduationError && <DialogCopy role="alert">{graduationError}</DialogCopy>}

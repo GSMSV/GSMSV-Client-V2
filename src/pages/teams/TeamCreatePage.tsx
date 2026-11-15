@@ -6,7 +6,6 @@ import { listMyTeams, type TeamRole, type TeamSummary } from '../../entities/tea
 import { ApiRequestError } from '../../shared/api';
 import { isDemoMode } from '../../shared/demo';
 import { Button, TextField } from '../../shared/ui/controls';
-import { Banner } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { StudentShell } from '../../widgets/student-shell';
 import { getSessionUser } from '../../entities/session';
@@ -49,9 +48,11 @@ const FormCard = styled.form`
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 16px;
+  padding: 24px;
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
 `;
 
 const CardHeading = styled.div`
@@ -127,10 +128,14 @@ const InfoGrid = styled.div`
   @media (max-width: 860px) { grid-template-columns: 1fr; }
 `;
 
+// Figma 24: 안내 카드도 24px 안쪽 여백, 마지막 항목 아래에도 구분선이 있다.
 const InfoCard = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 24px;
+
+  @media (max-width: 600px) { padding: 16px; }
+
   border-radius: ${({ theme }) => theme.radii.base}px;
   background: ${({ theme }) => theme.colors.surface};
 `;
@@ -153,8 +158,6 @@ const InfoRow = styled.li`
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-
-  &:last-child { border-bottom: 0; }
 `;
 
 const InfoIcon = styled.span`
@@ -351,7 +354,7 @@ export default function TeamCreatePage() {
             <InfoList>
               <InfoRow>
                 <InfoIcon aria-hidden="true"><Octicon name="server" size={16} /></InfoIcon>
-                <InfoCopy><InfoLabel>팀 VM 함께 관리</InfoLabel><InfoDescription>팀원이 만든 VM을 보고 SSH로 접속할 수 있습니다.</InfoDescription></InfoCopy>
+                <InfoCopy><InfoLabel>팀 VM 함께 관리</InfoLabel><InfoDescription>팀원 모두 팀 VM을 보고 SSH로 접속할 수 있습니다.</InfoDescription></InfoCopy>
               </InfoRow>
               <InfoRow>
                 <InfoIcon aria-hidden="true"><Octicon name="shield" size={16} /></InfoIcon>
@@ -359,7 +362,7 @@ export default function TeamCreatePage() {
               </InfoRow>
               <InfoRow>
                 <InfoIcon aria-hidden="true"><Octicon name="cpu" size={16} /></InfoIcon>
-                <InfoCopy><InfoLabel>팀 할당량</InfoLabel><InfoDescription>팀 VM은 개인 할당량과 별도로 팀 할당량을 씁니다.</InfoDescription></InfoCopy>
+                <InfoCopy><InfoLabel>팀 할당량</InfoLabel><InfoDescription>팀 VM은 개인 할당량과 따로 팀 할당량을 씁니다.</InfoDescription></InfoCopy>
               </InfoRow>
             </InfoList>
           </InfoCard>
@@ -373,11 +376,11 @@ export default function TeamCreatePage() {
               </InfoRow>
               <InfoRow>
                 <InfoIcon aria-hidden="true"><Octicon name="people" size={16} /></InfoIcon>
-                <InfoCopy><InfoLabel>2. 팀원 초대</InfoLabel><InfoDescription>승인을 기다리는 동안에도 팀원을 초대할 수 있습니다.</InfoDescription></InfoCopy>
+                <InfoCopy><InfoLabel>2. 팀원 초대</InfoLabel><InfoDescription>승인을 기다리는 동안에도 초대할 수 있습니다.</InfoDescription></InfoCopy>
               </InfoRow>
               <InfoRow>
                 <InfoIcon aria-hidden="true"><Octicon name="plus" size={16} /></InfoIcon>
-                <InfoCopy><InfoLabel>3. 팀 VM 만들기</InfoLabel><InfoDescription>팀이 승인되면 팀장과 DevOps가 만들 수 있습니다.</InfoDescription></InfoCopy>
+                <InfoCopy><InfoLabel>3. 팀 VM 만들기</InfoLabel><InfoDescription>승인된 뒤 팀장과 DevOps가 만들 수 있습니다.</InfoDescription></InfoCopy>
               </InfoRow>
             </InfoList>
           </InfoCard>
@@ -391,12 +394,6 @@ export default function TeamCreatePage() {
           </PeriodCopy>
         </PeriodNote>
 
-        <Banner
-          tone="neutral"
-          icon={<Octicon name="info" size={20} />}
-          title="새 팀은 관리자 승인 대기 상태로 만들어집니다."
-          description="승인 전에는 팀 자원을 만들 수 없지만, 팀원 초대와 팀 정보 확인은 할 수 있습니다."
-        />
         </>}
       </Page>
     </StudentShell>
