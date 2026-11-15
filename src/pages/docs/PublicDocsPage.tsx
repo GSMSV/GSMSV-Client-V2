@@ -240,7 +240,7 @@ export default function PublicDocsPage() {
               </PageHeading>
               <LoginNotice>
                 <Octicon name="person" size={16} aria-hidden="true" />
-                <NoticeCopy><NoticeTitle>로그인 후 리소스 화면으로 이동합니다</NoticeTitle><p>이 문서는 로그인 없이 VM 사용 기간과 연장 정책을 확인할 수 있습니다.</p></NoticeCopy>
+                <NoticeCopy><NoticeTitle>로그인하면 내 VM의 만료일을 여기서 바로 볼 수 있습니다</NoticeTitle><p>이 문서는 로그인 없이 볼 수 있습니다. 로그인하면 이 자리에 내 VM의 만료일과 연장 버튼이 나옵니다.</p></NoticeCopy>
                 <Button variant="primary" onClick={startDataGsmLogin} icon={<Octicon name="sign-in" size={16} />}>DataGSM으로 로그인</Button>
               </LoginNotice>
               <Card id="overview">

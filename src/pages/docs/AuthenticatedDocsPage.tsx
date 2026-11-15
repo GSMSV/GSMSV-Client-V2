@@ -330,7 +330,7 @@ export default function AuthenticatedDocsPage() {
           <BannerIcon><Octicon name="terminal" size={16} aria-hidden="true" /></BannerIcon>
           <BannerCopy>
             <BannerTitle>VM에 SSH로 접속하기</BannerTitle>
-            <BannerDescription>SSH 접속 전에 VM이 실행 중이고 Network에 SSH 기본 포트가 등록되어 있는지 확인하세요.</BannerDescription>
+            <BannerDescription>Instance 개요에서 내 접속 명령을 복사하면 빠르게 시작할 수 있습니다. 먼저 VM이 실행 중인지 확인하세요.</BannerDescription>
           </BannerCopy>
           <Button variant="secondary" onClick={() => navigate('/')} icon={<Octicon name="server" size={16} />}>내 Resources 보기</Button>
         </InfoBanner>
@@ -344,7 +344,7 @@ export default function AuthenticatedDocsPage() {
             </Step>
             <Step>
               <StepIcon><Octicon name="copy" size={20} aria-hidden="true" /></StepIcon>
-              <StepCopy><strong>2. Network에서 SSH 포트를 확인하세요</strong><span>외부 SSH 포트는 VM마다 다릅니다. 연결하려는 VM의 Network에서 현재 SSH 포트를 확인하세요.</span></StepCopy>
+              <StepCopy><strong>2. 개요의 SSH 명령을 복사하세요</strong><span>외부 SSH 포트는 VM마다 다릅니다. 개요에 표시되는 현재 포트로 접속하세요.</span></StepCopy>
             </Step>
             <Step>
               <StepIcon><Octicon name="terminal" size={20} aria-hidden="true" /></StepIcon>
