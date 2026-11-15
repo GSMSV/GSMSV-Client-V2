@@ -20,6 +20,7 @@ export interface TeamMember {
   email: string;
   role: TeamRole;
   profile_image_url: string | null;
+  joined_at?: string | null;
 }
 
 export interface TeamQuotaUsage {

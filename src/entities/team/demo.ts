@@ -42,9 +42,9 @@ const seedState: DemoTeamState = {
     rejection_reason: null,
     my_role: 'leader',
     members: [
-      { member_id: 'demo-student', name: '김지민', email: 'jimin@example.com', role: 'leader', profile_image_url: null },
-      { member_id: 'demo-member-1', name: '한도윤', email: 'doyoon@example.com', role: 'devops', profile_image_url: null },
-      { member_id: 'demo-member-2', name: '윤채원', email: 'chaewon@example.com', role: 'member', profile_image_url: null },
+      { member_id: 'demo-student', name: '김지민', email: 'jimin@example.com', role: 'leader', profile_image_url: null, joined_at: '2026-09-29' },
+      { member_id: 'demo-member-1', name: '한도윤', email: 'doyoon@example.com', role: 'devops', profile_image_url: null, joined_at: '2026-09-29' },
+      { member_id: 'demo-member-2', name: '윤채원', email: 'chaewon@example.com', role: 'member', profile_image_url: null, joined_at: '2026-09-30' },
     ],
     quota: { vm: { vcpu: { used: 4, limit: 4 }, ram_gb: { used: 6, limit: 8 }, ssd_gb: { used: 50, limit: 60 } } },
     permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: false },
@@ -123,7 +123,18 @@ export function getDemoTeam(teamId: string): DemoTeamDetail | undefined {
   // A former member must not regain access through a stale direct URL. Admin
   // workflows still need to inspect teams for approved disband requests.
   if (team?.my_role === null && getSessionUser()?.role !== 'admin') return undefined;
-  return team;
+  if (team?.id !== 'demo-team') return team;
+
+  // Older saved previews lack dates for the original sample members.
+  return {
+    ...team,
+    members: team.members.map(member => {
+      if (member.joined_at) return member;
+      const seed = seedState.teams[0].members.find(candidate =>
+        candidate.member_id === member.member_id && candidate.email === member.email);
+      return seed?.joined_at ? { ...member, joined_at: seed.joined_at } : member;
+    }),
+  };
 }
 
 export function createDemoTeam(name: string): TeamSummary {
@@ -135,7 +146,7 @@ export function createDemoTeam(name: string): TeamSummary {
     status: 'pending',
     rejection_reason: null,
     my_role: 'leader',
-    members: [{ member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader', profile_image_url: null }],
+    members: [{ member_id: 'demo-student', name: '김민수', email: 'minsu@example.com', role: 'leader', profile_image_url: null, joined_at: new Date().toISOString() }],
     quota: { vm: { vcpu: { used: 0, limit: 4 }, ram_gb: { used: 0, limit: 8 }, ssd_gb: { used: 0, limit: 60 } } },
     permissions: { invite_member: true, remove_member: true, grant_devops: true, transfer_leader: true, disband_team: true, leave_team: true, resubmit_team: true },
   };
@@ -208,7 +219,14 @@ export function acceptDemoTeamInvitation(token: string) {
   if (!isDemoMode() || !invitation || !team) throw new Error('GONE');
   const updatedTeam = {
     ...team,
-    members: [...team.members, { member_id: `demo-member-${crypto.randomUUID()}`, name: '데모 학생', email: invitation.email, role: 'member' as const, profile_image_url: null }],
+    members: [...team.members, {
+      member_id: `demo-member-${crypto.randomUUID()}`,
+      name: '데모 학생',
+      email: invitation.email,
+      role: 'member' as const,
+      profile_image_url: null,
+      joined_at: new Date().toISOString(),
+    }],
   };
   saveState({ ...state, teams: state.teams.map(item => item.id === team.id ? updatedTeam : item), invitations: state.invitations.filter(item => item.id !== invitation.id) });
   return { team: { id: team.id, name: team.name }, my_role: 'member' as const };
