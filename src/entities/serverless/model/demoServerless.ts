@@ -153,18 +153,24 @@ function version(fn: DemoServerlessFunction, state: DemoServerlessState, summary
   const currentId = String(state.sequence + 1);
   const label = `버전 ${currentId}`;
   const now = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date());
-  fn.versions = [{ id: currentId, label, savedAt: now, author: '김민수', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))];
+  fn.versions = [{ id: currentId, label, savedAt: now, author: '김민수', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))].slice(0, 10);
 }
 
 export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promise<string> {
   const id = crypto.randomUUID();
   const fn: DemoServerlessFunction = { id, name: draft.name, description: draft.description, runtime: draft.runtime, timeoutSeconds: draft.timeoutSeconds, memoryMb: draft.memoryMb, code: draft.code, active: false, expiresAt: '생성 후 7일', variables: [], triggers: [], versions: [], runs: [], testResult: null };
   return transactDemoServerlessState(seed, normalizeState, state => {
+    if (state.functions.some(existing => !existing.teamId && existing.name.trim().toLowerCase() === draft.name.trim().toLowerCase())) {
+      return { duplicate: true as const };
+    }
     version(fn, state, '함수 생성');
     state.sequence += 1;
     state.functions.unshift(fn);
-    return id;
-  }).then(({ result }) => result!);
+    return { id } as const;
+  }).then(({ result }) => {
+    if (result?.duplicate) throw new Error('이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.');
+    return result!.id;
+  });
 }
 export function saveDemoServerlessCode(id: string, code: string) { return mutate(id, (fn, state) => { fn.code = code; version(fn, state, '코드'); state.sequence += 1; }); }
 export function saveDemoServerlessSettings(id: string, settings: Pick<DemoServerlessFunction, 'runtime' | 'timeoutSeconds' | 'memoryMb'>) { return mutate(id, (fn, state) => { Object.assign(fn, settings); version(fn, state, '실행 설정'); state.sequence += 1; }); }
@@ -208,7 +214,10 @@ export async function executeDemoServerlessTest(id: string, payload: string): Pr
     if (!fn) return { kind: 'missing' } as const;
     if (!fn.active) return { kind: 'inactive' } as const;
     if (state.executionsToday >= state.dailyLimit) return { kind: 'quota' } as const;
-    const body = JSON.parse(payload) as { name?: string };
+    const parsedPayload: unknown = JSON.parse(payload);
+    const body = parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)
+      ? parsedPayload as { name?: string }
+      : {};
     const name = typeof body.name === 'string' ? body.name : '지민';
     const greeting = fn.variables.find(item => item.name === 'GREETING')?.value ?? '안녕하세요';
     const message = fn.runtime === 'python' ? '함수가 정상적으로 응답했습니다' : `${greeting}, ${name}!`;

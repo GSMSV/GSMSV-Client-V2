@@ -16,7 +16,8 @@ export interface ServerlessFunctionDraft {
 
 export interface ServerlessCreatePageProps {
   onCancel: () => void;
-  onCreate: (draft: ServerlessFunctionDraft) => void;
+  onCreate: (draft: ServerlessFunctionDraft) => void | Promise<void>;
+  existingNames?: string[];
 }
 
 const starterCode: Record<ServerlessRuntime, string> = {
@@ -232,6 +233,12 @@ const Help = styled.p`
   font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
 `;
 
+const FormError = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.danger};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
 const EditorCard = styled(Card)`
   gap: 16px;
 `;
@@ -287,14 +294,17 @@ const CodeInput = styled.textarea`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 4px; }
 `;
 
-export default function ServerlessCreatePage({ onCancel, onCreate }: ServerlessCreatePageProps) {
+export default function ServerlessCreatePage({ onCancel, onCreate, existingNames = [] }: ServerlessCreatePageProps) {
   const [name, setName] = useState('welcome-api');
   const [runtime, setRuntime] = useState<ServerlessRuntime>('javascript');
   const [timeoutSeconds, setTimeoutSeconds] = useState<'30' | '60'>('30');
   const [memoryMb, setMemoryMb] = useState<'128' | '256'>('128');
   const [description, setDescription] = useState('서비스 첫 방문자에게 환영 메시지를 반환합니다.');
   const [code, setCode] = useState(starterCode.javascript);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
   const lineCount = useMemo(() => code.split('\n').length, [code]);
+  const duplicateName = existingNames.some(existingName => existingName.trim().toLowerCase() === name.trim().toLowerCase());
 
   const handleRuntimeChange = (value: string) => {
     const selectedRuntime = value as ServerlessRuntime;
@@ -302,16 +312,27 @@ export default function ServerlessCreatePage({ onCancel, onCreate }: ServerlessC
     setCode(starterCode[selectedRuntime]);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onCreate({
-      name: name.trim(),
-      runtime,
-      timeoutSeconds: Number(timeoutSeconds) as 30 | 60,
-      memoryMb: Number(memoryMb) as 128 | 256,
-      description: description.trim(),
-      code,
-    });
+    if (isCreating || duplicateName || !name.trim()) return;
+    setIsCreating(true);
+    setCreateError('');
+    try {
+      await onCreate({
+        name: name.trim(),
+        runtime,
+        timeoutSeconds: Number(timeoutSeconds) as 30 | 60,
+        memoryMb: Number(memoryMb) as 128 | 256,
+        description: description.trim(),
+        code,
+      });
+    } catch (error) {
+      setCreateError(error instanceof Error && error.message.includes('이미 사용 중인 함수 이름')
+        ? error.message
+        : '함수를 저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -325,10 +346,12 @@ export default function ServerlessCreatePage({ onCancel, onCreate }: ServerlessC
               <Subtitle>코드를 작성하면 다음 단계에서 실행 방법을 연결할 수 있습니다.</Subtitle>
             </TitleGroup>
             <Actions>
-              <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={onCancel}>취소</Button>
-              <Button variant="primary" icon={<Octicon name="plus" size={16} />} type="submit">함수 생성</Button>
+              <Button variant="secondary" icon={<Octicon name="x" size={16} />} disabled={isCreating} onClick={onCancel}>취소</Button>
+              <Button variant="primary" icon={<Octicon name={isCreating ? 'sync' : 'plus'} size={16} />} type="submit" disabled={isCreating || duplicateName || !name.trim()}>{isCreating ? '생성 중…' : '함수 생성'}</Button>
             </Actions>
           </Heading>
+          {duplicateName && <FormError role="alert">이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.</FormError>}
+          {createError && <FormError role="alert">{createError}</FormError>}
 
           <Notice role="note">
             <NoticeIcon aria-hidden="true"><Octicon name="info" size={20} /></NoticeIcon>
@@ -346,7 +369,9 @@ export default function ServerlessCreatePage({ onCancel, onCreate }: ServerlessC
                 label="함수 이름"
                 hint="함수를 알아볼 이름을 입력하세요. 호출 주소에는 이름이 들어가지 않습니다."
                 value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
+                onChange={(event) => { setName(event.currentTarget.value); setCreateError(''); }}
+                error={duplicateName ? '이미 사용 중인 함수 이름입니다. 다른 이름을 입력하세요.' : undefined}
+                disabled={isCreating}
                 required
               />
             </FieldGroup>

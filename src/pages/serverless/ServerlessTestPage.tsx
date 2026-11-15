@@ -27,7 +27,7 @@ export interface ServerlessTestPageProps {
   onExecute?: (requestPayload: string) => void | Promise<void>;
   active?: boolean;
   dailyExecutions?: { used: number; limit: number };
-  executionError?: 'inactive' | 'quota' | 'missing' | null;
+  executionError?: 'inactive' | 'quota' | 'missing' | 'storage' | null;
   onDismissExecutionError: () => void;
   onActivate: () => void;
   onCopyResponse?: (responseJson: string) => void;
@@ -326,6 +326,8 @@ export function ServerlessTestPage({
   onSelectTab,
 }: ServerlessTestPageProps) {
   const [requestPayload, setRequestPayload] = useState(initialPayload);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [jsonErrorOpen, setJsonErrorOpen] = useState(false);
   const lineCount = useMemo(() => requestPayload.split('\n').length, [requestPayload]);
   const payloadError = useMemo(() => {
     try {
@@ -337,6 +339,31 @@ export function ServerlessTestPage({
   }, [requestPayload]);
   const responseLineCount = Math.max(1, result?.responseJson.split('\n').length ?? 1);
   const outputLines = result?.logs ? result.logs.split('\n') : [];
+  const jsonErrorLine = useMemo(() => {
+    const trailingCommas = [...requestPayload.matchAll(/,(\s*[}\]])/g)];
+    if (!trailingCommas.length) return undefined;
+    const normalizedPayload = requestPayload.replace(/,(\s*[}\]])/g, '$1');
+    try {
+      JSON.parse(normalizedPayload);
+      const index = trailingCommas[0].index;
+      return index === undefined ? undefined : requestPayload.slice(0, index).split('\n').length;
+    } catch {
+      return undefined;
+    }
+  }, [requestPayload]);
+  const execute = async () => {
+    if (!onExecute || isExecuting) return;
+    if (payloadError) {
+      setJsonErrorOpen(true);
+      return;
+    }
+    setIsExecuting(true);
+    try {
+      await onExecute(requestPayload);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
   return (
     <Page data-node-id="53:2031">
@@ -371,9 +398,9 @@ export function ServerlessTestPage({
             <Button
               variant="primary"
               icon={<Octicon name="play" size={16} />}
-              disabled={!onExecute || Boolean(payloadError)}
-              onClick={() => onExecute?.(requestPayload)}
-            >실행</Button>
+              disabled={!onExecute || isExecuting}
+              onClick={() => void execute()}
+            >{isExecuting ? '실행 중…' : '실행'}</Button>
           </PanelHeader>
           <CodeFrame>
             <LineNumbers aria-hidden="true">{Array.from({ length: lineCount }, (_, index) => index + 1).join('\n')}</LineNumbers>
@@ -444,10 +471,24 @@ export function ServerlessTestPage({
             <ExecutionDialogActions>
               <Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button>
             </ExecutionDialogActions>
+          </> : executionError === 'storage' ? <>
+            <ExecutionDialogTitle id="serverless-test-error-title">테스트를 완료하지 못했습니다</ExecutionDialogTitle>
+            <ExecutionDialogCopy>실행 결과를 저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.</ExecutionDialogCopy>
+            <ExecutionDialogActions><Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button></ExecutionDialogActions>
           </> : <>
             <ExecutionDialogTitle id="serverless-test-error-title">함수를 찾을 수 없습니다</ExecutionDialogTitle>
             <ExecutionDialogActions><Button type="button" variant="secondary" onClick={onDismissExecutionError}>닫기</Button></ExecutionDialogActions>
           </>}
+        </ExecutionDialog>
+      </ModalSurface>}
+      {jsonErrorOpen && <ModalSurface labelledBy="serverless-test-json-error-title" onDismiss={() => setJsonErrorOpen(false)}>
+        <ExecutionDialog>
+          <ExecutionDialogTitle id="serverless-test-json-error-title">JSON 형식을 확인해주세요</ExecutionDialogTitle>
+          <ExecutionDialogCopy>
+            요청 페이로드를 해석할 수 없어 실행하지 않았습니다. 입력 내용은 유지되며, 형식을 고친 뒤 다시 실행할 수 있습니다.
+            {jsonErrorLine && <><br />{jsonErrorLine}번째 줄: 마지막 항목 뒤의 쉼표를 지워주세요.</>}
+          </ExecutionDialogCopy>
+          <ExecutionDialogActions><Button type="button" variant="primary" onClick={() => setJsonErrorOpen(false)}>계속 수정</Button></ExecutionDialogActions>
         </ExecutionDialog>
       </ModalSurface>}
     </Page>

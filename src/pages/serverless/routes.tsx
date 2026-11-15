@@ -10,6 +10,7 @@ import {
   deleteDemoServerlessVariable,
   describeCronExpression,
   executeDemoServerlessTest,
+  getDemoServerlessFunctions,
   extendDemoServerlessFunction,
   formatCronExecution,
   getDemoServerlessFunction,
@@ -92,9 +93,11 @@ export function ServerlessCreateRoute() {
   return (
     <ServerlessShell>
       <CreatePage
+        existingNames={getDemoServerlessFunctions().map(fn => fn.name)}
         onCancel={() => void navigate('/serverless')}
-        onCreate={(draft: ServerlessFunctionDraft) => {
-          void createDemoServerlessFunction(draft).then(id => navigate(`/serverless/${encodeURIComponent(id)}`));
+        onCreate={async (draft: ServerlessFunctionDraft) => {
+          const id = await createDemoServerlessFunction(draft);
+          await navigate(`/serverless/${encodeURIComponent(id)}`);
         }}
       />
     </ServerlessShell>
@@ -210,7 +213,7 @@ export function ServerlessTabRoute() {
   const [revision, setRevision] = useServerlessStateRevision(functionId, demoMode);
   const [page, setPage] = useState(1);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [executionError, setExecutionError] = useState<'inactive' | 'quota' | 'missing' | null>(null);
+  const [executionError, setExecutionError] = useState<'inactive' | 'quota' | 'missing' | 'storage' | null>(null);
   useEffect(() => { setPage(1); setSelectedRunId(null); }, [functionId, tab]);
   const fn = getFunction(functionId, demoMode);
   void revision;
@@ -261,12 +264,16 @@ export function ServerlessTabRoute() {
       onActivate={() => { setDemoServerlessActive(fn.id, true); setExecutionError(null); changed(); }}
       enabledTabs={['code', 'versions', 'triggers', 'environment', 'test', 'logs'] as ServerlessTestTab[]}
       onExecute={async payload => {
-        const execution = await executeDemoServerlessTest(fn.id, payload);
-        if (execution.kind === 'executed') {
-          setExecutionError(null);
-          changed();
-        } else {
-          setExecutionError(execution.kind);
+        try {
+          const execution = await executeDemoServerlessTest(fn.id, payload);
+          if (execution.kind === 'executed') {
+            setExecutionError(null);
+            changed();
+          } else {
+            setExecutionError(execution.kind);
+          }
+        } catch {
+          setExecutionError('storage');
         }
       }}
       onCopyResponse={response => { void navigator.clipboard.writeText(response); }}
