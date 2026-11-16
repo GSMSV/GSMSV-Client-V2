@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, useParams, type RouteObject } from 'react-router';
 import { loginCallbackLoader } from '../pages/auth/callback/loader';
 import NotFoundPage, { RouteErrorBoundary } from '../pages/not-found/NotFoundPage';
+import { getSessionUser } from '../entities/session';
 import { isDemoMode } from '../shared/demo';
 import { GlobalStateDialogs } from '../widgets/student-shell';
 
@@ -35,6 +36,15 @@ const ServerlessListPage = lazy(() => import('../pages/serverless/ServerlessList
 function TeamHomeRoute() {
   const { teamId } = useParams<{ teamId: string }>();
   return <TeamsHomePage teamId={teamId} />;
+}
+
+function HomeRoute() {
+  if (!isDemoMode() && !getSessionUser()) return <Navigate to="/login" replace />;
+  return (
+    <Suspense fallback={null}>
+      <PersonalResourcesPage />
+    </Suspense>
+  );
 }
 
 function TeamAppsRoute() {
@@ -96,11 +106,7 @@ const routes: RouteObject[] = [
   },
   {
     path: '/',
-    element: (
-      <Suspense fallback={null}>
-        <PersonalResourcesPage />
-      </Suspense>
-    ),
+    element: <HomeRoute />,
   },
   {
     path: '/login/callback',
