@@ -14,14 +14,14 @@ import { Button } from '../../../shared/ui/controls';
 import { LoadingCard } from '../../../shared/ui/feedback';
 import { Octicon, type OcticonName } from '../../../shared/ui/icons';
 
-const Panel = styled.aside<{ $top: number; $right: number }>`
-  position: fixed;
+const Panel = styled.aside<{ $top: number; $right: number; $anchorToTrigger: boolean }>`
+  position: ${({ $anchorToTrigger }) => $anchorToTrigger ? 'absolute' : 'fixed'};
   z-index: 40;
-  top: ${({ $top }) => $top}px;
-  right: ${({ $right }) => $right}px;
+  top: ${({ $anchorToTrigger, $top }) => $anchorToTrigger ? `calc(100% + 8px)` : `${$top}px`};
+  right: ${({ $anchorToTrigger, $right }) => $anchorToTrigger ? 0 : `${$right}px`};
   display: flex;
   width: min(480px, calc(100vw - 32px));
-  max-height: min(720px, calc(100vh - 82px));
+  max-height: ${({ $anchorToTrigger }) => $anchorToTrigger ? 'min(720px, calc(100dvh - 128px))' : 'min(720px, calc(100vh - 82px))'};
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
@@ -207,6 +207,7 @@ export interface NotificationPanelProps {
   onClose: () => void;
   top?: number;
   right?: number;
+  anchorToTrigger?: boolean;
   onUnreadCountChange?: (count: number) => void;
   onOpenResource?: (path: string) => void;
 }
@@ -249,7 +250,7 @@ function iconFor(notification: NotificationItem): OcticonName {
   return notification.kind === 'warning' ? 'alert' : 'bell';
 }
 
-export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnreadCountChange, onOpenResource }: NotificationPanelProps) {
+export function NotificationPanel({ open, onClose, top = 66, right = 24, anchorToTrigger = false, onUnreadCountChange, onOpenResource }: NotificationPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [state, setState] = useState<LoadState>(initialState);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -386,6 +387,7 @@ export function NotificationPanel({ open, onClose, top = 66, right = 24, onUnrea
       ref={panelRef}
       $top={top}
       $right={right}
+      $anchorToTrigger={anchorToTrigger}
       role="dialog"
       aria-label="알림"
       aria-modal="false"
