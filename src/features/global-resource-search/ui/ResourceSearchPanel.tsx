@@ -6,11 +6,11 @@ import { Octicon } from '../../../shared/ui/icons';
 import { isDemoMode } from '../../../shared/demo';
 import { loadResourceSearch, type SearchableResource } from '../api/loadResourceSearch';
 
-const Panel = styled.aside<{ $top: number; $right: number }>`
-  position: fixed;
+const Panel = styled.aside`
+  position: absolute;
   z-index: 40;
-  top: ${({ $top }) => $top}px;
-  right: ${({ $right }) => $right}px;
+  top: calc(100% + 8px);
+  left: 0;
   display: flex;
   width: min(480px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 82px));
@@ -171,11 +171,9 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onOpenResource: (path: string) => void;
-  top?: number;
-  right?: number;
 }
 
-export function ResourceSearchPanel({ open, onClose, onOpenResource, top = 66, right = 24 }: Props) {
+export function ResourceSearchPanel({ open, onClose, onOpenResource }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [resources, setResources] = useState<SearchableResource[] | null>(null);
@@ -229,8 +227,6 @@ export function ResourceSearchPanel({ open, onClose, onOpenResource, top = 66, r
   return (
     <Panel
       id="resource-search-panel"
-      $top={top}
-      $right={right}
       role="dialog"
       aria-label="검색"
       aria-modal="false"

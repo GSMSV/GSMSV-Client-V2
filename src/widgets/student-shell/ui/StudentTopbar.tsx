@@ -211,12 +211,19 @@ const OptionLabel = styled.span`
 `;
 
 const SearchAction = styled(Button)`
-  width: 520px;
+  width: 100%;
   min-width: 0;
-  flex: 0 1 520px;
+  flex: 1 1 auto;
   justify-content: flex-start;
   overflow: hidden;
   color: ${({ theme }) => theme.colors.text};
+`;
+
+const SearchContainer = styled.div`
+  position: relative;
+  width: 520px;
+  min-width: 0;
+  flex: 0 1 520px;
 
   @media (max-width: 1200px) {
     width: auto;
@@ -254,6 +261,12 @@ const RightActions = styled.div`
   @media (max-width: 480px) {
     gap: 0;
   }
+`;
+
+const NotificationAnchor = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
 `;
 
 const ActionLabel = styled.span`
@@ -449,39 +462,53 @@ export function StudentTopbar({
               </ScopeMenu>
             )}
           </ScopeSelector>
-          <SearchAction
-            id="student-search-trigger"
-            variant="secondary"
-            icon={<Octicon name="search" size={16} />}
-            aria-expanded={searchOpen}
-            aria-controls="resource-search-panel"
-            aria-haspopup="dialog"
-            onClick={() => {
-              onSearch();
-              setNotificationsOpen(false);
-              setScopeOpen(false);
-              setSearchOpen(value => !value);
-            }}
-          >
-            <SearchLabel>이름 또는 GRN으로 검색</SearchLabel>
-          </SearchAction>
+          <SearchContainer>
+            <SearchAction
+              id="student-search-trigger"
+              variant="secondary"
+              icon={<Octicon name="search" size={16} />}
+              aria-expanded={searchOpen}
+              aria-controls="resource-search-panel"
+              aria-haspopup="dialog"
+              onClick={() => {
+                onSearch();
+                setNotificationsOpen(false);
+                setScopeOpen(false);
+                setSearchOpen(value => !value);
+              }}
+            >
+              <SearchLabel>이름 또는 GRN으로 검색</SearchLabel>
+            </SearchAction>
+            <ResourceSearchPanel open={searchOpen} onClose={closeSearch} onOpenResource={openSearchResource} />
+          </SearchContainer>
         </HeaderStart>
         <RightActions>
-          <Button
-            id="student-notifications-trigger"
-            variant="ghost"
-            icon={<Octicon name="bell" size={16} />}
-            aria-expanded={notificationsOpen}
-            aria-controls="notification-panel"
-            aria-label={`알림${unreadCount > 0 ? ` ${unreadCount}` : ''}`}
-            onClick={() => {
-              onOpenNotifications();
-              setSearchOpen(false);
-              setNotificationsOpen(open => !open);
-            }}
-          >
-            <ActionLabel aria-hidden="true">알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
-          </Button>
+          <NotificationAnchor>
+            <Button
+              id="student-notifications-trigger"
+              variant="ghost"
+              icon={<Octicon name="bell" size={16} />}
+              aria-expanded={notificationsOpen}
+              aria-controls="notification-panel"
+              aria-label={`알림${unreadCount > 0 ? ` ${unreadCount}` : ''}`}
+              onClick={() => {
+                onOpenNotifications();
+                setSearchOpen(false);
+                setNotificationsOpen(open => !open);
+              }}
+            >
+              <ActionLabel aria-hidden="true">알림{unreadCount > 0 && <Count>{unreadCount}</Count>}</ActionLabel>
+            </Button>
+            <NotificationPanel
+              open={notificationsOpen}
+              onClose={closeNotifications}
+              onUnreadCountChange={setUnreadCount}
+              onOpenResource={path => {
+                onRequestNavigation(() => { void navigate(path); });
+              }}
+              anchorToTrigger
+            />
+          </NotificationAnchor>
           <StudentProfile
             userName={userName}
             profilePhotoUrl={profilePhotoUrl}
@@ -496,15 +523,6 @@ export function StudentTopbar({
           />
         </RightActions>
       </HeaderContent>
-      <NotificationPanel
-        open={notificationsOpen}
-        onClose={closeNotifications}
-        onUnreadCountChange={setUnreadCount}
-        onOpenResource={path => {
-          onRequestNavigation(() => { void navigate(path); });
-        }}
-      />
-      <ResourceSearchPanel open={searchOpen} onClose={closeSearch} onOpenResource={openSearchResource} />
     </Header>
   );
 }
