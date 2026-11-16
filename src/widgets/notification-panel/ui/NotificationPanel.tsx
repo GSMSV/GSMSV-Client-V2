@@ -21,7 +21,7 @@ const Panel = styled.aside<{ $top: number; $right: number; $anchorToTrigger: boo
   right: ${({ $anchorToTrigger, $right }) => $anchorToTrigger ? 0 : `${$right}px`};
   display: flex;
   width: min(480px, calc(100vw - 32px));
-  max-height: min(720px, calc(100vh - 82px));
+  max-height: ${({ $anchorToTrigger }) => $anchorToTrigger ? 'min(720px, calc(100dvh - 128px))' : 'min(720px, calc(100vh - 82px))'};
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;

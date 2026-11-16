@@ -13,7 +13,7 @@ const Panel = styled.aside`
   left: 0;
   display: flex;
   width: min(480px, calc(100vw - 32px));
-  max-height: min(720px, calc(100vh - 82px));
+  max-height: min(720px, calc(100dvh - 128px));
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
