@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
-import { canCreateDemoTeamVm, getDemoVmDraft, getDemoVmQuota, getDemoVmState, makeDemoVm, resetDemoVmDraft, saveDemoVmState, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
+import { canCreateDemoTeamVm, getDemoVmDraft, getDemoVmQuota, getDemoVmState, isDemoVmSharedPoolBlocked, makeDemoVm, resetDemoVmDraft, saveDemoVmState, saveDemoVmDraft, type VmDraft, type VmOwner } from '../../entities/vm';
 import { getSessionUser } from '../../entities/session';
 import { createDemoTeamQuotaRequest, getDemoTeam } from '../../entities/team/demo';
 import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
@@ -146,16 +146,7 @@ const FieldError = styled.span`
  * 목데이터의 학생 전체 몫(vCPU). 다른 학생들의 VM이 처음에는 몫을 거의 다 쓰고 있고,
  * 부족 안내를 처음 본 뒤 잠시 지나면 그 작업이 끝나 자원이 돌아온다.
  */
-const studentPoolCpuLimit = 14;
-const otherStudentsBusyCpu = 11;
-const otherStudentsFreedCpu = 8;
 const studentPoolRecoveryMs = 20_000;
-
-function otherStudentsCpu(state: { studentPoolReleaseAt?: number }) {
-  return state.studentPoolReleaseAt !== undefined && Date.now() >= state.studentPoolReleaseAt
-    ? otherStudentsFreedCpu
-    : otherStudentsBusyCpu;
-}
 
 /** 목데이터에서는 로그인된 데모 사용자(학생·관리자 모두)를 유효한 세션으로 본다. */
 function hasDemoSession() {
@@ -333,8 +324,7 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       }
     } else {
       // 학생 전체 몫은 개인 VM에만 적용된다(팀 VM은 팀 할당량으로 센다).
-      const myPersonalCpu = latest.vms.filter(vm => vm.owner === 'personal').reduce((total, vm) => total + vm.cpu, 0);
-      if (myPersonalCpu + otherStudentsCpu(latest) + draft.cpu > studentPoolCpuLimit) {
+      if (isDemoVmSharedPoolBlocked(latest, draft.cpu)) {
         if (latest.studentPoolReleaseAt === undefined) {
           const withRelease = { ...latest, studentPoolReleaseAt: Date.now() + studentPoolRecoveryMs };
           if (saveDemoVmState(withRelease)) latest = withRelease;

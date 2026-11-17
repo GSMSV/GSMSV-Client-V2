@@ -1,4 +1,5 @@
 import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { listDemoTeams } from '../../team/demo';
 
 export interface DemoProfile {
   name: string;
@@ -47,7 +48,15 @@ export function getDemoProfile(): DemoProfile | null {
     joinedAt: new Date().toISOString().slice(0, 10),
     teamName: '', teamRole: '', github: null, cliDevices: [],
   };
-  return readDemoState('profile', fallback);
+  const profile = readDemoState('profile', fallback);
+  if (isDemoFixtureMode()) return profile;
+  const teams = listDemoTeams();
+  const team = teams.find(item => item.status === 'approved') ?? teams[0];
+  return {
+    ...profile,
+    teamName: team?.name ?? '',
+    teamRole: team?.my_role === 'leader' ? '팀장' : team?.my_role === 'devops' ? 'DevOps' : team?.my_role === 'member' ? '팀원' : '',
+  };
 }
 
 export function saveDemoProfile(profile: DemoProfile): boolean {

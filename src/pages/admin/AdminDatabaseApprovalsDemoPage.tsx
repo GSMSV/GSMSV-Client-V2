@@ -131,7 +131,7 @@ export default function AdminDatabaseApprovalsDemoPage() {
       title: '전용형 Database 신청이 승인됐습니다', body: teamName,
       resource: { grn: database.grn, name: database.name },
     });
-    setNotice(`${request.team} 전용형 신청을 승인했습니다. ${database.name} Database가 로컬 미리보기에 등록되었습니다.`);
+    setNotice(`${request.team} 전용형 신청을 승인했습니다. ${database.name} Database가 등록되었습니다.`);
   }
 
   function reject() {

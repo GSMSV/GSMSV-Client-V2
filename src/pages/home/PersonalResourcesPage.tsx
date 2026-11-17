@@ -692,7 +692,7 @@ export default function PersonalResourcesPage() {
       const vmState = vmRepository.getDemoVmState();
       const personalVms = vmState.vms.filter(vm => vm.owner === 'personal');
       const personalFunctions = serverlessRepository.getDemoServerlessFunctions();
-      const firstVisit = personalVms.length === 0 && personalFunctions.length === 0;
+      const firstVisit = demo.isDemoWorkspaceFirstVisit();
       setFirstVisitGuess(firstVisit);
       try {
         await simulateDemoRequest('home', signal);

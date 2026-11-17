@@ -453,7 +453,7 @@ export function VmOverviewPage() {
         <StateDialogActions><Button variant="secondary" disabled={retrySeconds > 0} onClick={() => setRetryAt(0)}>
           {retrySeconds > 0 ? retrySeconds + '초 후 다시 시도' : '확인'}
         </Button></StateDialogActions>
-        <Hint>목데이터의 요청 제한 시간이 지나면 다시 사용할 수 있습니다.</Hint>
+        <Hint>요청 제한 시간이 지나면 다시 사용할 수 있습니다.</Hint>
       </StateDialogPanel>
     </ModalSurface>}
     {powerDialog && <ModalSurface labelledBy="vm-power-title" onDismiss={() => { if (powerOperation !== 'restart') setPowerDialog(null); }}>

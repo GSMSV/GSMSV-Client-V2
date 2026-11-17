@@ -2,6 +2,10 @@ import type { AppSummary } from '../../app/model/types';
 import type { MyQuota } from '../../quota/model/types';
 import type { TeamSummary } from '../../team/model/types';
 import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { getDemoVmState } from '../../vm/model/demoVmStore';
+import { getDemoServerlessFunctions } from '../../serverless/model/demoServerless';
+import { getDemoDatabaseState } from '../../database/model/demoDatabase';
+import { getDemoApps } from '../../app/model/demoAppState';
 
 export interface DemoFunctionSummary {
   id: string;
@@ -66,6 +70,13 @@ export const demoHomeApps: AppSummary[] = [{
 
 export function getDemoHomeState(): DemoHomeState | null {
   return isDemoMode() ? readDemoState('home', isDemoFixtureMode() ? seedHome : { firstVisit: true, functions: [] }) : null;
+}
+
+export function isDemoWorkspaceFirstVisit(): boolean {
+  return getDemoVmState().vms.every(vm => vm.owner !== 'personal')
+    && getDemoServerlessFunctions().length === 0
+    && getDemoDatabaseState().databases.every(database => database.owner.type !== 'user')
+    && getDemoApps().every(app => app.owner?.type !== 'user');
 }
 
 export function saveDemoHomeState(value: DemoHomeState): boolean {

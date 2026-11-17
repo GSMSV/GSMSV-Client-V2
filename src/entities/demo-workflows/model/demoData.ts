@@ -164,6 +164,8 @@ export function getDemoAccounts(): DemoAccount[] {
     if (profile.accountDeleted) return [];
     return [{
       ...account,
+      name: profile.name,
+      team: profile.teamName ? `${profile.teamName} · ${profile.teamRole}` : '—',
       github: profile.github ?? '연결 안 됨',
       discord: profile.discordConnected ? '@jimin_2107' : '연결 안 됨',
     }];

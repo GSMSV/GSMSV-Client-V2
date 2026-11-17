@@ -62,13 +62,7 @@ export function getDemoInstalledRepositories() {
     }
   }
   if (isSupportedDemoRepository(legacy)) installed.add(legacy);
-
-  const repositories = [...installed];
-  const savedSet = new Set(Array.isArray(saved) ? saved.filter(isSupportedDemoRepository) : []);
-  if (!Array.isArray(saved) || savedSet.size !== saved.length || repositories.some(repository => !savedSet.has(repository))) {
-    writeDemoState(installedRepositoriesKey, repositories);
-  }
-  return repositories;
+  return [...installed];
 }
 
 export function installDemoRepository(repository: string) {

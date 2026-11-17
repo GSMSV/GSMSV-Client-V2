@@ -279,6 +279,14 @@ const emptyVmState: DemoVmState = {
   sequence: 1,
 };
 
+/** The crowded student pool is a Figma fixture, not a limit on a user's empty workspace. */
+export function isDemoVmSharedPoolBlocked(state: DemoVmState, requestedCpu: number): boolean {
+  if (!isDemoFixtureMode()) return false;
+  const ownCpu = state.vms.filter(vm => vm.owner === 'personal').reduce((total, vm) => total + vm.cpu, 0);
+  const otherStudentsCpu = state.studentPoolReleaseAt !== undefined && Date.now() >= state.studentPoolReleaseAt ? 8 : 11;
+  return ownCpu + otherStudentsCpu + requestedCpu > 14;
+}
+
 const personalDraft: VmDraft = {
   cpu: 2,
   memory: 4,
