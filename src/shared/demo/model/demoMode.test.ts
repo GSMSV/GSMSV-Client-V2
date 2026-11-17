@@ -21,6 +21,15 @@ function visit(search: string, storage = new MemoryStorage()) {
 afterEach(() => { Reflect.deleteProperty(globalThis, 'window'); });
 
 describe('demo workspace mode', () => {
+  it('opens the interactive workspace on the ordinary site URL', () => {
+    const storage = visit('');
+    expect(isDemoMode()).toBe(true);
+    expect(isDemoFixtureMode()).toBe(false);
+    expect(writeDemoState('vms', ['new-vm'])).toBe(true);
+    expect(readDemoState('vms', [] as string[])).toEqual(['new-vm']);
+    expect(storage.getItem('gsmsv.demo.state.v2.vms')).not.toBeNull();
+  });
+
   it('starts with a clean workspace while keeping Figma fixtures explicit', () => {
     const storage = visit('?demo=1');
     expect(isDemoMode()).toBe(true);

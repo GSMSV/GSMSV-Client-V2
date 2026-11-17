@@ -4,6 +4,7 @@ import { loginCallbackLoader } from '../pages/auth/callback/loader';
 import NotFoundPage, { RouteErrorBoundary } from '../pages/not-found/NotFoundPage';
 import { getSessionUser } from '../entities/session';
 import { isDemoMode } from '../shared/demo';
+import { ensureWorkspaceSession } from '../shared/demo/model/ensureWorkspaceSession';
 import { GlobalStateDialogs } from '../widgets/student-shell';
 
 const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
@@ -361,6 +362,10 @@ function AppRoot() {
 
 export const router = createBrowserRouter([{
   Component: AppRoot,
+  loader: ({ request }) => {
+    ensureWorkspaceSession(new URL(request.url).pathname);
+    return null;
+  },
   errorElement: <RouteErrorBoundary />,
   children: demoSessionGate ? [{ Component: demoSessionGate, children: routes }] : routes,
 }]);

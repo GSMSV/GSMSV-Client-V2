@@ -20,9 +20,9 @@ export function isDemoMode(): boolean {
   try {
     const requested = new URLSearchParams(window.location.search).get('demo');
     if (requested === '1' || requested === 'fixture') window.localStorage.setItem(demoModeKey, requested);
-    return ['1', 'fixture'].includes(window.localStorage.getItem(demoModeKey) ?? '');
+    return true;
   } catch {
-    return ['1', 'fixture'].includes(new URLSearchParams(window.location.search).get('demo') ?? '');
+    return true;
   }
 }
 
