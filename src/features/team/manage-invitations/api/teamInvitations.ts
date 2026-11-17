@@ -1,4 +1,4 @@
-import { requestJson } from '../../../../shared/api';
+import { requestJson, requestNoContent } from '../../../../shared/api';
 
 export interface TeamInvitation {
   id: string;
@@ -43,21 +43,10 @@ export function inviteTeamMember(teamId: string, email: string, signal?: AbortSi
   });
 }
 
-export async function cancelTeamInvitation(teamId: string, invitationId: string, signal?: AbortSignal): Promise<void> {
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/+$/, '') ?? '';
-  let response: Response;
-  try {
-    response = await fetch(
-      `${apiOrigin}/api/v2/teams/${encodeURIComponent(teamId)}/invitations/${encodeURIComponent(invitationId)}`,
-      { method: 'DELETE', credentials: 'include', signal },
-    );
-  } catch {
-    if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
-    throw new Error('NETWORK_ERROR');
-  }
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { code?: string } | null;
-    throw new Error(payload?.code ?? `HTTP_${response.status}`);
-  }
+/** 서버는 204로 답한다. 공통 요청 함수를 써서 401 갱신 재시도와 오류 code 처리를 함께 받는다. */
+export function cancelTeamInvitation(teamId: string, invitationId: string, signal?: AbortSignal): Promise<void> {
+  return requestNoContent(
+    `/api/v2/teams/${encodeURIComponent(teamId)}/invitations/${encodeURIComponent(invitationId)}`,
+    { method: 'DELETE', signal },
+  );
 }
