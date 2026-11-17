@@ -1,6 +1,17 @@
 export interface DemoSshTarget { host: string; port: number; user: string; password?: string }
 export const demoVmPoolSize = 9;
 
+/**
+ * 준비된 VM 9개(기존 03번 제외 후 1~9번)의 용도. 용도끼리 서로 빌려 쓰지 않는다.
+ * 1~4번: 사용자 VM, 5~7번: Serverless 실행, 8~9번: MySQL Database.
+ */
+export type DemoVmPoolRole = 'vm' | 'serverless' | 'database';
+export const demoVmPoolRoles: Record<DemoVmPoolRole, readonly number[]> = {
+  vm: [0, 1, 2, 3],
+  serverless: [4, 5, 6],
+  database: [7, 8],
+};
+
 const suppliedDemoSshTargets: DemoSshTarget[] = [
   { host: 'ssh.gsmsv.site', port: 21141, user: 'ubuntu', password: '9NX#MVft' },
   { host: 'ssh.gsmsv.site', port: 21142, user: 'ubuntu', password: 'k31m!Ww7' },
@@ -31,9 +42,15 @@ export function parseDemoSshSlots(value: string | undefined): DemoSshTarget[] {
   }
 }
 
-export function allocateDemoSshSlot(occupied: readonly number[]): number | null {
-  for (let slot = 0; slot < demoVmPoolSize; slot += 1) if (!occupied.includes(slot)) return slot;
+/** 해당 용도의 VM 중 비어 있는 첫 번째 칸을 돌려준다. 없으면 null. */
+export function allocateDemoSshSlot(occupied: readonly number[], role: DemoVmPoolRole = 'vm'): number | null {
+  for (const slot of demoVmPoolRoles[role]) if (!occupied.includes(slot)) return slot;
   return null;
+}
+
+/** 칸 번호(0부터)를 화면에 쓰는 VM 번호(1부터)로 바꾼다. */
+export function demoVmPoolNumber(slot: number): number {
+  return slot + 1;
 }
 
 export function sshCommandForSlot(slot: number | undefined, targets: readonly DemoSshTarget[]): string | null {

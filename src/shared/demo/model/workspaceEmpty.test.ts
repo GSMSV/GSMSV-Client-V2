@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { indexedDB } from 'fake-indexeddb';
 import { getDemoVmDraft, getDemoVmState, isDemoVmSharedPoolBlocked, makeDemoVm, removeDemoVm, resetDemoVmDraft, saveDemoVmState } from '../../../entities/vm/model/demoVmStore';
-import { demoVmPoolSize } from '../../../entities/vm/model/demoSshSlots';
+import { demoVmPoolRoles } from '../../../entities/vm/model/demoSshSlots';
 import { createDemoServerlessFunction, extendDemoServerlessFunction, getDemoServerlessState, loadDemoServerlessState } from '../../../entities/serverless/model/demoServerless';
 import { getDemoDatabaseState } from '../../../entities/database/model/demoDatabase';
 import { addDemoApp, demoPersonalAppOwner, getDemoAppSummaries, getDemoApps } from '../../../entities/app/model/demoAppState';
@@ -72,18 +72,18 @@ describe('fresh interactive workspace', () => {
     expect((await listNotifications()).items).toEqual([]);
   });
 
-  it('reserves the shared VM pool without fabricating SSH access', () => {
+  it('reserves only VMs 1~4 for user VMs without fabricating SSH access', () => {
     visitWorkspace();
     const draft = { name: 'my-vm', purpose: 'test', cpu: 1, memory: 1, disk: 10, os: 'Linux Ubuntu 22.04 LTS' as const };
     let state = getDemoVmState();
-    for (let slot = 0; slot < demoVmPoolSize; slot += 1) {
+    for (const slot of demoVmPoolRoles.vm) {
       const created = makeDemoVm(state, { ...draft, name: `my-vm-${slot}` }, 'personal');
       expect(created.vm.sshSlot).toBe(slot);
       expect(created.vm.sshPort).toBe(0);
       expect(created.vm.password).toBe('');
       state = created.state;
     }
-    expect(() => makeDemoVm(state, draft, 'personal')).toThrow('준비된 VM 9개');
+    expect(() => makeDemoVm(state, draft, 'personal')).toThrow('사용자 VM용으로 준비된 4대');
   });
 
   it('shows the assigned SSH port and display password after VM setup', () => {
