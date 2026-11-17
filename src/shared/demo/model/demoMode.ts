@@ -1,7 +1,8 @@
 import { saveSessionUser, type SessionUserRole } from '../../../entities/session';
 
-const demoModeKey = 'gsmsv.demo.mode.v1';
-const demoStatePrefix = 'gsmsv.demo.state.v1.';
+const demoModeKey = 'gsmsv.demo.mode.v2';
+const workspaceStatePrefix = 'gsmsv.demo.state.v2.';
+const fixtureStatePrefix = 'gsmsv.demo.state.v1.';
 const demoResetGenerationKey = 'gsmsv.demo.reset.generation';
 
 export function getDemoResetGeneration(): string {
@@ -17,13 +18,25 @@ export function isDemoMode(): boolean {
   if (typeof window === 'undefined') return false;
 
   try {
-    if (new URLSearchParams(window.location.search).get('demo') === '1') {
-      window.localStorage.setItem(demoModeKey, '1');
-    }
-    return window.localStorage.getItem(demoModeKey) === '1';
+    const requested = new URLSearchParams(window.location.search).get('demo');
+    if (requested === '1' || requested === 'fixture') window.localStorage.setItem(demoModeKey, requested);
+    return ['1', 'fixture'].includes(window.localStorage.getItem(demoModeKey) ?? '');
   } catch {
-    return new URLSearchParams(window.location.search).get('demo') === '1';
+    return ['1', 'fixture'].includes(new URLSearchParams(window.location.search).get('demo') ?? '');
   }
+}
+
+export function isDemoFixtureMode(): boolean {
+  if (!isDemoMode() || typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(demoModeKey) === 'fixture';
+  } catch {
+    return new URLSearchParams(window.location.search).get('demo') === 'fixture';
+  }
+}
+
+function demoStateKey(slice: string): string {
+  return `${isDemoFixtureMode() ? fixtureStatePrefix : workspaceStatePrefix}${slice}`;
 }
 
 export function startDemoSession(role: SessionUserRole): boolean {
@@ -32,7 +45,7 @@ export function startDemoSession(role: SessionUserRole): boolean {
   }
 
   try {
-    window.localStorage.setItem(demoModeKey, '1');
+    window.localStorage.setItem(demoModeKey, isDemoFixtureMode() ? 'fixture' : '1');
   } catch {
     return false;
   }
@@ -49,7 +62,7 @@ export function readDemoState<T>(slice: string, seed: T): T {
   if (!isDemoMode() || typeof window === 'undefined') return seed;
 
   try {
-    const raw = window.localStorage.getItem(`${demoStatePrefix}${slice}`);
+    const raw = window.localStorage.getItem(demoStateKey(slice));
     if (!raw) return seed;
     const parsed = JSON.parse(raw) as { version?: unknown; value?: unknown };
     if (parsed.version !== 1 || parsed.value === undefined) return seed;
@@ -63,7 +76,7 @@ export function writeDemoState<T>(slice: string, value: T): boolean {
   if (!isDemoMode() || typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.setItem(`${demoStatePrefix}${slice}`, JSON.stringify({ version: 1, value }));
+    window.localStorage.setItem(demoStateKey(slice), JSON.stringify({ version: 1, value }));
     return true;
   } catch {
     return false;

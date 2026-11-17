@@ -1,5 +1,6 @@
 import { getDemoTeam } from '../../team/demo';
-import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolSize } from './demoSshSlots';
 
 export type VmStatus = 'queued' | 'running' | 'stopped';
 export type VmOwner = 'personal' | 'team';
@@ -40,6 +41,7 @@ export interface DemoVm {
   expiresAt: string;
   internalIp: string;
   sshPort: number;
+  sshSlot?: number;
   sshUser: string;
   password: string;
   autoSnapshots: boolean;
@@ -267,6 +269,16 @@ const initialVmState: DemoVmState = {
   sequence: 1,
 };
 
+const emptyVmState: DemoVmState = {
+  schemaVersion: currentSchemaVersion,
+  vms: [],
+  deletedVms: [],
+  personalQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
+  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  teamQuotas: {},
+  sequence: 1,
+};
+
 const personalDraft: VmDraft = {
   cpu: 2,
   memory: 4,
@@ -328,9 +340,10 @@ export function getDemoVmState(): DemoVmState {
       status: now >= expiresAt ? 'stopped' as const : 'running' as const,
       createdAt: formatDemoVmDate(completedAt),
       expiresAt: formatDemoVmDate(expiresAt),
-      internalIp: '10.20.0.' + (100 + vm.requestedAtMs % 100),
-      sshPort: vm.owner === 'team' ? 32117 : 32104,
-      password: 'gsvm-demo-' + vm.requestedAtMs.toString(36),
+      internalIp: isDemoFixtureMode() ? '10.20.0.' + (100 + vm.requestedAtMs % 100) : '접속 정보 준비 중',
+      sshPort: isDemoFixtureMode() ? (vm.owner === 'team' ? 32117 : 32104) : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.port ?? 0),
+      sshUser: isDemoFixtureMode() ? vm.sshUser : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.user ?? '준비 중'),
+      password: isDemoFixtureMode() ? 'gsvm-demo-' + vm.requestedAtMs.toString(36) : '',
     };
   });
   if (!changed) return state;
@@ -357,7 +370,7 @@ function migrateToSchema5(stored: DemoVmState): DemoVmState {
 
 function readStoredDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
-  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
+  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return isDemoFixtureMode() ? initialVmState : emptyVmState;
   if ((stored.schemaVersion ?? 0) >= currentSchemaVersion) return stored;
   if ((stored.schemaVersion ?? 0) === 4) return migrateToSchema5(stored);
 
@@ -551,6 +564,9 @@ export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {
 }
 
 export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, teamId = 'demo-team', teamName = 'GSM Connect', creatorName = '김지민'): { state: DemoVmState; vm: DemoVm } {
+  const sshSlot = isDemoFixtureMode() ? null : allocateDemoSshSlot(state.vms.map(vm => vm.sshSlot).filter((slot): slot is number => slot !== undefined));
+  if (!isDemoFixtureMode() && sshSlot === null) throw new Error(`준비된 VM ${demoVmPoolSize}개를 모두 사용 중입니다. 기존 VM을 삭제한 뒤 다시 시도해 주세요.`);
+  const target = sshSlot === null ? undefined : configuredDemoSshTargets()[sshSlot];
   const sequence = state.sequence;
   const team = owner === 'team';
   const suffix = String(sequence).padStart(3, '0');
@@ -576,8 +592,9 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     expiresAt: team ? '생성 완료 시각부터 30일' : '생성 완료 시각부터 7일',
     internalIp: '배정 대기 중',
     sshPort: 0,
-    sshUser: 'ubuntu',
-    password: '대기 중',
+    sshSlot: sshSlot ?? undefined,
+    sshUser: target?.user ?? (isDemoFixtureMode() ? 'ubuntu' : '준비 중'),
+    password: isDemoFixtureMode() ? '대기 중' : '',
     autoSnapshots: false,
     snapshots: [],
   };

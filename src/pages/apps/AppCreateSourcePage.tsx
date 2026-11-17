@@ -258,7 +258,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       if (!active) return;
       const modules = { profile, team, app, draft: draftModule };
       setDemoModules(modules);
-      setDemoDraft(draftModule.readDemoAppDraft(teamId) ?? draftModule.defaultDemoAppSourceDraft);
+      setDemoDraft(draftModule.readDemoAppDraft(teamId) ?? draftModule.getDefaultDemoAppSourceDraft());
       setTeams(team.listDemoTeams());
       setCurrentTeam(teamId ? team.getDemoTeam(teamId) ?? null : null);
     }).catch(() => {
@@ -359,7 +359,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
       onSelectScope={() => undefined}
       onSearch={() => undefined}
       onOpenNotifications={() => undefined}
-      hasUnsavedInput={demoDraft && demoModules ? Object.keys(demoDraft).some(key => demoDraft[key as keyof typeof demoDraft] !== demoModules.draft.defaultDemoAppSourceDraft[key as keyof typeof demoDraft]) : hasUnsavedInput}
+      hasUnsavedInput={demoDraft && demoModules ? Object.keys(demoDraft).some(key => demoDraft[key as keyof typeof demoDraft] !== demoModules.draft.getDefaultDemoAppSourceDraft()[key as keyof typeof demoDraft]) : hasUnsavedInput}
     >
       <Page>
         <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
@@ -390,7 +390,7 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                     else setDialog('unsupported-source');
                     return;
                   }
-                  if (demoDraft && demoModules && demoDraft.sourceType !== 'github') setDemoDraft({ ...demoDraft, sourceType: type, repository: demoModules.draft.defaultDemoAppSourceDraft.repository, branch: 'main' });
+                  if (demoDraft && demoModules && demoDraft.sourceType !== 'github') setDemoDraft({ ...demoDraft, sourceType: type, repository: demoModules.draft.getDefaultDemoAppSourceDraft().repository, branch: 'main' });
                   else setField('sourceType', type);
                 }}>{sourceTypeLabels[type]}</Segment>
               ))}
@@ -427,11 +427,16 @@ export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
                   value={form.repository}
                   placeholder="저장소 검색"
                   disabled={!demoMode}
-                  options={demoMode ? [{ value: 'gsm-jimin/portfolio-web', label: 'gsm-jimin/portfolio-web' }, { value: 'gsm-jimin/study-log', label: 'gsm-jimin/study-log' }] : []}
+                  options={demoMode ? (demoModules?.draft.getDemoInstalledRepositories() ?? []).map(repository => ({ value: repository, label: repository })) : []}
                   onChange={value => {
                     setField('repository', value);
                     setField('branch', 'main');
                     if (demoMode) setField('name', value.split('/').at(-1) ?? '');
+                  }}
+                  onInputChange={value => {
+                    if (!demoMode) return;
+                    setField('repository', value);
+                    setField('name', value.split('/').at(-1) ?? '');
                   }}
                 />
                 <FieldGrid $stacked={demoMode}>

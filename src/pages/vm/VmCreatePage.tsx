@@ -349,7 +349,14 @@ export function VmCreatePage({ owner, step }: { owner: VmOwner; step: VmCreateSt
       reportCreateFailure();
       return;
     }
-    const { state: nextState, vm } = makeDemoVm(latest, draft, owner, teamId, teamName, creatorName);
+    let created: ReturnType<typeof makeDemoVm>;
+    try {
+      created = makeDemoVm(latest, draft, owner, teamId, teamName, creatorName);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'VM을 만들 수 없습니다.');
+      return;
+    }
+    const { state: nextState, vm } = created;
     if (!saveDemoVmState(nextState)) {
       reportCreateFailure();
       return;

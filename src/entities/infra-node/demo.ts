@@ -1,5 +1,7 @@
 import type { AdminResource, InfraNode, NodeVm } from './model/types';
-import { readDemoState, writeDemoState } from '../../shared/demo';
+import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../shared/demo';
+import { getDemoVmState, saveDemoVmState } from '../vm/model/demoVmStore';
+import { configuredDemoSshTargets, sshCommandForSlot } from '../vm/model/demoSshSlots';
 
 export interface DemoInfraFailure {
   name: string;
@@ -168,9 +170,54 @@ const snapshot: DemoInfraSnapshot = {
 };
 
 export function getDemoInfraSnapshot(): DemoInfraSnapshot {
-  return readDemoState('admin.infraSnapshot', structuredClone(snapshot));
+  const empty: DemoInfraSnapshot = {
+    nodes: [], resources: [], nodeVms: {}, nodeKinds: {}, creationInProgress: 0,
+    expiringWithinThreeDays: 0, expiringToday: 0, deletionGrace: 0,
+    recentFailures: [], expiringGrns: [], vmDetails: {},
+  };
+  if (isDemoFixtureMode()) return readDemoState('admin.infraSnapshot', structuredClone(snapshot));
+  const saved = readDemoState('admin.infraSnapshot', empty);
+  const vms = getDemoVmState().vms;
+  const targets = configuredDemoSshTargets();
+  return {
+    ...saved,
+    resources: vms.map(vm => ({
+      grn: vm.grn, type: 'vm', name: vm.name, node: 'V1 VM', vmid: null,
+      owner_email: vm.owner === 'team' ? vm.teamName ?? vm.teamId ?? '' : vm.creator,
+      status: vm.status === 'queued' ? 'creating' : 'active',
+      power_state: vm.status === 'running' ? 'running' : 'stopped',
+    })),
+    creationInProgress: vms.filter(vm => vm.status === 'queued').length,
+    vmDetails: Object.fromEntries(vms.map(vm => [vm.grn, {
+      ownerName: vm.owner === 'team' ? vm.teamName ?? vm.creator : vm.creator,
+      expiresAt: vm.expiresAt, purpose: vm.purpose, tier: vm.nodeType,
+      vcpu: vm.cpu, ramGb: vm.memory, diskGb: vm.disk, os: vm.os,
+      createdAt: vm.createdAt, uptime: vm.status === 'running' ? '실행 중' : '정지',
+      sshUser: targets[vm.sshSlot ?? -1]?.user ?? '준비 중', internalIp: 'V1 정보 대기',
+      sshCommand: sshCommandForSlot(vm.sshSlot, targets) ?? '', initialPassword: '',
+      autoSnapshot: vm.autoSnapshots, retainedSnapshots: vm.snapshots.length,
+      externalPorts: targets[vm.sshSlot ?? -1] ? 1 : 0, externalPortLimit: 30,
+      httpsDomains: 0, httpsDomainLimit: 2,
+    } satisfies DemoVmDetails])),
+  };
 }
 
 export function saveDemoInfraSnapshot(next: DemoInfraSnapshot): boolean {
   return writeDemoState('admin.infraSnapshot', next);
+}
+
+export function setDemoAdminVmPower(grn: string, powerState: 'running' | 'stopped'): boolean {
+  if (isDemoFixtureMode()) {
+    const snapshot = getDemoInfraSnapshot();
+    if (!snapshot.resources.some(resource => resource.grn === grn)) return false;
+    return saveDemoInfraSnapshot({
+      ...snapshot,
+      resources: snapshot.resources.map(resource => resource.grn === grn
+        ? { ...resource, power_state: powerState, status: powerState === 'running' ? '실행 중' : '정지됨' }
+        : resource),
+    });
+  }
+  const state = getDemoVmState();
+  if (!state.vms.some(vm => vm.grn === grn)) return false;
+  return saveDemoVmState({ ...state, vms: state.vms.map(vm => vm.grn === grn ? { ...vm, status: powerState } : vm) });
 }

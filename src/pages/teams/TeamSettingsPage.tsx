@@ -12,7 +12,7 @@ import { ApiRequestError } from '../../shared/api';
 import { TeamQuotaRequestDialog } from '../../features/team/request-quota';
 import type { DemoStudentAccount, DemoTeamDetail } from '../../entities/team/demo';
 import type { TeamMember } from '../../entities/team';
-import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { AccountDialog, DialogCopy } from '../../features/settings/demo-account/ui/AccountDialog';
 import { getDemoDisbandResources } from '../../features/settings/demo-account/model/approveTeamDisband';
 
@@ -526,10 +526,10 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
           <Panel aria-labelledby="invite-form-title">
             <InviteHeader><PanelTitle id="invite-form-title">팀원 초대</PanelTitle><Button type="submit" form="team-invite-form" variant="primary" icon={<Octicon name="plus" size={16} />} disabled={!inviteAllowed || busyAction === 'invite'}>{busyAction === 'invite' ? '보내는 중…' : '초대 보내기'}</Button></InviteHeader>
             <InviteForm id="team-invite-form" onSubmit={handleInvite}>
-              {demoMode && <Hint>{'초대할 학생의 학교 이메일을 정확히 입력하세요.\nGSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.'}</Hint>}
+              {demoMode && <Hint>{isDemoFixtureMode() ? '초대할 학생의 학교 이메일을 정확히 입력하세요.\nGSM SV에 한 번 로그인한 학생만 초대할 수 있습니다.' : '초대할 팀원의 이메일을 입력하세요.'}</Hint>}
               <TextField label="학교 이메일" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.currentTarget.value); setFormError(''); }} placeholder="student@school.example" error={formError || undefined} disabled={!inviteAllowed || busyAction === 'invite'} />
               {demoMode ? <>
-                {inlineMatch && <Hint>{inlineMatch.name} · {inlineMatch.classLabel} — 일반 팀원으로 초대됩니다.</Hint>}
+                {inlineMatch && <Hint>{isDemoFixtureMode() ? `${inlineMatch.name} · ${inlineMatch.classLabel}` : inlineMatch.email} — 일반 팀원으로 초대됩니다.</Hint>}
               </> : <Hint>초대할 학생의 학교 이메일 전체를 입력하세요. 가입 여부는 공개되지 않으며 학교 도메인은 서버가 확인합니다.</Hint>}
               {!inviteAllowed && <Hint>{permissionMessage}</Hint>}
               {inviteError && <InlineError role="alert">{inviteError}</InlineError>}
@@ -604,7 +604,7 @@ export default function TeamSettingsPage({ teamId: routeTeamId }: TeamSettingsPa
         </Suspense>}
         {demoMode && inviteDialog && (inviteDialog.account
           ? <AccountDialog title="팀원 초대" icon="people"
-            description={`· ${inviteDialog.account.name} · ${inviteDialog.account.classLabel}\n· 일반 팀원으로 초대됩니다. 링크는 7일 동안 1번만 쓸 수 있습니다.`}
+            description={`· ${isDemoFixtureMode() ? `${inviteDialog.account.name} · ${inviteDialog.account.classLabel}` : inviteDialog.account.email}\n· 일반 팀원으로 초대됩니다. 링크는 7일 동안 1번만 쓸 수 있습니다.`}
             onDismiss={() => setInviteDialog(null)} actions={<>
               <Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={() => setInviteDialog(null)} disabled={busyAction === 'invite'}>취소</Button>
               <Button icon={<Octicon name="plus" size={16} />} onClick={() => void confirmDemoInvite()} disabled={busyAction === 'invite'}>{busyAction === 'invite' ? '보내는 중…' : '초대 보내기'}</Button>

@@ -1,7 +1,7 @@
 import type { AppSummary } from '../../app/model/types';
 import type { MyQuota } from '../../quota/model/types';
 import type { TeamSummary } from '../../team/model/types';
-import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 export interface DemoFunctionSummary {
   id: string;
@@ -65,7 +65,7 @@ export const demoHomeApps: AppSummary[] = [{
 }];
 
 export function getDemoHomeState(): DemoHomeState | null {
-  return isDemoMode() ? readDemoState('home', seedHome) : null;
+  return isDemoMode() ? readDemoState('home', isDemoFixtureMode() ? seedHome : { firstVisit: true, functions: [] }) : null;
 }
 
 export function saveDemoHomeState(value: DemoHomeState): boolean {

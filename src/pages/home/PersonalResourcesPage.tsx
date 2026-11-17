@@ -728,12 +728,19 @@ export default function PersonalResourcesPage() {
       setDatabaseFunctions(Object.fromEntries(personalDatabases.map(database => [database.grn, databaseRepository.getDemoDatabaseConnectedFunctions(database.grn)])));
       setDatabases({ value: personalDatabases, loading: false, error: false });
       const serverlessQuota = serverlessRepository.getDemoServerlessQuota();
+      const appQuota = appRepository.getDemoAppQuota(appRepository.demoPersonalAppOwner);
       setQuota({
         value: {
           ...demo.demoHomeQuota,
           db: databaseRepository.getDemoDatabaseQuota().db,
           vm: withPersonalVmQuota(demo.demoHomeQuota.vm, vmState.personalQuota),
           fn: serverlessQuota,
+          app: {
+            ...demo.demoHomeQuota.app,
+            count: { used: appQuota.count, limit: appQuota.limit },
+            memory_mb: { used: appQuota.usedMemory, limit: appRepository.demoAppMemoryLimit },
+            always_on: { ...demo.demoHomeQuota.app.always_on, used: appQuota.alwaysOn },
+          },
         },
         loading: false,
         error: false,
@@ -898,7 +905,13 @@ export default function PersonalResourcesPage() {
       setVmCreateFailureError('지금도 사용 가능한 자원이 부족합니다. 설정을 바꾸거나 잠시 후 다시 시도해 주세요.');
       return;
     }
-    const { state: next } = vmRepository.makeDemoVm(state, failure, 'personal');
+    let next: typeof state;
+    try {
+      ({ state: next } = vmRepository.makeDemoVm(state, failure, 'personal'));
+    } catch (error) {
+      setVmCreateFailureError(error instanceof Error ? error.message : 'VM을 만들 수 없습니다.');
+      return;
+    }
     if (!vmRepository.saveDemoVmState(next)) {
       setVmCreateFailureError('생성 요청을 다시 보내지 못했습니다. 다시 시도해 주세요.');
       return;

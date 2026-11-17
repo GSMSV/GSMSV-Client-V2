@@ -1,4 +1,4 @@
-import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 export interface DemoProfile {
   name: string;
@@ -41,7 +41,13 @@ const seedProfile: DemoProfile = {
 };
 
 export function getDemoProfile(): DemoProfile | null {
-  return isDemoMode() ? readDemoState('profile', seedProfile) : null;
+  if (!isDemoMode()) return null;
+  const fallback = isDemoFixtureMode() ? seedProfile : {
+    ...seedProfile,
+    joinedAt: new Date().toISOString().slice(0, 10),
+    teamName: '', teamRole: '', github: null, cliDevices: [],
+  };
+  return readDemoState('profile', fallback);
 }
 
 export function saveDemoProfile(profile: DemoProfile): boolean {

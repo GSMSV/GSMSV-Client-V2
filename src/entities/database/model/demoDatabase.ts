@@ -1,4 +1,4 @@
-import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
 import type { DatabaseQuota } from '../../quota/model/types';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail, DatabaseEngine, DatabaseSummary } from './types';
 
@@ -100,6 +100,18 @@ const demoDatabaseSeed: DemoDatabaseState = {
   passwords: { [welcomeGrn]: 'demo-local-pass-welcome', [teamGrn]: 'demo-local-pass-team', [teamSuspendedGrn]: 'demo-local-pass-legacy', [teamMemberViewGrn]: 'demo-local-pass-stats' },
 };
 
+const emptyDatabaseSeed: DemoDatabaseState = {
+  welcomeFixtureInitialized: true,
+  welcomeBackupsFixtureInitialized: true,
+  teamStateFixturesInitialized: true,
+  knownMembers: {},
+  unlockedAt: {},
+  databases: [],
+  deletedBackups: {},
+  backups: {},
+  passwords: {},
+};
+
 const clone = <T,>(value: T): T => structuredClone(value);
 
 function settleDemoDatabaseTransitions(state: DemoDatabaseState, now: number): boolean {
@@ -164,11 +176,12 @@ function syncDemoOwnerTotals(state: DemoDatabaseState): boolean {
 }
 
 export function getDemoDatabaseState(): DemoDatabaseState {
-  const value = readDemoState<unknown>('database.resources', clone(demoDatabaseSeed));
-  if (!value || typeof value !== 'object') return clone(demoDatabaseSeed);
+  const fallback = isDemoFixtureMode() ? demoDatabaseSeed : emptyDatabaseSeed;
+  const value = readDemoState<unknown>('database.resources', clone(fallback));
+  if (!value || typeof value !== 'object') return clone(fallback);
   const state = value as Partial<DemoDatabaseState>;
   if (!Array.isArray(state.databases) || !state.backups || typeof state.backups !== 'object' || !state.passwords || typeof state.passwords !== 'object') {
-    return clone(demoDatabaseSeed);
+    return clone(fallback);
   }
   const validState = state as DemoDatabaseState;
   let changed = false;
