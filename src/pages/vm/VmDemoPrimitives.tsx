@@ -1,0 +1,434 @@
+import type { ComponentProps, ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router';
+import styled from 'styled-components';
+import { Button } from '../../shared/ui/controls';
+import { Octicon, type OcticonName } from '../../shared/ui/icons';
+import { isDemoMode } from '../../shared/demo';
+import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { listDemoTeams } from '../../entities/team/demo';
+
+export const DemoPage = styled.div`
+  display: flex;
+  width: 100%;
+  max-width: 1224px;
+  flex-direction: column;
+  gap: 24px;
+  padding: 40px;
+
+  @media (max-width: 760px) {
+    gap: 20px;
+    padding: 24px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 16px;
+  }
+`;
+
+export const Breadcrumb = styled.p`
+  width: 100%;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.faint};
+  font: 400 12px/18px ${({ theme }) => theme.typography.body.family}, sans-serif;
+`;
+
+export const Heading = styled.div`
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+
+  @media (max-width: 760px) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+`;
+
+export const Title = styled.h1`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h1.weight} ${({ theme }) => theme.typography.h1.size}px/${({ theme }) => theme.typography.h1.lineHeight}px ${({ theme }) => theme.typography.h1.family}, sans-serif;
+`;
+
+export const Subtitle = styled.p`
+  margin: 4px 0 0;
+  color: ${({ theme }) => theme.colors.primary};
+  font: ${({ theme }) => theme.typography.body.weight} ${({ theme }) => theme.typography.body.size}px/${({ theme }) => theme.typography.body.lineHeight}px ${({ theme }) => theme.typography.body.family}, sans-serif;
+`;
+
+export const Tabs = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+
+  @media (max-width: 600px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+`;
+
+export const Tab = styled(Link)<{ $active?: boolean }>`
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
+  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
+  text-decoration: none;
+
+  @media (max-width: 600px) { flex: 0 0 auto; }
+`;
+
+export const Surface = styled.section`
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
+`;
+
+export const SurfaceTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
+`;
+
+export const Hint = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+export const Row = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @media (max-width: 600px) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+`;
+
+export const Actions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+`;
+
+export const Stack = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+export const Field = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+export const Input = styled.input`
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  outline-color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.field};
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+export const Textarea = styled.textarea`
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  outline-color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.field};
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  resize: vertical;
+`;
+
+export const Banner = styled.div<{ $tone?: 'primary' | 'warning' | 'muted' }>`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warningSoft : $tone === 'primary' ? theme.colors.primarySoft : theme.colors.surface};
+  color: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warning : theme.colors.text};
+  /* Figma 배너 제목: 기본은 흰색, 경고는 노란색, 안내(primary)는 초록색 */
+  > div > strong { color: ${({ theme, $tone }) => $tone === 'warning' ? theme.colors.warning : $tone === 'primary' ? theme.colors.primary : theme.colors.text}; }
+`;
+
+export const BannerCopy = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  strong { font-weight: 500; }
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+export const Facts = styled.div<{ $columns?: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $columns = 3 }) => $columns}, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 600px) { grid-template-columns: 1fr; }
+`;
+
+export const MetricCard = styled.article`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+
+  @media (max-width: 600px) { padding: 16px; }
+`;
+
+export const MetricLabel = styled.span`
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+export const MetricValue = styled.strong`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+export const Fact = styled.div`
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+export const FactLabel = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+export const FactValue = styled.span`
+  overflow-wrap: anywhere;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+export const Grid2 = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  @media (max-width: 1100px) { grid-template-columns: 1fr; }
+`;
+
+export const TableWrap = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
+export const Table = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+  /* Figma 11·팀 VM 표: 채운 머리글(12px)과 행 아래 구분선 */
+  thead { background: ${({ theme }) => theme.colors.raised}; }
+  th { padding: 12px; color: ${({ theme }) => theme.colors.muted}; font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif; text-align: left; }
+  th:first-child { border-radius: ${({ theme }) => theme.radii.base}px 0 0 ${({ theme }) => theme.radii.base}px; }
+  th:last-child { border-radius: 0 ${({ theme }) => theme.radii.base}px ${({ theme }) => theme.radii.base}px 0; }
+  td { padding: 12px; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; text-align: left; }
+  th, td { white-space: nowrap; }
+`;
+
+const Segmented = styled.div`
+  display: flex;
+  width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+`;
+
+const Segment = styled.button<{ $active: boolean }>`
+  flex: 1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: ${({ theme, $active }) => $active ? theme.colors.primarySoft : 'transparent'};
+  color: ${({ theme, $active }) => $active ? theme.colors.primary : theme.colors.muted};
+  font: ${({ theme }) => theme.typography.button.weight} ${({ theme }) => theme.typography.button.size}px/${({ theme }) => theme.typography.button.lineHeight}px ${({ theme }) => theme.typography.button.family}, sans-serif;
+  cursor: pointer;
+`;
+
+export function OsSelector({ value, onChange }: { value: string; onChange: (value: 'Linux Ubuntu 22.04 LTS' | 'Ubuntu Server') => void }) {
+  return <Segmented aria-label="운영체제">
+    {(['Linux Ubuntu 22.04 LTS', 'Ubuntu Server'] as const).map(option => <Segment key={option} type="button" $active={value === option} aria-pressed={value === option} onClick={() => onChange(option)}>{option}</Segment>)}
+  </Segmented>;
+}
+
+/** Figma: 탭과 화면별 동작 버튼은 한 줄에 놓인다(탭 왼쪽, 버튼 오른쪽). */
+export const TabsBar = styled.div`
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+`;
+
+export const TabActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+
+  @media (max-width: 1100px) { justify-content: flex-start; }
+`;
+
+export function DetailTabs({ vmId, active, teamId, networkVmGrn, actions }: { vmId: string; active: string; teamId?: string; networkVmGrn?: string; actions?: ReactNode }) {
+  const prefix = teamId ? `/teams/${teamId}/vms/${vmId}` : `/vms/${vmId}`;
+  const tabs = [
+    ['개요', prefix],
+    ['Monitoring', `${prefix}/monitoring`],
+    ['Network', teamId ? `/teams/${teamId}/vms/${networkVmGrn ?? vmId}/network` : `/vms/${networkVmGrn ?? vmId}/network`],
+    ['Snapshot', `${prefix}/snapshots`],
+    ['설정', `${prefix}/settings`],
+  ];
+  const nav = <Tabs aria-label="VM 메뉴">{tabs.map(([label, to]) => <Tab key={label} to={to} $active={active === label}>{label}</Tab>)}</Tabs>;
+  if (!actions) return nav;
+  return <TabsBar>{nav}<TabActions>{actions}</TabActions></TabsBar>;
+}
+
+export function DemoShell({ children, activeItem = 'home', scopeLabel = '내 Resources', userName = '김지민', teamScopeId, hasUnsavedInput = false }: {
+  children: ReactNode;
+  activeItem?: StudentNavigationKey;
+  scopeLabel?: string;
+  userName?: string;
+  teamScopeId?: string;
+  hasUnsavedInput?: boolean;
+}) {
+  const activeDemo = isDemoMode();
+  const routeTo = useNavigate();
+  const navigate = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    const teamPath = teamScopeId ? `/teams/${encodeURIComponent(teamScopeId)}` : undefined;
+    const paths: Record<Exclude<StudentNavigationKey, 'none'>, string> = {
+      home: teamPath ?? '/',
+      'vm-create': teamPath ? `${teamPath}/vms/new` : '/vms/new',
+      serverless: '/serverless',
+      database: teamScopeId ? `/databases?owner=${encodeURIComponent(teamScopeId)}` : '/databases',
+      apps: teamPath ? `${teamPath}/apps` : '/apps',
+      team: teamPath ?? '/teams',
+      docs: '/docs',
+      support: '/support/inquiries',
+      settings: '/settings',
+    };
+    routeTo(paths[item]);
+
+    return true;
+  };
+  const scopeOptions = [
+    { id: 'personal', label: '내 Resources', selected: !teamScopeId, onSelect: () => routeTo('/') },
+    ...listDemoTeams().map(team => ({
+      id: team.id,
+      label: `${team.name} · ${team.my_role === 'leader' ? '팀장' : team.my_role === 'devops' ? 'DevOps' : '멤버'}`,
+      selected: team.id === teamScopeId,
+      onSelect: () => routeTo(`/teams/${encodeURIComponent(team.id)}`),
+    })),
+  ];
+  return <StudentShell
+    activeItem={activeItem}
+    scopeLabel={scopeLabel}
+    scopeOptions={scopeOptions}
+    teamScopeId={teamScopeId}
+    userName={userName}
+    notificationCount={2}
+    onNavigate={navigate}
+    onCreateTeam={() => window.location.assign('/teams/new')}
+    onOpenStatus={() => window.location.assign('/status')}
+    onSelectScope={() => {}}
+    onSearch={() => {}}
+    onOpenNotifications={() => {}}
+    hasUnsavedInput={hasUnsavedInput}
+    disabledNavigationItems={activeDemo ? [] : ['vm-create']}
+  >{children}</StudentShell>;
+}
+
+export function InlineFact({ label, value, icon = 'server', action }: { label: string; value: ReactNode; icon?: OcticonName; action?: ReactNode }) {
+  return <FactRow><Octicon name={icon} size={16} /><FactBody><FactLabel>{label}</FactLabel><FactValue>{value}</FactValue></FactBody>{action}</FactRow>;
+}
+
+/** Figma 정보 행: 아이콘 16px · 라벨/값 · 오른쪽 동작이 세로 가운데 정렬된다. */
+const FactRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  > svg { flex: 0 0 16px; color: ${({ theme }) => theme.colors.muted}; }
+  > button { flex: 0 0 auto; white-space: nowrap; }
+`;
+
+const FactBody = styled(Fact)`
+  flex: 1 1 auto;
+`;
+
+export const FactList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+export const StatusText = styled.span<{ $status: 'running' | 'queued' | 'stopped' }>`
+  color: ${({ theme, $status }) => $status === 'running' ? theme.colors.primary : $status === 'queued' ? theme.colors.warning : theme.colors.faint};
+`;
+
+export const PrimaryButton = (props: ComponentProps<typeof Button>) => <Button variant="primary" {...props} />;
+
+export const ScreenGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+export const ProgressBar = styled.div<{ $percent: number }>`
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  &::before { display: block; width: ${({ $percent }) => Math.max(0, Math.min(100, $percent))}%; height: 100%; border-radius: inherit; background: ${({ theme }) => theme.colors.primary}; content: ''; }
+`;

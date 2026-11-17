@@ -1,0 +1,15 @@
+export {
+  clearDemoVmCreateFailure,
+  demoHomeApps,
+  demoHomeQuota,
+  demoHomeTeams,
+  demoVmCreateFailureSeed,
+  dismissDemoGraduationNotice,
+  getDemoHomeState,
+  recordDemoVmCreateFailure,
+  saveDemoHomeState,
+  setDemoFirstVisit,
+  type DemoFunctionSummary,
+  type DemoHomeState,
+  type DemoVmCreateFailure,
+} from './model/demoHome';

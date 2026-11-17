@@ -1,0 +1,540 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
+import styled from 'styled-components';
+import { useAppSourceDraft, type AppSourceType } from '../../features/app/create-app';
+import { getTeam, listMyTeams, type TeamDetail, type TeamRole, type TeamSummary } from '../../entities/team';
+import { getSessionUser } from '../../entities/session';
+import { Button } from '../../shared/ui/controls';
+import { Combobox, SelectField, StepIndicator, TextField } from '../../shared/ui/controls';
+import { Octicon } from '../../shared/ui/icons';
+import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
+import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { DemoCreateFormState } from './DemoCreateFormState';
+
+type DemoCreateModules = {
+  profile: typeof import('../../entities/profile');
+  team: typeof import('../../entities/team/demo');
+  app: typeof import('../../entities/app/demo');
+  draft: typeof import('../../features/apps/createDemoAppDraft');
+};
+
+const roleLabel: Record<TeamRole, string> = { leader: '팀장', devops: 'DevOps', member: '팀원' };
+
+const Page = styled.div`
+  display: flex;
+  width: 100%;
+  max-width: 1224px;
+  flex-direction: column;
+  gap: 24px;
+  padding: 40px;
+
+  @media (max-width: 760px) { padding: 24px 16px; }
+`;
+
+const Breadcrumb = styled.p`
+  width: 100%;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.caption.weight} ${({ theme }) => theme.typography.caption.size}px/${({ theme }) => theme.typography.caption.lineHeight}px ${({ theme }) => theme.typography.caption.family}, sans-serif;
+`;
+
+const Heading = styled.h1`
+  width: 100%;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h1.weight} ${({ theme }) => theme.typography.h1.size}px/${({ theme }) => theme.typography.h1.lineHeight}px ${({ theme }) => theme.typography.h1.family}, sans-serif;
+`;
+
+const StepRow = styled.div`
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+
+  @media (max-width: 760px) { flex-wrap: wrap; }
+`;
+
+const Steps = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const StepLine = styled.span`
+  width: 36px;
+  height: 1px;
+  background: ${({ theme }) => theme.colors.border};
+`;
+
+const Segmented = styled.div`
+  display: flex;
+  width: 100%;
+  height: 42px;
+  gap: 4px;
+  padding: 4px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.field};
+`;
+
+const Segment = styled.button<{ $selected: boolean }>`
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  color: ${({ theme, $selected }) => $selected ? theme.colors.primary : theme.colors.muted};
+  background: ${({ theme, $selected }) => $selected ? theme.colors.primarySoft : 'transparent'};
+  font-family: ${({ theme }) => theme.typography.button.family}, sans-serif;
+  font-size: ${({ theme }) => theme.typography.button.size}px;
+  font-weight: ${({ theme }) => theme.typography.button.weight};
+  line-height: ${({ theme }) => theme.typography.button.lineHeight}px;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary}; outline-offset: 1px; }
+`;
+
+const Card = styled.section`
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+`;
+
+const CardTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.title.weight} ${({ theme }) => theme.typography.title.size}px/${({ theme }) => theme.typography.title.lineHeight}px ${({ theme }) => theme.typography.title.family}, sans-serif;
+`;
+
+const AccountRow = styled.div`
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 16px;
+
+  @media (max-width: 460px) { flex-wrap: wrap; }
+`;
+
+const AccountText = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const Caption = styled.span`
+  color: ${({ theme }) => theme.colors.faint};
+  font: ${({ theme }) => theme.typography.label.weight} ${({ theme }) => theme.typography.label.size}px/${({ theme }) => theme.typography.label.lineHeight}px ${({ theme }) => theme.typography.label.family}, sans-serif;
+`;
+
+const Body = styled.span`
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const IconSlot = styled.span`
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.colors.muted};
+`;
+
+const FieldGrid = styled.div<{ $stacked: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $stacked }) => $stacked ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))'};
+  gap: 16px;
+
+  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
+`;
+
+const DialogBackdrop = styled.div`
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #0009;
+`;
+
+const Dialog = styled.section`
+  display: flex;
+  width: min(100%, 480px);
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 16px 48px #0005;
+`;
+
+const DialogTitle = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text};
+  font: ${({ theme }) => theme.typography.h2.weight} ${({ theme }) => theme.typography.h2.size}px/${({ theme }) => theme.typography.h2.lineHeight}px ${({ theme }) => theme.typography.h2.family}, sans-serif;
+`;
+
+const DialogCopy = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+const DialogActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+const SourceUnavailable = styled.div`
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: ${({ theme }) => theme.radii.base}px;
+  background: ${({ theme }) => theme.colors.raised};
+  color: ${({ theme }) => theme.colors.muted};
+  font: ${({ theme }) => theme.typography.bodySmall.weight} ${({ theme }) => theme.typography.bodySmall.size}px/${({ theme }) => theme.typography.bodySmall.lineHeight}px ${({ theme }) => theme.typography.bodySmall.family}, sans-serif;
+`;
+
+type DialogKind = 'unsupported-source' | 'github-disconnected' | 'repository-inaccessible' | 'quota' | null;
+
+export default function AppCreateSourcePage({ teamId }: { teamId?: string }) {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  const demoMode = isDemoMode();
+  const location = useLocation();
+  const { draft, update, hasUnsavedInput } = useAppSourceDraft();
+  const [demoLoadError, setDemoLoadError] = useState(false);
+  const [demoLoadAttempt, setDemoLoadAttempt] = useState(0);
+  const retryDemoLoad = () => {
+    setDemoLoadError(false);
+    setDemoLoadAttempt(value => value + 1);
+  };
+  const [dialog, setDialog] = useState<DialogKind>(null);
+  const [demoModules, setDemoModules] = useState<DemoCreateModules | null>(null);
+  const [demoDraft, setDemoDraft] = useState<ReturnType<DemoCreateModules['draft']['readDemoAppDraft']> | null>(null);
+  const github = demoMode ? demoModules?.profile.getDemoProfile()?.github : null;
+  const form = demoDraft ?? draft;
+  const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
+    if (demoDraft) setDemoDraft(current => current && ({ ...current, [key]: value }));
+    else update(key, value);
+  };
+  const installRepository = () => {
+    if (github && demoModules?.draft.installDemoRepository(form.repository)) setDialog(null);
+  };
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [currentTeam, setCurrentTeam] = useState<TeamDetail | null>(null);
+  const [archiveError, setArchiveError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const demoReady = Boolean(demoModules && demoDraft);
+
+  useEffect(() => {
+    if (!demoMode) { setDemoModules(null); setDemoDraft(null); return; }
+    let active = true;
+    const controller = new AbortController();
+    void simulateDemoRequest('apps-create', controller.signal).then(() => Promise.all([
+      import('../../entities/profile'),
+      import('../../entities/team/demo'),
+      import('../../entities/app/demo'),
+      import('../../features/apps/createDemoAppDraft'),
+    ])).then(([profile, team, app, draftModule]) => {
+      if (!active) return;
+      const modules = { profile, team, app, draft: draftModule };
+      setDemoModules(modules);
+      setDemoDraft(draftModule.readDemoAppDraft(teamId) ?? draftModule.defaultDemoAppSourceDraft);
+      setTeams(team.listDemoTeams());
+      setCurrentTeam(teamId ? team.getDemoTeam(teamId) ?? null : null);
+    }).catch(() => {
+      if (active) setDemoLoadError(true);
+    });
+    return () => { active = false; controller.abort(); };
+  }, [demoMode, demoLoadAttempt, teamId]);
+
+  useEffect(() => {
+    if (demoMode) return;
+    const controller = new AbortController();
+    void listMyTeams(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setTeams(value); })
+      .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+    return () => controller.abort();
+  }, [demoMode]);
+
+  useEffect(() => {
+    if (demoMode) return;
+    if (!teamId) {
+      setCurrentTeam(null);
+      return;
+    }
+    const controller = new AbortController();
+    setCurrentTeam(null);
+    void getTeam(teamId, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setCurrentTeam(value); })
+      .catch(() => { if (!controller.signal.aborted) setCurrentTeam(null); });
+    return () => controller.abort();
+  }, [demoMode, teamId]);
+  const sourceTypeLabels: Record<AppSourceType, string> = {
+    github: 'GitHub 저장소',
+    container: '컨테이너 이미지',
+    archive: '압축 파일',
+  };
+  const navigateFromShell = (item: Exclude<StudentNavigationKey, 'none'>) => {
+    if (item === 'apps') navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps');
+
+    return ['apps'].includes(item);
+  };
+
+  const scopeOptions = useMemo(() => {
+    const options = [
+      { id: 'personal', label: '내 Resources', selected: !teamId, onSelect: () => navigate('/apps/new') },
+      ...teams.map(team => ({
+        id: team.id,
+        label: `${team.name} · ${roleLabel[team.my_role]}`,
+        selected: team.id === teamId,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(team.id)}/apps/new`),
+      })),
+    ];
+    if (teamId && !teams.some(team => team.id === teamId)) {
+      options.push({
+        id: teamId,
+        label: currentTeam ? `${currentTeam.name} · ${currentTeam.my_role ? roleLabel[currentTeam.my_role] : '관리자'}` : '팀 Resources',
+        selected: true,
+        onSelect: () => navigate(`/teams/${encodeURIComponent(teamId)}/apps/new`),
+      });
+    }
+    return options;
+  }, [currentTeam, navigate, teamId, teams]);
+
+  const handleContinue = () => {
+    if (!demoMode && form.sourceType !== 'github') return;
+    const name = form.name.trim();
+    if (name.length < 1 || name.length > 30) return;
+    if (demoMode) {
+      if (!demoModules || !demoDraft) return;
+      setSaveError('');
+      const quota = demoModules.app.getDemoAppQuota(teamId ? { type: 'team', id: teamId } : demoModules.app.demoPersonalAppOwner);
+      if (quota.count >= quota.limit) { setDialog('quota'); return; }
+      if (form.sourceType === 'github' && !github && currentTeam?.status !== 'pending') { setDialog('github-disconnected'); return; }
+      if (form.sourceType === 'github' && !demoModules.draft.isDemoRepositoryAccessible(form.repository, demoModules.draft.getDemoInstalledRepositories())) {
+        setDialog('repository-inaccessible');
+        return;
+      }
+      if (!form.repository.trim() || (form.sourceType === 'github' && !form.branch)) return;
+      if (!demoModules.draft.saveDemoAppDraft(teamId, { ...form, name })) {
+        setSaveError('소스 입력을 저장하지 못했습니다. 다시 시도해 주세요.');
+        return;
+      }
+    } else {
+      const draftKey = teamId ? `gsmsv.app-create-source-draft:team:${teamId}` : 'gsmsv.app-create-source-draft';
+      sessionStorage.setItem(draftKey, JSON.stringify({ name, repository: draft.repository, branch: draft.branch, folder: draft.folder, watchPaths: draft.watchPaths }));
+    }
+    navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps/new/service` : '/apps/new/service');
+  };
+
+  return (
+    <StudentShell
+      activeItem="apps"
+      scopeLabel={teamId ? '팀 Resources' : '내 Resources'}
+      scopeOptions={scopeOptions}
+      userName={user?.name ?? '사용자'}
+      onNavigate={navigateFromShell}
+      onCreateTeam={() => navigate('/teams/new')}
+      onOpenStatus={() => navigate('/status')}
+      onSelectScope={() => undefined}
+      onSearch={() => undefined}
+      onOpenNotifications={() => undefined}
+      hasUnsavedInput={demoDraft && demoModules ? Object.keys(demoDraft).some(key => demoDraft[key as keyof typeof demoDraft] !== demoModules.draft.defaultDemoAppSourceDraft[key as keyof typeof demoDraft]) : hasUnsavedInput}
+    >
+      <Page>
+        <Breadcrumb>{teamId ? '팀 Apps' : 'Apps'}</Breadcrumb>
+        <Heading>어디서 코드를 가져오시겠습니까?</Heading>
+        <StepRow>
+          <Steps aria-label="앱 만들기 단계">
+            <StepIndicator number={1} label="소스" active />
+            <StepLine role="presentation" />
+            <StepIndicator number={2} label="서비스" />
+          </Steps>
+          <Button variant="primary" icon={<Octicon name="arrow-right" size={16} />} onClick={handleContinue} disabled={(demoMode && (!demoReady || !form.repository.trim())) || (!demoMode && form.sourceType !== 'github') || !form.name.trim() || form.name.trim().length > 30}>
+            다음: 서비스
+          </Button>
+        </StepRow>
+
+        {saveError && <SourceUnavailable role="alert"><Octicon name="alert" size={18} />{saveError}</SourceUnavailable>}
+
+        {demoMode && (demoLoadError || !demoReady) ? (
+          <DemoCreateFormState step="source" onRetry={demoLoadError ? retryDemoLoad : undefined} />
+        ) : <>
+          <Card>
+            <CardTitle>소스</CardTitle>
+            <Segmented role="group" aria-label="코드 소스 선택">
+              {(Object.keys(sourceTypeLabels) as AppSourceType[]).map(type => (
+                <Segment key={type} type="button" $selected={form.sourceType === type} aria-pressed={form.sourceType === type} disabled={demoMode && !demoReady} onClick={() => {
+                  if (type !== 'github') {
+                    if (demoDraft) setDemoDraft({ ...demoDraft, sourceType: type, repository: '', branch: '' });
+                    else setDialog('unsupported-source');
+                    return;
+                  }
+                  if (demoDraft && demoModules && demoDraft.sourceType !== 'github') setDemoDraft({ ...demoDraft, sourceType: type, repository: demoModules.draft.defaultDemoAppSourceDraft.repository, branch: 'main' });
+                  else setField('sourceType', type);
+                }}>{sourceTypeLabels[type]}</Segment>
+              ))}
+            </Segmented>
+            {demoMode && <Caption>압축 파일은 100 MB까지 올릴 수 있습니다.</Caption>}
+          </Card>
+
+          <Card>
+            <CardTitle>{sourceTypeLabels[form.sourceType]}</CardTitle>
+            {form.sourceType === 'github' ? <>
+              <AccountRow>
+                <IconSlot aria-hidden="true"><Octicon name="link" size={16} /></IconSlot>
+                <AccountText>
+                  <Caption>GitHub 계정</Caption>
+                <Body>{demoMode ? (github ? `${github} · 연결됨` : '연결되지 않음') : 'GitHub 연결 정보를 확인할 API가 준비되지 않았습니다.'}</Body>
+                </AccountText>
+              </AccountRow>
+              <AccountRow>
+                <IconSlot aria-hidden="true"><Octicon name="shield" size={16} /></IconSlot>
+                <AccountText>
+                  <Caption>GSMSV GitHub 앱</Caption>
+                  <Body>앱을 설치한 저장소만 고를 수 있습니다.</Body>
+                </AccountText>
+                <Button variant="ghost" icon={<Octicon name="link-external" size={16} />} disabled={!demoMode} onClick={() => { if (!github) setDialog('github-disconnected'); else installRepository(); }}>
+                  설치 저장소 바꾸기
+                </Button>
+              </AccountRow>
+              {!demoMode && <SourceUnavailable role="status">
+                <Octicon name="info" size={18} />
+                GitHub 연결 API가 없어 저장소는 연결되지 않습니다. 다음 단계에서 앱 이름만 저장하는 앱을 만들 수 있고, 소스 설정은 전송하지 않습니다.
+              </SourceUnavailable>}
+                <Combobox
+                  label="저장소"
+                  value={form.repository}
+                  placeholder="저장소 검색"
+                  disabled={!demoMode}
+                  options={demoMode ? [{ value: 'gsm-jimin/portfolio-web', label: 'gsm-jimin/portfolio-web' }, { value: 'gsm-jimin/study-log', label: 'gsm-jimin/study-log' }] : []}
+                  onChange={value => {
+                    setField('repository', value);
+                    setField('branch', 'main');
+                    if (demoMode) setField('name', value.split('/').at(-1) ?? '');
+                  }}
+                />
+                <FieldGrid $stacked={demoMode}>
+                  <SelectField
+                    label="브랜치"
+                    value={form.branch}
+                    placeholder="브랜치 선택"
+                    disabled={!demoMode}
+                    options={demoMode ? [{ value: 'main', label: 'main' }, { value: 'develop', label: 'develop' }] : []}
+                    onChange={value => setField('branch', value)}
+                  />
+                  <TextField
+                    label="폴더"
+                    value={form.folder}
+                    disabled={!demoMode}
+                    onChange={event => setField('folder', event.currentTarget.value)}
+                    hint="저장소 안에서 이 앱의 코드가 있는 폴더입니다."
+                  />
+                </FieldGrid>
+                <TextField
+                  label="감시 경로"
+                  value={form.watchPaths}
+                  placeholder="src/**, package.json"
+                  disabled={!demoMode}
+                  onChange={event => setField('watchPaths', event.currentTarget.value)}
+                  hint="이 경로의 파일이 바뀐 push만 배포합니다. 비워 두면 모든 push를 배포합니다."
+                />
+
+            </> : demoMode && form.sourceType === 'container' ? <>
+              <TextField label="컨테이너 이미지" value={form.repository} placeholder="ghcr.io/{사용자}/{이미지}:태그" onChange={event => setField('repository', event.currentTarget.value)}  />
+              <TextField label="앱 이름" value={form.name} maxLength={30} onChange={event => setField('name', event.currentTarget.value)} />
+            </> : demoMode && form.sourceType === 'archive' ? <>
+              <TextField label="앱 이름" value={form.name} maxLength={30} onChange={event => setField('name', event.currentTarget.value)} />
+              <TextField label="압축 파일" value={form.repository} error={archiveError || undefined} placeholder="ZIP 파일 선택" disabled />
+              <Button variant="secondary" onClick={() => document.getElementById('demo-app-archive')?.click()}>압축 파일 선택</Button>
+              <input id="demo-app-archive" type="file" accept=".zip,.tar,.gz" hidden onChange={event => {
+                const file = event.currentTarget.files?.[0];
+                if (!file) return;
+                if (file.size > 100 * 1024 * 1024) { setField('repository', ''); setArchiveError('압축 파일은 100 MB까지 올릴 수 있습니다.'); return; }
+                setArchiveError('');
+                setField('repository', file.name);
+              }} />
+            </> : <SourceUnavailable role="status">
+              <Octicon name="info" size={18} />
+              이 소스 방식은 현재 앱 API 계약에 정의되어 있지 않습니다.
+            </SourceUnavailable>}
+          </Card>
+
+          {form.sourceType === 'github' && <Card>
+            <CardTitle>기본 정보</CardTitle>
+            <TextField
+              label="앱 이름"
+              value={form.name}
+              maxLength={30}
+              onChange={event => setField('name', event.currentTarget.value)}
+              hint={demoMode ? "저장소 이름을 그대로 썼습니다. 앱 설정에서 바꿀 수 있습니다." : "앞뒤 공백을 제외하고 1~30자로 입력해 주세요. 현재 계약은 이 이름만 저장합니다."}
+            />
+          </Card>}
+        </>}
+      </Page>
+
+      {demoMode && dialog && dialog !== 'unsupported-source' && <DialogBackdrop onMouseDown={event => { if (event.target === event.currentTarget) setDialog(null); }}>
+        <Dialog role="dialog" aria-modal="true" aria-labelledby="demo-source-dialog-title">
+          <DialogTitle id="demo-source-dialog-title">{dialog === 'quota' ? '앱을 더 만들 수 없습니다' : dialog === 'github-disconnected' ? 'GitHub 계정을 먼저 연결해 주세요' : '저장소에 접근할 수 없습니다'}</DialogTitle>
+          <DialogCopy>{dialog === 'quota' ? <>
+            <span>· {teamId ? '팀 앱을 모두 쓰고 있습니다.' : '내 앱 2개를 모두 쓰고 있습니다.'}</span>
+            <span>· 쓰지 않는 앱을 지우면 다시 만들 수 있습니다.</span>
+            {!teamId && <span>· 더 필요하면 팀을 만들어 팀 앱을 쓰세요.</span>}
+          </> : dialog === 'github-disconnected' ? <>
+            <span>· GitHub 저장소에서 배포하려면 계정 설정에서 GitHub를 연결해야 합니다.</span>
+            <span>· 연결을 마치면 이 화면으로 돌아옵니다.</span>
+          </> : <>
+            <span>· {form.repository}에 GSMSV GitHub 앱이 설치되지 않았습니다.</span>
+            <span>· GitHub에서 설치할 저장소에 추가한 뒤 다시 골라 주세요.</span>
+          </>}</DialogCopy>
+          <DialogActions>
+            {dialog === 'quota' ? <>
+              <Button variant="secondary" onClick={() => navigate(teamId ? `/teams/${encodeURIComponent(teamId)}/apps` : '/apps')}>Apps 목록</Button>
+              {!teamId && <Button onClick={() => navigate('/teams/new')}>팀 만들기</Button>}
+            </> : dialog === 'github-disconnected' ? <>
+              <Button variant="secondary" onClick={() => setDialog(null)}>취소</Button>
+              <Button onClick={() => { demoModules?.draft.saveDemoAppDraft(teamId, form); navigate('/settings', { state: { returnTo: location.pathname } }); }}>계정 설정에서 연결</Button>
+            </> : <>
+              <Button variant="secondary" onClick={handleContinue}>다시 확인</Button>
+              <Button onClick={installRepository}>설치 저장소 바꾸기</Button>
+            </>}
+          </DialogActions>
+        </Dialog>
+      </DialogBackdrop>}
+      {dialog === 'unsupported-source' && <DialogBackdrop onMouseDown={event => { if (event.target === event.currentTarget) setDialog(null); }}>
+        <Dialog role="dialog" aria-modal="true" aria-labelledby="source-dialog-title" aria-describedby="source-dialog-copy">
+          <DialogTitle id="source-dialog-title">이 소스는 준비 중입니다</DialogTitle>
+          <DialogCopy id="source-dialog-copy">
+            {dialog === 'unsupported-source' ? <>
+              <span>현재 공개 앱 API 계약은 앱 이름만 지원하고, 저장소·이미지·압축 파일 소스 설정은 정의하지 않았습니다.</span>
+              <span>GitHub를 선택하면 앱 이름만으로 기본 앱을 만들 수 있지만 소스 설정은 저장되지 않습니다.</span>
+            </> : null}
+          </DialogCopy>
+          <DialogActions>
+            <Button variant="secondary" onClick={() => setDialog(null)}>닫기</Button>
+          </DialogActions>
+        </Dialog>
+      </DialogBackdrop>}
+    </StudentShell>
+  );
+}

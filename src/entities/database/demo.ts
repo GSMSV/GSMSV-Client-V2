@@ -1,0 +1,25 @@
+export {
+  acknowledgeDemoDatabaseMembers,
+  addDemoPreRestoreBackup,
+  applyDemoDatabaseWrite,
+  DEMO_DATABASE_WRITE_STEP_GB,
+  createDemoDatabase,
+  deleteDemoDatabase,
+  getDemoDatabase,
+  getDemoDatabaseConnectedFunctions,
+  getDemoDatabaseCurrentConnections,
+  getDemoDatabaseDepartedMembers,
+  getDemoDatabaseQuota,
+  getDemoDatabaseBackups,
+  getDemoDatabaseCredentials,
+  getDemoDatabaseSuspensionInfo,
+  getDemoDatabaseState,
+  getDemoDatabaseUnlockedAt,
+  listDemoDatabases,
+  removeDemoDatabasesByOwner,
+  saveDemoDatabaseState,
+  setDemoDatabasePassword,
+  updateDemoDatabase,
+} from './model/demoDatabase';
+export { DEMO_TEAM_DEDICATED_DATABASE_LIMIT, getDemoTeamDedicatedDatabaseQuota } from './model/demoDedicatedQuota';
+export type { DemoDatabaseState } from './model/demoDatabase';

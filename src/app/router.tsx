@@ -1,0 +1,396 @@
+import { lazy, Suspense } from 'react';
+import { createBrowserRouter, Navigate, Outlet, useParams, type RouteObject } from 'react-router';
+import { loginCallbackLoader } from '../pages/auth/callback/loader';
+import NotFoundPage, { RouteErrorBoundary } from '../pages/not-found/NotFoundPage';
+import { getSessionUser } from '../entities/session';
+import { isDemoMode } from '../shared/demo';
+import { GlobalStateDialogs } from '../widgets/student-shell';
+
+const DesignSystemPage = lazy(() => import('../pages/design-system/DesignSystemPage'));
+const PersonalResourcesPage = lazy(() => import('../pages/home/PersonalResourcesPage'));
+const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const DatabaseListPage = lazy(() => import('../pages/database/DatabaseListPage'));
+const DatabaseCreatePage = lazy(() => import('../pages/database/DatabaseCreatePage'));
+const DatabaseDetailPage = lazy(() => import('../pages/database/DatabaseDetailPage'));
+const DatabaseBackupsPage = lazy(() => import('../pages/database/DatabaseBackupsPage'));
+const DatabaseSettingsPage = lazy(() => import('../pages/database/DatabaseSettingsPage'));
+const AppsListPage = lazy(() => import('../pages/apps/AppsListPage'));
+const TeamAppsListPage = lazy(() => import('../pages/apps/TeamAppsListPage'));
+const AppCreateSourcePage = lazy(() => import('../pages/apps/AppCreateSourcePage'));
+const AppCreateServicePage = lazy(() => import('../pages/apps/AppCreateServicePage'));
+const AppSettingsPage = lazy(() => import('../pages/apps/AppSettingsPage'));
+const AppOverviewPage = lazy(() => import('../pages/apps/AppOverviewPage'));
+const TeamsHomePage = lazy(() => import('../pages/teams/TeamsHomePage'));
+const TeamCreatePage = lazy(() => import('../pages/teams/TeamCreatePage'));
+const TeamSettingsPage = lazy(() => import('../pages/teams/TeamSettingsPage'));
+const TeamInvitationAcceptPage = lazy(() => import('../pages/teams/TeamInvitationAcceptPage'));
+const VMNetworkPage = lazy(() => import('../pages/network/VMNetworkPage'));
+const AccountSettingsPage = lazy(() => import('../pages/settings/AccountSettingsPage'));
+const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
+const PublicStatusPage = lazy(() => import('../pages/status/PublicStatusPage'));
+const PublicDocsPage = lazy(() => import('../pages/docs/PublicDocsPage'));
+const AuthenticatedDocsPage = lazy(() => import('../pages/docs/AuthenticatedDocsPage'));
+const AdminInfrastructurePage = lazy(() => import('../pages/admin/AdminInfrastructurePage'));
+const ServerlessListPage = lazy(() => import('../pages/serverless/ServerlessListPage'));
+
+function TeamHomeRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamsHomePage teamId={teamId} />;
+}
+
+function HomeRoute() {
+  if (!isDemoMode() && !getSessionUser()) return <Navigate to="/login" replace />;
+  return (
+    <Suspense fallback={null}>
+      <PersonalResourcesPage />
+    </Suspense>
+  );
+}
+
+function TeamAppsRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamAppsListPage key={teamId} teamId={teamId ?? ''} />;
+}
+
+function TeamAppCreateSourceRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <AppCreateSourcePage key={teamId} teamId={teamId} />;
+}
+
+function TeamAppCreateServiceRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <AppCreateServicePage key={teamId} teamId={teamId} />;
+}
+
+function VMNetworkRoute() {
+  const { vmGrn } = useParams<{ vmGrn: string }>();
+  return <VMNetworkPage key={vmGrn} />;
+}
+
+let demoRoutes: RouteObject[] = [];
+let demoSessionGate: RouteObject['Component'];
+
+if (import.meta.env.DEV || isDemoMode()) {
+  const [roleSelection, vms, databaseSupport, apps, serverless, sessionGate] = await Promise.all([
+    import('../pages/auth/RoleSelectionDemoPage'),
+    import('../pages/vm/demoRoutes'),
+    import('../pages/demo-workflows/routes'),
+    import('../pages/apps/demoRoutes'),
+    import('../pages/serverless/routes'),
+    import('../pages/demo/DemoSessionGate'),
+  ]);
+  const RoleSelectionDemoPage = roleSelection.default;
+  demoSessionGate = sessionGate.default;
+
+  demoRoutes = [
+    {
+      path: '/__demo/role-selection',
+      element: (
+        <Suspense fallback={null}>
+          <RoleSelectionDemoPage />
+        </Suspense>
+      ),
+    },
+    ...vms.demoVmRoutes,
+    ...databaseSupport.demoDatabaseSupportRoutes,
+    ...apps.demoAppRoutes,
+    ...serverless.serverlessDemoRoutes,
+  ];
+}
+
+const routes: RouteObject[] = [
+  ...demoRoutes,
+  {
+    path: '/admin',
+    element: <Navigate to="/admin/infra" replace />,
+  },
+  {
+    path: '/',
+    element: <HomeRoute />,
+  },
+  {
+    path: '/login/callback',
+    loader: loginCallbackLoader,
+  },
+  {
+    path: '/login',
+    element: (
+      <Suspense fallback={null}>
+        <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/new/service',
+    element: (
+      <Suspense fallback={null}>
+        <AppCreateServicePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/serverless',
+    element: (
+      <Suspense fallback={null}>
+        <ServerlessListPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/invitations/accept',
+    element: (
+      <Suspense fallback={null}>
+        <TeamInvitationAcceptPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/new',
+    element: (
+      <Suspense fallback={null}>
+        <TeamCreatePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps/new/service',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppCreateServiceRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/apps/new',
+    element: (
+      <Suspense fallback={null}>
+        <TeamAppCreateSourceRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId/settings',
+    element: (
+      <Suspense fallback={null}>
+        <TeamSettingsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams/:teamId',
+    element: (
+      <Suspense fallback={null}>
+        <TeamHomeRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/teams',
+    element: (
+      <Suspense fallback={null}>
+        <TeamHomeRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/new',
+    element: (
+      <Suspense fallback={null}>
+        <AppCreateSourcePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/:appGrn/settings',
+    element: (
+      <Suspense fallback={null}>
+        <AppSettingsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps/:appGrn',
+    element: (
+      <Suspense fallback={null}>
+        <AppOverviewRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/apps',
+    element: (
+      <Suspense fallback={null}>
+        <AppsListPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/vms/:vmGrn/network',
+    element: (
+      <Suspense fallback={null}>
+        <VMNetworkRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/settings',
+    element: (
+      <Suspense fallback={null}>
+        <AccountSettingsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/settings/notifications',
+    element: (
+      <Suspense fallback={null}>
+        <NotificationSettingsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/docs',
+    element: (
+      <Suspense fallback={null}>
+        <PublicDocsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/help',
+    element: (
+      <Suspense fallback={null}>
+        <AuthenticatedDocsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/status',
+    element: (
+      <Suspense fallback={null}>
+        <PublicStatusPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/admin/infra',
+    element: (
+      <Suspense fallback={null}>
+        <AdminInfrastructurePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/admin/vms',
+    element: (
+      <Suspense fallback={null}>
+        <AdminInfrastructurePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases/new',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseCreatePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases/:databaseGrn/settings',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseSettingsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases/:databaseGrn/backups',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseBackupsRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases/:databaseGrn',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseDetailRoute />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/databases',
+    element: (
+      <Suspense fallback={null}>
+        <DatabaseListPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/__design-system',
+    element: (
+      <Suspense fallback={null}>
+        <DesignSystemPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '*',
+    element: <NotFoundPage />,
+  },
+];
+
+function AppRoot() {
+  return (
+    <>
+      <Outlet />
+      <GlobalStateDialogs />
+    </>
+  );
+}
+
+export const router = createBrowserRouter([{
+  Component: AppRoot,
+  errorElement: <RouteErrorBoundary />,
+  children: demoSessionGate ? [{ Component: demoSessionGate, children: routes }] : routes,
+}]);
+
+function AppSettingsRoute() {
+  const { appGrn } = useParams<{ appGrn: string }>();
+  return <AppSettingsPage key={appGrn} />;
+}
+
+function AppOverviewRoute() {
+  const { appGrn } = useParams<{ appGrn: string }>();
+  return <AppOverviewPage key={appGrn} />;
+}
+
+function TeamSettingsRoute() {
+  const { teamId } = useParams<{ teamId: string }>();
+  return <TeamSettingsPage key={teamId} teamId={teamId ?? ''} />;
+}
+
+function DatabaseDetailRoute() {
+  const { databaseGrn } = useParams<{ databaseGrn: string }>();
+  return <DatabaseDetailPage key={databaseGrn} />;
+}
+
+function DatabaseBackupsRoute() {
+  const { databaseGrn } = useParams<{ databaseGrn: string }>();
+  return <DatabaseBackupsPage key={databaseGrn} />;
+}
+
+function DatabaseSettingsRoute() {
+  const { databaseGrn } = useParams<{ databaseGrn: string }>();
+  return <DatabaseSettingsPage key={databaseGrn} />;
+}
