@@ -99,6 +99,7 @@ function monthDayTime(value: string) {
   return `${parts.month}월 ${parts.day}일 ${parts.hour}:${parts.minute}`;
 }
 function fileSize(value: number) {
+  if (value < 1) return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(Math.max(0.1, value * 1024))} KB`;
   return value >= 100 ? `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(Math.round(value / 1024 * 10) / 10)} GB` : `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value)} MB`;
 }
 function backupKind(kind: DatabaseBackup['kind']) { return kind === 'pre_restore' ? '복원 직전' : '매일 자동'; }
@@ -128,6 +129,10 @@ export default function DatabaseBackupsPage() {
         return;
       }
       const demo = await import('../../entities/database/demo');
+      if (signal.aborted) return;
+      // 오늘 백업이 없으면 실제 Database 파일 사본으로 '매일 자동' 백업을 남긴다.
+      const found = demo.getDemoDatabase(databaseGrn);
+      if (found) await demo.ensureDemoDailyBackup(found.grn).catch(() => false);
       if (signal.aborted) return;
       const value = demo.getDemoDatabase(databaseGrn);
       setDetail(value ? { value, loading: false, error: false } : { value: null, loading: false, error: true });
@@ -227,11 +232,7 @@ export default function DatabaseBackupsPage() {
     setFailedDownloadBackup(null);
     try {
       const blob = isDemoMode()
-        ? await new Response(
-          new Blob([`-- Local demo backup: ${backup.id}\n-- Database: ${detail.value?.name ?? databaseGrn}\nSELECT 1;\n`])
-            .stream()
-            .pipeThrough(new CompressionStream('gzip')),
-        ).arrayBuffer().then(bytes => new Blob([bytes], { type: 'application/gzip' }))
+        ? await import('../../entities/database/demo').then(demo => demo.downloadDemoDatabaseBackup(databaseGrn, backup.id))
         : await downloadDatabaseBackup(databaseGrn, backup.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -254,19 +255,12 @@ export default function DatabaseBackupsPage() {
       let result: RestoreDatabaseBackupResponse;
       if (isDemoMode()) {
         const demo = await import('../../entities/database/demo');
-        const preRestoreId = `pre-restore-${crypto.randomUUID()}`;
-        const savedPreRestoreBackup = demo.addDemoPreRestoreBackup(databaseGrn, {
-          id: preRestoreId,
-          kind: 'pre_restore',
-          created_at: new Date().toISOString(),
-          size_mb: detail.value.storage.used_gb * 128,
-          expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-        });
-        if (!savedPreRestoreBackup) throw new Error('Pre-restore backup could not be saved');
+        // 복원 직전 사본을 남기고 선택한 백업 사본으로 Database 파일을 실제로 바꾼다.
+        const restored = await demo.restoreDemoDatabaseBackup(databaseGrn, selectedBackup.id);
         result = {
-          operation: { id: `demo-op-${crypto.randomUUID()}`, type: 'restore', status: 'queued' },
+          operation: { id: `demo-op-${crypto.randomUUID()}`, type: 'restore', status: 'succeeded' },
           resource: { grn: detail.value.grn },
-          pre_restore_backup: { id: preRestoreId },
+          pre_restore_backup: { id: restored.preRestoreBackup.id },
         };
         setBackups(current => current.value
           ? { ...current, value: demo.getDemoDatabaseBackups(databaseGrn) }
@@ -330,7 +324,7 @@ export default function DatabaseBackupsPage() {
               </BackupCard>
             )}
           </Section>
-          {restoreOperation && <OperationDetails role="status"><strong>복원을 시작했습니다</strong><span>상태: {restoreOperation.operation.status} · 작업 ID: {restoreOperation.operation.id}</span><span>복원 전 백업: {restoreOperation.pre_restore_backup.id}</span><span>완료 여부는 서버 작업 상태에서 확인할 수 있습니다.</span></OperationDetails>}
+          {restoreOperation && <OperationDetails role="status"><strong>{restoreOperation.operation.status === 'succeeded' ? '복원했습니다' : '복원을 시작했습니다'}</strong><span>상태: {restoreOperation.operation.status} · 작업 ID: {restoreOperation.operation.id}</span><span>복원 전 백업: {restoreOperation.pre_restore_backup.id}</span>{restoreOperation.operation.status !== 'succeeded' && <span>완료 여부는 서버 작업 상태에서 확인할 수 있습니다.</span>}</OperationDetails>}
           <NoticeCopy><NoticeTitle>삭제한 Database의 백업도 7일 동안 남습니다</NoticeTitle><NoticeDescription>그 안에 문의를 남기면 관리자가 되살려 드립니다. 7일이 지나면 백업도 지워집니다.</NoticeDescription></NoticeCopy>
         </>}
       </Page>

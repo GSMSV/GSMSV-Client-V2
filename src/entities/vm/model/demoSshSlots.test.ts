@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolSize, parseDemoSshSlots, sshCommandForSlot } from './demoSshSlots';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolRoles, parseDemoSshSlots, sshCommandForSlot } from './demoSshSlots';
 
 describe('precreated VM SSH pool', () => {
   it('maps the supplied VM slots in creation order with display passwords', () => {
@@ -14,8 +14,16 @@ describe('precreated VM SSH pool', () => {
     expect(allocateDemoSshSlot([])).toBe(0);
     expect(allocateDemoSshSlot([0])).toBe(1);
     expect(allocateDemoSshSlot([0, 1])).toBe(2);
-    expect(allocateDemoSshSlot(Array.from({ length: demoVmPoolSize }, (_, index) => index))).toBeNull();
+    expect(allocateDemoSshSlot([0, 1, 2, 3])).toBeNull();
     expect(allocateDemoSshSlot([0, 2])).toBe(1);
+  });
+
+  it('keeps each role inside its own VMs (1~4 VM, 5~7 Serverless, 8~9 Database)', () => {
+    expect(demoVmPoolRoles).toEqual({ vm: [0, 1, 2, 3], serverless: [4, 5, 6], database: [7, 8] });
+    expect(allocateDemoSshSlot([], 'serverless')).toBe(4);
+    expect(allocateDemoSshSlot([4, 5, 6], 'serverless')).toBeNull();
+    expect(allocateDemoSshSlot([0, 1, 2, 3, 4, 5, 6], 'database')).toBe(7);
+    expect(allocateDemoSshSlot([7, 8], 'database')).toBeNull();
   });
 
   it('does not invent a command for an unconfigured slot', () => {

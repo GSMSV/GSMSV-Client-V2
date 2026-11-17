@@ -19,6 +19,8 @@ export interface ServerlessTriggersPageProps {
   functionName: string;
   activeTab?: ServerlessTriggerTab;
   publicUrl?: string;
+  /** 함수가 배포된 Serverless VM. 비활성이면 비운다. */
+  deployedVmLabel?: string;
   httpMethod?: string;
   concurrentLimit?: number;
   /** 오늘 동시 실행 한도를 넘어 429로 거절한 요청 수. 1건 이상이면 경고를 보인다. */
@@ -373,6 +375,7 @@ export function ServerlessTriggersPage({
   functionName,
   activeTab = 'triggers',
   publicUrl,
+  deployedVmLabel,
   httpMethod,
   concurrentLimit,
   rejectedRequestsToday = 0,
@@ -474,7 +477,7 @@ export function ServerlessTriggersPage({
         <AddressRow>
           <IconSlot aria-hidden="true"><Octicon name="globe" size={16} /></IconSlot>
           <AddressValue>
-            <Eyebrow>HTTP {httpMethod ?? '—'}</Eyebrow>
+            <Eyebrow>HTTP {httpMethod ?? '—'} · {deployedVmLabel ?? '배포 전 · 활성화하면 Serverless VM에 배포됩니다'}</Eyebrow>
             <Value>{publicUrl ?? '—'}</Value>
           </AddressValue>
           <Button variant="ghost" icon={<Octicon name="copy" size={16} />} disabled={!publicUrl || !onCopyAddress} onClick={onCopyAddress}>주소 복사</Button>

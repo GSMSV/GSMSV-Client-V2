@@ -1,5 +1,6 @@
 import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
 import type { DatabaseQuota } from '../../quota/model/types';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolNumber, demoVmPoolRoles } from '../../vm/model/demoSshSlots';
 import type { DatabaseBackup, DatabaseCredentials, DatabaseDetail, DatabaseEngine, DatabaseSummary } from './types';
 
 export interface DemoDatabaseState {
@@ -28,8 +29,39 @@ const teamSuspendedGrn = 'grn:gsmsv:database:demo-team:connect-legacy-db';
 const teamMemberViewGrn = 'grn:gsmsv:database:demo-team:connect-stats-db';
 const teamFixtureGrns = [teamSuspendedGrn, teamMemberViewGrn];
 const demoTeamMemberNames = ['김지민', '한도윤', '윤채원'];
-/** 쿼리 콘솔에서 INSERT·UPDATE 한 번이 늘리는(DELETE·TRUNCATE·DROP 한 번이 줄이는) 용량. */
-export const DEMO_DATABASE_WRITE_STEP_GB = 0.26;
+const GIB = 1024 ** 3;
+/**
+ * Database용 VM(8·9번) 한 대에 둘 수 있는 Database 수.
+ * 개인 한도(2개)를 다 쓴 사용자 한 명이 VM 한 대를 채우는 크기로 잡았다.
+ */
+export const DEMO_DATABASES_PER_VM = 2;
+const fixtureSeedGrns = new Set([welcomeGrn, teamGrn, teamSuspendedGrn, teamMemberViewGrn]);
+
+/** Database용 VM이 모두 가득 차서 새 Database를 둘 곳이 없다. */
+export class DemoDatabaseCapacityError extends Error {
+  constructor() {
+    super('DEMO_DATABASE_VMS_FULL');
+    this.name = 'DemoDatabaseCapacityError';
+  }
+}
+
+/** Figma 목데이터로 들어 있는 Database인지. 이 Database는 사용량·백업 숫자를 목데이터 그대로 둔다. */
+export function isDemoDatabaseFixtureSeed(grn: string): boolean {
+  return fixtureSeedGrns.has(grn);
+}
+
+const passwordAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+/** 발급·교체 때마다 브라우저의 crypto.getRandomValues로 새 비밀번호를 만든다. */
+export function generateDemoDatabasePassword(length = 24): string {
+  const limit = 256 - (256 % passwordAlphabet.length);
+  let password = '';
+  while (password.length < length) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(64))) {
+      if (byte < limit && password.length < length) password += passwordAlphabet[byte % passwordAlphabet.length];
+    }
+  }
+  return password;
+}
 const fullPermissions = { view: true, view_credentials: true, update: true, rotate_password: true, delete: true, extend: true, read_backup: true, restore_backup: true };
 const memberPermissions = { view: true, view_credentials: true, update: false, rotate_password: false, delete: false, extend: true, read_backup: true, restore_backup: false };
 const demoDatabaseSeed: DemoDatabaseState = {
@@ -337,31 +369,50 @@ export function getDemoDatabaseUnlockedAt(grn: string): string | null {
 }
 
 /**
- * 쿼리 콘솔의 쓰기 쿼리를 용량에 반영한다. INSERT·UPDATE는 늘리고 DELETE·TRUNCATE·DROP은 줄인다.
+ * 쿼리 콘솔이 실제로 저장한 Database 파일 크기를 사용량에 반영한다.
  * 소유자 전체 사용량이 한도를 넘으면 그 소유자의 Database 전부가 쓰기 금지되고,
  * 다시 한도 아래로 내려가면 풀리면서 '다시 쓸 수 있습니다' 상태가 된다.
+ * 목데이터 Database(VM 배정 없음)는 Figma 숫자를 그대로 둔다.
  */
-export function applyDemoDatabaseWrite(grn: string, direction: 'grow' | 'shrink'): DatabaseDetail | null {
+export function recordDemoDatabaseUsage(grn: string, bytes: number): DatabaseDetail | null {
   const state = getDemoDatabaseState();
   const database = state.databases.find(item => item.grn === grn || item.id === grn);
-  if (!database || database.status !== 'active') return null;
-  if (direction === 'grow' && database.write_locked) return null;
-  const delta = direction === 'grow' ? DEMO_DATABASE_WRITE_STEP_GB : -DEMO_DATABASE_WRITE_STEP_GB;
-  database.storage.used_gb = Math.max(0, roundGb(database.storage.used_gb + delta));
+  if (!database) return null;
+  if (database.vm_slot === undefined) return clone(database);
+  const previous = database.storage.used_bytes ?? Math.round(database.storage.used_gb * GIB);
+  database.storage.used_bytes = bytes;
+  database.storage.used_gb = roundGb(bytes / GIB);
   database.updated_at = new Date().toISOString();
   syncDemoOwnerTotals(state);
   const siblings = state.databases.filter(item => ownerKey(item.owner) === ownerKey(database.owner));
+  const totalBytes = siblings.reduce((total, item) => total + (item.storage.used_bytes ?? item.storage.used_gb * GIB), 0);
   const wasLocked = siblings.some(item => item.write_locked);
-  const nowLocked = database.storage.owner_total_used_gb > database.storage.owner_limit_gb;
+  const nowLocked = totalBytes > database.storage.owner_limit_gb * GIB;
   const unlockedAt = { ...state.unlockedAt };
   for (const item of siblings) {
     item.write_locked = nowLocked;
-    if (nowLocked || direction === 'grow') delete unlockedAt[item.grn];
+    if (nowLocked || bytes > previous) delete unlockedAt[item.grn];
     else if (wasLocked) unlockedAt[item.grn] = new Date().toISOString();
   }
   state.unlockedAt = unlockedAt;
   if (!saveDemoDatabaseState(state)) return null;
   return clone(database);
+}
+
+function fullDatabaseSlots(state: DemoDatabaseState): number[] {
+  return demoVmPoolRoles.database.filter(slot => state.databases.filter(database => database.vm_slot === slot).length >= DEMO_DATABASES_PER_VM);
+}
+
+/** Database용 VM 8·9번에 남은 자리. */
+export function getDemoDatabaseCapacity() {
+  const state = getDemoDatabaseState();
+  const vms = demoVmPoolRoles.database.map(slot => ({
+    slot,
+    vmNumber: demoVmPoolNumber(slot),
+    used: state.databases.filter(database => database.vm_slot === slot).length,
+    limit: DEMO_DATABASES_PER_VM,
+  }));
+  return { vms, available: allocateDemoSshSlot(fullDatabaseSlots(state), 'database') !== null };
 }
 
 /**
@@ -403,9 +454,14 @@ export function createDemoDatabase(
   const ownerInfo = owner
     ? { type: 'team' as const, id: owner.id, name: owner.name }
     : { type: 'user' as const, id: 'demo-student', name: '김지민' };
-  const id = `demo-${crypto.randomUUID()}`;
+  const suffix = Array.from(crypto.getRandomValues(new Uint8Array(6)), byte => byte.toString(16).padStart(2, '0')).join('');
+  const id = `db-${suffix}`;
   const now = new Date().toISOString();
   const dedicated = isolation === 'dedicated';
+  // 공유형은 Database용 VM(8·9번) 중 자리가 남은 VM에 둔다. 전용형은 관리자가 따로 준비한다.
+  const slot = dedicated ? null : allocateDemoSshSlot(fullDatabaseSlots(state), 'database');
+  const target = slot === null ? undefined : configuredDemoSshTargets()[slot];
+  if (!dedicated && (slot === null || !target)) throw new DemoDatabaseCapacityError();
   const database: DatabaseDetail = {
     grn: `grn:gsmsv:database:${ownerInfo.id}:${id}`,
     id,
@@ -415,8 +471,9 @@ export function createDemoDatabase(
     isolation,
     status: 'creating',
     write_locked: false,
-    connection: { host: dedicated ? 'team-db-demo.gs-msv.local' : 'db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: id.replaceAll('-', '_'), username: `${ownerInfo.id}_user`, tls: true },
-    storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 1 },
+    connection: { host: target?.host ?? 'team-db-demo.gs-msv.local', port: engine === 'mysql' ? 3306 : 5432, database: `db_${suffix}`, username: `u_${suffix}`, tls: true },
+    storage: { used_gb: 0, owner_total_used_gb: 0, owner_limit_gb: owner ? 60 : 1, ...(slot === null ? {} : { used_bytes: 0 }) },
+    ...(slot === null ? {} : { vm_slot: slot }),
     max_connections: dedicated ? 100 : 10,
     created_by: { name: '김지민' },
     created_at: now,
@@ -429,7 +486,7 @@ export function createDemoDatabase(
   // 쓰기 금지는 소유자 전체 사용량이 실제로 한도를 넘을 때만 새 Database에도 걸린다.
   database.write_locked = database.storage.owner_total_used_gb > database.storage.owner_limit_gb;
   state.backups[database.grn] = [];
-  state.passwords[database.grn] = `demo-${crypto.randomUUID().slice(0, 18)}`;
+  state.passwords[database.grn] = generateDemoDatabasePassword();
   if (!saveDemoDatabaseState(state)) throw new Error('DEMO_DATABASE_SAVE_FAILED');
   setTimeout(() => { getDemoDatabaseState(); }, 2_000);
   return database;
@@ -490,6 +547,10 @@ export function removeDemoDatabasesByOwner(owner: DatabaseDetail['owner']['type'
   const state = getDemoDatabaseState();
   const belongsToOwner = (item: DatabaseDetail['owner']) => item.type === owner && item.id === ownerId;
   const removed = new Set(state.databases.filter(database => belongsToOwner(database.owner) && !excludeIds.includes(database.id)).map(database => database.grn));
+  // 지운 Database의 브라우저 파일과 백업도 함께 지운다.
+  if (removed.size > 0 && typeof window !== 'undefined') {
+    void import('./demoDatabaseFiles').then(files => Promise.all([...removed].map(grn => files.deleteDemoDatabaseFiles(grn)))).catch(() => undefined);
+  }
   return saveDemoDatabaseState({
     ...state,
     databases: state.databases.filter(database => !removed.has(database.grn)),
