@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import { canManageDemoVm, getDemoVmState, isDemoVmExpired, saveDemoVmState, useDemoVmResourceState, type DemoSnapshot, type DemoVm } from '../../entities/vm';
@@ -11,6 +11,7 @@ import { Banner, BannerCopy, Breadcrumb, DemoPage, DemoShell, DetailTabs, Facts,
 import { VmUnavailablePage } from './VmUnavailablePage';
 import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
 import { findDeletedDemoVm } from './vmDemoHelpers';
+import { useOverlayDismiss } from './useOverlayDismiss';
 
 const Title = styled.h1`
   margin: 0;
@@ -156,6 +157,12 @@ export function VmSnapshotsPage() {
   const [deletingSnapshotId, setDeletingSnapshotId] = useState<string | null>(null);
   const load = useVmPageLoad('vm-snapshots', vmId);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useOverlayDismiss(dialog !== null, () => {
+    if (operation !== null) return;
+    setDialog(null);
+    setDialogError('');
+  }, dialogRef);
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;
   if (!vm) {
@@ -339,7 +346,7 @@ export function VmSnapshotsPage() {
         setDialogError('');
       }
     }}>
-      <Dialog role="dialog" aria-modal="true" aria-labelledby="snapshot-dialog-title">
+      <Dialog ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="snapshot-dialog-title">
         {dialog.kind === 'create' && <>
           <DialogHeader><Octicon name="database" size={20} /><DialogTitle id="snapshot-dialog-title">{operation === 'create' ? 'Snapshot을 만들고 있어요' : '수동 Snapshot 만들기'}</DialogTitle></DialogHeader>
           {operation === 'create' ? <>
@@ -348,18 +355,16 @@ export function VmSnapshotsPage() {
           </> : <>
             <DialogCopy>현재 디스크 상태를 저장합니다. 수동 Snapshot은 2개까지 만들 수 있습니다.</DialogCopy>
             <DialogCopy>· 수동 {manualCount}/2개 사용 중{'\n'}· 메모리 상태는 포함되지 않습니다.</DialogCopy>
-            <DialogForm onSubmit={event => void createSnapshot(event)}>
+            <DialogForm noValidate onSubmit={event => void createSnapshot(event)}>
               <TextField
                 label="Snapshot 이름"
                 value={snapshotName}
                 maxLength={40}
-                pattern="[A-Za-z][A-Za-z0-9_-]{0,39}"
                 placeholder="before-update"
                 hint="영문으로 시작 · 1–40자 · 영문, 숫자, 밑줄, 하이픈"
                 error={dialogError}
                 disabled={memberReadOnly}
                 onChange={event => { setSnapshotName(event.currentTarget.value); setDialogError(''); }}
-                autoFocus
               />
               <DialogActions>
                 <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>취소</Button>
@@ -371,15 +376,15 @@ export function VmSnapshotsPage() {
         {dialog.kind === 'restore' && <>
           <DialogHeader><Octicon name="history" size={20} /><DialogTitle id="snapshot-dialog-title">{operation === 'restore' ? 'Snapshot을 복원하고 있어요' : '이 Snapshot으로 복원하시겠습니까?'}</DialogTitle></DialogHeader>
           {operation === 'restore' ? <>
-            <DialogCopy>실행 중인 {vmRecord.name}을 정지한 뒤 디스크를 복원하고 있습니다.</DialogCopy>
+            <DialogCopy>{vmRecord.status === 'running' ? `실행 중인 ${vmRecord.name}을 정지한 뒤 디스크를 복원하고 있습니다.` : '디스크를 복원하고 있습니다.'}</DialogCopy>
             <LoadingCard height={72} />
           </> : <>
             <DialogCopy>Snapshot을 만든 이후 디스크의 모든 변경 사항이 사라집니다. 이 작업은 되돌릴 수 없습니다.</DialogCopy>
-            <DialogCopy>· 복원 지점: {dialog.snapshot.name}{'\n'}· 생성 시각: {dialog.snapshot.createdAt} (KST){'\n'}· 실행 중인 {vmRecord.name}을 먼저 정지합니다.{'\n'}· 복원 후 VM은 정지 상태로 유지됩니다.</DialogCopy>
+            <DialogCopy>· 복원 지점: {dialog.snapshot.name}{'\n'}· 생성 시각: {dialog.snapshot.createdAt} (KST){'\n'}{vmRecord.status === 'running' ? `· 실행 중인 ${vmRecord.name}을 먼저 정지합니다.\n` : ''}· 복원 후 VM은 정지 상태로 유지됩니다.</DialogCopy>
             {dialogError && <DialogCopy role="alert">{dialogError}</DialogCopy>}
             <DialogActions>
               <Button variant="secondary" type="button" onClick={() => { setDialog(null); setDialogError(''); }}>취소</Button>
-              <Button variant="primary" type="button" disabled={memberReadOnly || operation !== null} onClick={() => void restoreSnapshot(dialog.snapshot)}>정지하고 복원</Button>
+              <Button variant="primary" type="button" disabled={memberReadOnly || operation !== null} onClick={() => void restoreSnapshot(dialog.snapshot)}>{vmRecord.status === 'running' ? '정지하고 복원' : '복원'}</Button>
             </DialogActions>
           </>}
         </>}

@@ -13,6 +13,7 @@ import { Breadcrumb, DemoPage, DemoShell, DetailTabs, FactValue, Heading, Hint, 
 import { VmUnavailablePage } from './VmUnavailablePage';
 import { useVmPageLoad, VmPagePlaceholder } from './VmPageLoad';
 import { findDeletedDemoVm } from './vmDemoHelpers';
+import { useOverlayDismiss } from './useOverlayDismiss';
 
 const Title = styled.h1`
   margin: 0;
@@ -163,6 +164,7 @@ export function VmSettingsPage() {
   const [renamed, setRenamed] = useState<string | null>(null);
   const load = useVmPageLoad('vm-settings', vmId);
   const vm = useMemo(() => state.vms.find(item => item.id === vmId), [state.vms, vmId]);
+  useOverlayDismiss(deleteOpen, () => { if (!deleteSaving) setDeleteOpen(false); });
 
   if (!isDemoMode()) return <Navigate to="/" replace />;
   if (routeTeamId && !getDemoTeam(routeTeamId)) return <Navigate to="/teams" replace />;

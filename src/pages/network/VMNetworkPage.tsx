@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import styled from 'styled-components';
 import {
@@ -31,6 +31,7 @@ import { ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
 import { VmUnavailablePage } from '../vm/VmUnavailablePage';
 import { findDeletedDemoVm } from '../vm/vmDemoHelpers';
+import { useOverlayDismiss } from '../vm/useOverlayDismiss';
 import { StudentShell, type StudentNavigationKey } from '../../widgets/student-shell';
 
 const Page = styled.div`
@@ -424,9 +425,11 @@ function syncLabel(status: Domain['sync_status']) {
 }
 
 function DialogFrame({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useOverlayDismiss(true, onClose, dialogRef);
   return (
     <Overlay onMouseDown={event => { if (event.currentTarget === event.target) onClose(); }}>
-      <Dialog role="dialog" aria-modal="true" aria-label={title}>
+      <Dialog ref={dialogRef} role="dialog" aria-modal="true" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         {children}
       </Dialog>
@@ -526,7 +529,9 @@ export default function VMNetworkPage() {
   const portsRemaining = Math.max(0, (ports.value?.limits.custom ?? 0) - customPortCount);
   const domainRemaining = Math.max(0, (domains.value?.limits.per_vm ?? 0) - (domains.value?.items.length ?? 0));
   const ruleRemaining = Math.max(0, (rules.value?.limits.per_vm ?? 0) - (rules.value?.items.length ?? 0));
-  const busy = ports.loading || rules.loading || domains.loading;
+  // 처음 불러올 때만 표를 로딩 카드로 바꾼다. 작업 뒤 다시 불러올 때는 기존 표를 유지해 화면 높이가 출렁이지 않게 한다.
+  const busy = (ports.loading && !ports.value) || (rules.loading && !rules.value) || (domains.loading && !domains.value);
+  const refreshing = ports.loading || rules.loading || domains.loading;
   const firewallApplying = action === 'firewall-loading' || action === 'firewall-enable-loading';
   const pendingRuleAllows = action === 'firewall-loading' && ruleForm.action === 'accept' && ruleForm.direction === 'in' ? 1 : 0;
   const applyingRuleCount = firewallAllowRuleCount + pendingRuleAllows;
@@ -601,7 +606,9 @@ export default function VMNetworkPage() {
   async function confirmFirewallRule() {
     if (readOnly || !networkGrn) return;
     const enabling = !firewallEnabled;
-    setSubmitting(true); setError(''); setAction('firewall-loading');
+    // 이미 켜진 방화벽에 규칙만 더할 때는 "방화벽을 켜는 중" 상태를 띄우지 않고 규칙 대화상자에서 진행한다.
+    const applying = enabling || !demoMode;
+    setSubmitting(true); setError(''); if (applying) setAction('firewall-loading');
     try {
       if (demoMode && enabling) {
         await new Promise(resolve => window.setTimeout(resolve, 300));
@@ -623,7 +630,10 @@ export default function VMNetworkPage() {
         ...(ruleForm.source.trim() ? { source: ruleForm.source.trim() } : {}),
       });
       setNotice(!demoMode || enabling ? '방화벽 규칙을 추가했습니다. 방화벽이 켜졌습니다.' : '방화벽 규칙을 추가했습니다.'); finishAction(); reload();
-    } catch (cause) { handleActionError(cause, '방화벽 켜기'); setSubmitting(false); setAction('firewall-error'); }
+    } catch (cause) {
+      if (!applying) { handleActionError(cause, '규칙 추가'); setSubmitting(false); return; }
+      handleActionError(cause, '방화벽 켜기'); setSubmitting(false); setAction('firewall-error');
+    }
   }
 
   async function setFirewallState(enabled: boolean) {
@@ -871,7 +881,7 @@ export default function VMNetworkPage() {
                 role="switch"
                 aria-checked={firewallEnabled}
                 aria-label="방화벽 사용 상태"
-                disabled={readOnly || firewallApplying || !demoMode || !rules.value || busy}
+                disabled={readOnly || firewallApplying || !demoMode || !rules.value || refreshing}
                 title={!demoMode ? '계약에 방화벽 켜기/끄기 API가 없습니다.' : undefined}
                 onClick={toggleFirewall}
               >
@@ -918,7 +928,7 @@ export default function VMNetworkPage() {
       {action === 'port' && <DialogFrame title="외부 접속 포트 추가" onClose={finishAction}>
         <DialogCopy>외부 포트는 30000–39999 중 사용 가능한 번호가 자동 배정됩니다.</DialogCopy>
         {ports.value && <DialogCopy>· 현재 {ports.value.items.length}/{ports.value.limits.custom}개 사용 중</DialogCopy>}
-        <Form onSubmit={event => void submitPort(event)}>
+        <Form noValidate onSubmit={event => void submitPort(event)}>
           <FieldGroup>내부 포트<Input type="number" min="1" max="65535" required value={portForm.internalPort} onChange={event => setPortForm(current => ({ ...current, internalPort: event.target.value }))} placeholder="예: 8080" /><FieldHint>1–65535</FieldHint></FieldGroup>
           <FieldGroup>프로토콜<Segmented role="group" aria-label="프로토콜">{(['tcp', 'udp'] as const).map(value => <Segment key={value} type="button" $active={portForm.protocol === value} aria-pressed={portForm.protocol === value} onClick={() => setPortForm(current => ({ ...current, protocol: value as NetworkProtocol }))}>{value.toUpperCase()}</Segment>)}</Segmented></FieldGroup>
           <FieldGroup>출발지<Input value={portForm.allowedSource} onChange={event => setPortForm(current => ({ ...current, allowedSource: event.target.value }))} placeholder="IP 또는 CIDR" /><FieldHint>IP 또는 CIDR · 미입력 시 모든 출발지</FieldHint></FieldGroup>
@@ -930,7 +940,7 @@ export default function VMNetworkPage() {
 
       {action === 'rule' && <DialogFrame title="방화벽 규칙 추가" onClose={finishAction}>
         <DialogCopy>추가하면 바로 적용됩니다. 목적지는 이 VM의 내부 IP로 고정됩니다.</DialogCopy>
-        <Form onSubmit={event => void submitRule(event)}>
+        <Form noValidate onSubmit={event => void submitRule(event)}>
           <FieldGroup>동작<Segmented role="group" aria-label="규칙 동작">{(['accept', 'drop', 'reject'] as const).map(value => <Segment key={value} type="button" $active={ruleForm.action === value} aria-pressed={ruleForm.action === value} onClick={() => setRuleForm(current => ({ ...current, action: value }))}>{ruleActionLabel(value)}</Segment>)}</Segmented></FieldGroup>
           <FieldGroup>방향<Segmented role="group" aria-label="규칙 방향">{(['in', 'out'] as const).map(value => <Segment key={value} type="button" $active={ruleForm.direction === value} aria-pressed={ruleForm.direction === value} onClick={() => setRuleForm(current => ({ ...current, direction: value }))}>{value === 'in' ? '수신' : '송신'}</Segment>)}</Segmented></FieldGroup>
           <FieldGroup>프로토콜<Segmented role="group" aria-label="프로토콜">{(['tcp', 'udp', 'icmp'] as const).map(value => <Segment key={value} type="button" $active={ruleForm.protocol === value} aria-pressed={ruleForm.protocol === value} onClick={() => setRuleForm(current => ({ ...current, protocol: value as FirewallProtocol }))}>{value.toUpperCase()}</Segment>)}</Segmented></FieldGroup>
@@ -1005,8 +1015,8 @@ export default function VMNetworkPage() {
       {action === 'domain' && <DialogFrame title="HTTPS Domain 추가" onClose={finishAction}>
         <DialogCopy>인증서가 자동 적용됩니다. VM 하나에 Domain {domains.value?.limits.per_vm ?? 2}개까지 연결할 수 있습니다.</DialogCopy>
         <DialogCopy>· {domainForm.subdomain.trim() || 'subdomain'}.https.gsmsv.site{'\n'}· admin·api·www·status·app·mail·ftp·gsmsv는 사용할 수 없습니다.</DialogCopy>
-        <Form onSubmit={event => void submitDomain(event)}>
-          <FieldGroup>Subdomain<Input required maxLength={63} pattern="[a-z0-9-]+" value={domainForm.subdomain} onChange={event => setDomainForm(current => ({ ...current, subdomain: event.target.value }))} placeholder="예: portfolio-preview" /><FieldHint>영문 소문자·숫자·하이픈 1–63자</FieldHint></FieldGroup>
+        <Form noValidate onSubmit={event => void submitDomain(event)}>
+          <FieldGroup>Subdomain<Input required maxLength={63} value={domainForm.subdomain} onChange={event => setDomainForm(current => ({ ...current, subdomain: event.target.value }))} placeholder="예: portfolio-preview" /><FieldHint>영문 소문자·숫자·하이픈 1–63자</FieldHint></FieldGroup>
           <FieldGroup>내부 포트<Input type="number" required min="1" max="65535" value={domainForm.internalPort} onChange={event => setDomainForm(current => ({ ...current, internalPort: event.target.value }))} placeholder="예: 3000" /><FieldHint>서비스가 실행 중인 내부 포트</FieldHint></FieldGroup>
           {error && <InlineError role="alert">{error}</InlineError>}
           <DialogActions><Button variant="secondary" icon={<Octicon name="x" size={16} />} onClick={finishAction}>취소</Button><Button type="submit" variant="primary" icon={<Octicon name="plus" size={16} />} disabled={submitting}>{submitting ? '연결 중…' : 'Domain 추가'}</Button></DialogActions>
