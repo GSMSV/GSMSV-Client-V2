@@ -1,6 +1,10 @@
 import { isDemoFixtureMode, readDemoState } from '../../../shared/demo';
 import { DemoServerlessStorageError, transactDemoServerlessState } from './demoServerlessStorage';
 import { validateCronExpression } from './cron';
+import { compileServerlessCode, compileServerlessCodeSync } from './serverlessCompiler';
+import { withServerlessExecutionSlot, serverlessConcurrentLimit } from './serverlessExecutionSlots';
+import { pickServerlessVmSlot } from './serverlessPlacement';
+import { runServerlessInSandbox, type ServerlessSandboxLog, type ServerlessSandboxOutcome } from './serverlessSandbox';
 export type DemoServerlessRuntime = 'javascript' | 'typescript' | 'python';
 export interface DemoServerlessDraft { name: string; runtime: DemoServerlessRuntime; timeoutSeconds: 30 | 60; memoryMb: 128 | 256; description: string; code: string; }
 
@@ -24,6 +28,8 @@ export interface DemoServerlessFunction {
   suspended?: { expiredAtLabel: string; deleteAtLabel: string };
   /** 오늘 동시 실행 한도를 넘어 429로 거절한 요청 수. */
   rejectedRequestsToday?: number;
+  /** 배포된 Serverless VM 칸(0부터). 활성 함수만 갖는다. */
+  vmSlot?: number;
   publicUrl?: string; domain?: string | null; databaseId?: string; teamId?: string; variables: DemoServerlessVariable[]; triggers: DemoServerlessTrigger[];
   versions: DemoServerlessVersion[]; runs: DemoServerlessRun[]; testResult: DemoServerlessTestResult | null;
 }
@@ -135,6 +141,17 @@ function normalizeState(value: unknown): { value: DemoServerlessState; changed: 
       changed = true;
     }
   }
+  // 활성 함수는 Serverless VM 하나에 배포돼 있어야 한다. 예전 데이터는 여기서 자리를 잡는다.
+  for (const fn of migrated.functions) {
+    if (!fn.active && fn.vmSlot !== undefined) { delete fn.vmSlot; changed = true; }
+  }
+  for (const fn of migrated.functions) {
+    if (!fn.active || fn.vmSlot !== undefined) continue;
+    const slot = pickServerlessVmSlot(migrated.functions);
+    if (slot === null) fn.active = false;
+    else fn.vmSlot = slot;
+    changed = true;
+  }
   return { value: migrated, changed };
 }
 
@@ -212,6 +229,11 @@ const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
  */
 export function findDemoServerlessCodeError(code: string, runtime: DemoServerlessRuntime): DemoServerlessCodeError | null {
   const fileName = getDemoServerlessFileName(runtime);
+  if (runtime !== 'python') {
+    // sucrase를 불러왔으면 실제 파서로 검사한다. 불러오기 전에는 아래 괄호 검사로 먼저 안내한다.
+    const compiled = compileServerlessCodeSync(code, runtime);
+    if (compiled) return compiled.ok ? null : { fileName, line: compiled.error.line, message: compiled.error.message };
+  }
   const stack: Array<{ char: string; line: number }> = [];
   let line = 1;
   let quote: string | null = null;
@@ -251,19 +273,6 @@ export function findDemoServerlessCodeError(code: string, runtime: DemoServerles
   const unclosed = stack.pop();
   if (unclosed) return { fileName, line: unclosed.line, message: `닫는 ${closingName[pairs[unclosed.char]]}가 필요합니다.` };
   return null;
-}
-
-/** 실행을 흉내 낸다: 끝나지 않는 반복은 시간 초과, throw/raise 문은 실행 오류로 본다. */
-function simulateRuntime(code: string, runtime: DemoServerlessRuntime): { kind: 'timeout' } | { kind: 'error'; error: DemoServerlessRuntimeFailure } | null {
-  const lines = code.split('\n');
-  const fileName = getDemoServerlessFileName(runtime);
-  if (lines.some(item => /\bwhile\s*\(\s*true\s*\)|\bfor\s*\(\s*;\s*;\s*\)|^\s*while\s+True\s*:/.test(item))) return { kind: 'timeout' };
-  const throwLine = lines.findIndex(item => /^\s*(throw|raise)\b/.test(item));
-  if (throwLine < 0) return null;
-  const statement = lines[throwLine];
-  const message = statement.match(/["'`]([^"'`]*)["'`]/)?.[1] ?? '';
-  const type = statement.match(/(?:new\s+|raise\s+)([A-Za-z]*(?:Error|Exception))/)?.[1] ?? (runtime === 'python' ? 'Exception' : 'Error');
-  return { kind: 'error', error: { message: message ? `${type}: ${message}` : type, location: `${fileName} · ${throwLine + 1}번째 줄` } };
 }
 
 export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger[]): DemoServerlessTrigger['type'] | undefined {
@@ -319,7 +328,28 @@ export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promis
 }
 export function saveDemoServerlessCode(id: string, code: string) { return mutate(id, (fn, state) => { fn.code = code; version(fn, state, '코드'); state.sequence += 1; }); }
 export function saveDemoServerlessSettings(id: string, settings: Pick<DemoServerlessFunction, 'runtime' | 'timeoutSeconds' | 'memoryMb'>) { return mutate(id, (fn, state) => { Object.assign(fn, settings); version(fn, state, '실행 설정'); state.sequence += 1; }); }
-export function setDemoServerlessActive(id: string, active: boolean) { return mutate(id, fn => { fn.active = active; }); }
+/**
+ * 활성화 = 배포. 켜면 가장 덜 찬 Serverless VM(5~7번)에 올리고, 끄면 VM 자리를 비운다.
+ * 세 대가 모두 가득 차면 'vm-full'을 돌려주고 켜지 않는다.
+ */
+export async function setDemoServerlessActive(id: string, active: boolean): Promise<'ok' | 'vm-full' | 'missing'> {
+  const { result } = await transactDemoServerlessState(getSeed(), normalizeState, state => {
+    const fn = state.functions.find(item => item.id === id);
+    if (!fn) return 'missing' as const;
+    if (!active) {
+      fn.active = false;
+      delete fn.vmSlot;
+      return 'ok' as const;
+    }
+    if (fn.active && fn.vmSlot !== undefined) return 'ok' as const;
+    const slot = pickServerlessVmSlot(state.functions);
+    if (slot === null) return 'vm-full' as const;
+    fn.active = true;
+    fn.vmSlot = slot;
+    return 'ok' as const;
+  });
+  return result ?? 'missing';
+}
 export function extendDemoServerlessFunction(id: string) { return mutate(id, fn => { fn.expiresAt = formatExpiry(Math.max(Date.now(), parseExpiry(fn.expiresAt) || 0) + 14 * 86_400_000); delete fn.suspended; }); }
 export function deleteDemoServerlessFunction(id: string) { return transactDemoServerlessState(getSeed(), normalizeState, state => { state.functions = state.functions.filter(fn => fn.id !== id); }); }
 export function rollbackDemoServerlessVersion(id: string, versionId: string) { return mutate(id, (fn, state) => { const target = fn.versions.find(item => item.id === versionId); if (!target) return; fn.code = target.code; fn.runtime = target.runtime; fn.timeoutSeconds = target.timeoutSeconds; fn.memoryMb = target.memoryMb; version(fn, state, `버전 ${versionId} 복원`); state.sequence += 1; }); }
@@ -353,34 +383,152 @@ export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoSer
 export function updateDemoServerlessTrigger(id: string, triggerId: string, enabled: boolean) { return mutate(id, fn => { fn.triggers = fn.triggers.map(item => item.id === triggerId ? { ...item, enabled } : item); }); }
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
 export function regenerateDemoServerlessUrl(id: string) { return mutate(id, fn => { fn.publicUrl = `https://${crypto.randomUUID().slice(0, 12)}.example.com`; }); }
+/** 실행 Log를 무한히 쌓지 않도록 함수마다 최근 기록만 남긴다. */
+const maxStoredRuns = 1000;
+const timestampFormat = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Seoul' });
+
+function formatLogTime(time: number): string {
+  const kst = new Date(time + 9 * 60 * 60 * 1000);
+  const pad = (value: number, size = 2) => String(value).padStart(size, '0');
+  return `${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}:${pad(kst.getUTCSeconds())}.${pad(kst.getUTCMilliseconds(), 3)}`;
+}
+
+export function formatDemoServerlessLogLine(log: ServerlessSandboxLog): string {
+  const level = log.level === 'warn' || log.level === 'error' ? `[${log.level}] ` : '';
+  return `${formatLogTime(log.time)} ${level}${log.text}`;
+}
+
+function formatDuration(ms: number): string {
+  return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}초`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function functionUrl(fn: DemoServerlessFunction): string {
+  return fn.publicUrl ?? (fn.id === 'welcome-api' ? defaultWelcomePublicUrl : `https://${fn.id}.example.com`);
+}
+
+/** 테스트 탭의 요청: HTTP Trigger의 방식(없거나 전체면 POST)으로, 페이로드를 JSON 본문에 담는다. */
+export function buildDemoServerlessTestRequest(fn: DemoServerlessFunction, payload: string) {
+  const http = fn.triggers.find(trigger => trigger.type === 'HTTP');
+  const method = http && http.schedule !== 'ALL' ? http.schedule : 'POST';
+  return {
+    method,
+    url: new URL('/', functionUrl(fn)).href,
+    headers: [['content-type', 'application/json'], ['x-gsmsv-trigger', 'manual']] as Array<[string, string]>,
+    body: method === 'GET' || method === 'HEAD' ? undefined : payload,
+  };
+}
+
+function prettyBody(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+/** Logs 화면 안내대로 실행 1건의 출력은 8KB까지만 남긴다. */
+const maxRunOutputBytes = 8 * 1024;
+export function capDemoServerlessOutput(lines: string[]): string[] {
+  const encoder = new TextEncoder();
+  const kept: string[] = [];
+  let used = 0;
+  for (const line of lines) {
+    const size = encoder.encode(line).length + 1;
+    if (used + size > maxRunOutputBytes) {
+      kept.push('… 출력이 8KB를 넘어 이후 내용은 잘렸습니다');
+      break;
+    }
+    kept.push(line);
+    used += size;
+  }
+  return kept;
+}
+
+function pushRun(fn: DemoServerlessFunction, run: Omit<DemoServerlessRun, 'id'>) {
+  fn.runs.unshift({ id: crypto.randomUUID(), ...run, ...(run.outputLines ? { outputLines: capDemoServerlessOutput(run.outputLines) } : {}) });
+  if (fn.runs.length > maxStoredRuns) fn.runs.length = maxStoredRuns;
+}
+
+async function recordFailureWithoutExecution(id: string, startedAt: number, lines: string[]) {
+  await mutate(id, fn => { pushRun(fn, { result: 'failure', startedAt: timestampFormat.format(startedAt), path: '수동', duration: '실패', outputLines: lines }); });
+}
+
+/**
+ * 테스트 탭의 "실행". 함수 코드를 새 Web Worker에서 실제로 실행하고, 끝난 뒤에만 결과를 저장한다.
+ * Python은 브라우저에서 실행할 수 없어 실행하지 않았다고 알린다(성공으로 꾸미지 않는다).
+ */
 export async function executeDemoServerlessTest(id: string, payload: string): Promise<DemoServerlessTestExecution> {
+  const state = await loadDemoServerlessState();
+  const fn = state.functions.find(item => item.id === id);
+  if (!fn) return { kind: 'missing' };
+  if (!fn.active) return { kind: 'inactive' };
+  if (state.executionsToday >= state.dailyLimit) return { kind: 'quota' };
+  const fileName = getDemoServerlessFileName(fn.runtime);
+  const startedAt = Date.now();
+
+  if (fn.runtime === 'python') {
+    const error = { message: 'Python Runtime은 이 브라우저 실행 환경에서 실행할 수 없어 실행하지 않았습니다. JavaScript나 TypeScript로 바꾸면 실행할 수 있습니다.', location: `${fileName} · 실행하지 않음` };
+    await recordFailureWithoutExecution(id, startedAt, [error.message]);
+    return { kind: 'runtime-error', error };
+  }
+
+  const compiled = await compileServerlessCode(fn.code, fn.runtime);
+  if (!compiled.ok) {
+    const error = { message: `SyntaxError: ${compiled.error.message}`, location: `${fileName} · ${compiled.error.line}번째 줄` };
+    await recordFailureWithoutExecution(id, startedAt, [error.message, `    at ${error.location}`]);
+    return { kind: 'runtime-error', error };
+  }
+
+  const env = Object.fromEntries(fn.variables.filter(variable => typeof variable.value === 'string').map(variable => [variable.name, variable.value as string]));
+  const slot = await withServerlessExecutionSlot(id, () => runServerlessInSandbox({
+    compiledCode: compiled.code,
+    request: buildDemoServerlessTestRequest(fn, payload),
+    env,
+    timeoutMs: fn.timeoutSeconds * 1000,
+  }));
+  if (!slot.acquired) {
+    await mutate(id, current => { current.rejectedRequestsToday = (current.rejectedRequestsToday ?? 0) + 1; });
+    return { kind: 'runtime-error', error: { message: `429 Too Many Requests: 동시 실행 ${serverlessConcurrentLimit}개가 이미 실행 중이라 거절했습니다.`, location: `${fn.name} · 동시 실행 한도` } };
+  }
+  return recordOutcome(id, startedAt, fileName, slot.value);
+}
+
+async function recordOutcome(id: string, startedAt: number, fileName: string, outcome: ServerlessSandboxOutcome): Promise<DemoServerlessTestExecution> {
+  const timestamp = timestampFormat.format(startedAt);
+  const logLines = outcome.logs.map(formatDemoServerlessLogLine);
   const { result } = await transactDemoServerlessState(getSeed(), normalizeState, state => {
     const fn = state.functions.find(item => item.id === id);
     if (!fn) return { kind: 'missing' } as const;
-    if (!fn.active) return { kind: 'inactive' } as const;
-    if (state.executionsToday >= state.dailyLimit) return { kind: 'quota' } as const;
-    const timestamp = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Seoul' }).format(new Date());
-    const simulated = simulateRuntime(fn.code, fn.runtime);
-    if (simulated) {
-      state.executionsToday += 1;
-      if (simulated.kind === 'timeout') {
-        fn.runs.unshift({ id: crypto.randomUUID(), result: 'timeout', startedAt: timestamp, path: '수동', duration: `${fn.timeoutSeconds}초`, outputLines: [`Task timed out after ${fn.timeoutSeconds} seconds`] });
-        return { kind: 'timeout', timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb } as const;
-      }
-      fn.runs.unshift({ id: crypto.randomUUID(), result: 'failure', startedAt: timestamp, path: '수동', duration: '실패', outputLines: [simulated.error.message, `    at ${simulated.error.location}`] });
-      return { kind: 'runtime-error', error: simulated.error } as const;
-    }
-    const parsedPayload: unknown = JSON.parse(payload);
-    const body = parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)
-      ? parsedPayload as { name?: string }
-      : {};
-    const name = typeof body.name === 'string' ? body.name : '지민';
-    const greeting = fn.variables.find(item => item.name === 'GREETING')?.value ?? '안녕하세요';
-    const message = fn.runtime === 'python' ? '함수가 정상적으로 응답했습니다' : `${greeting}, ${name}!`;
     state.executionsToday += 1;
-    const execution: DemoServerlessTestResult = { responseJson: JSON.stringify({ message: fn.runtime === 'python' ? 'ok' : message, ...(fn.runtime === 'python' ? { service: fn.name } : {}) }, null, 2), statusLabel: '성공', statusMessage: '함수가 정상적으로 응답했습니다', pathLabel: '수동 실행', pathCaption: `오늘 실행 ${state.executionsToday.toLocaleString('ko-KR')} / ${state.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`, durationLabel: '182ms', durationCaption: '메모리 46MB 사용', logs: `Greeting sent ${name}`, timestampLabel: timestamp, dailyExecutionsUsed: state.executionsToday };
+    if (outcome.kind === 'timeout') {
+      pushRun(fn, { result: 'timeout', startedAt: timestamp, path: '수동', duration: `${fn.timeoutSeconds}초`, outputLines: [...logLines, `Task timed out after ${fn.timeoutSeconds} seconds`] });
+      return { kind: 'timeout', timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb } as const;
+    }
+    if (outcome.kind === 'error') {
+      const error = { message: outcome.message, location: outcome.line ? `${fileName} · ${outcome.line}번째 줄` : fileName };
+      pushRun(fn, { result: 'failure', startedAt: timestamp, path: '수동', duration: formatDuration(outcome.durationMs), outputLines: [...logLines, error.message, `    at ${error.location}`] });
+      return { kind: 'runtime-error', error } as const;
+    }
+    const ok = outcome.status >= 200 && outcome.status < 400;
+    const execution: DemoServerlessTestResult = {
+      responseJson: prettyBody(outcome.body),
+      statusLabel: ok ? '성공' : `HTTP ${outcome.status}`,
+      statusMessage: ok ? '함수가 정상적으로 응답했습니다' : `함수가 HTTP ${outcome.status} 상태로 응답했습니다`,
+      pathLabel: '수동 실행',
+      pathCaption: `오늘 실행 ${state.executionsToday.toLocaleString('ko-KR')} / ${state.dailyLimit.toLocaleString('ko-KR')}회에 포함됩니다`,
+      durationLabel: formatDuration(outcome.durationMs),
+      durationCaption: `HTTP ${outcome.status} · 응답 ${formatBytes(outcome.bytes)}`,
+      logs: capDemoServerlessOutput(logLines).join('\n'),
+      timestampLabel: timestamp,
+      dailyExecutionsUsed: state.executionsToday,
+    };
     fn.testResult = execution;
-    fn.runs.unshift({ id: crypto.randomUUID(), result: 'success', startedAt: timestamp, path: '수동', duration: '182ms', outputLines: execution.logs.split('\n') });
+    pushRun(fn, { result: ok ? 'success' : 'failure', startedAt: timestamp, path: '수동', duration: execution.durationLabel, outputLines: logLines.length ? logLines : [`HTTP ${outcome.status}`] });
     return { kind: 'executed', result: execution } as const;
   });
   return result ?? { kind: 'missing' };
