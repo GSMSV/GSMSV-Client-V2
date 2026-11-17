@@ -36,6 +36,7 @@ export interface DatabaseDetail {
   created_at: string;
   updated_at: string;
   expires_at: string;
+  /** Server main sends `delete`, `extend`, `view_access_info`, `rotate_password`. Demo fixtures use their own keys. */
   permissions: Record<string, boolean>;
 }
 

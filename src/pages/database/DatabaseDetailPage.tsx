@@ -441,7 +441,7 @@ export default function DatabaseDetailPage() {
                 {copyableField('link', '포트', String(detail.value.connection.port))}
                 {copyableField('database', 'database', detail.value.connection.database)}
                 {copyableField('person', '계정', detail.value.connection.username)}
-                {detail.value.permissions.view_credentials
+                {(isDemoMode() ? detail.value.permissions.view_credentials : detail.value.permissions.view_access_info)
                   ? infoRow('key', '비밀번호', credentialVisible && credential ? credential.password : credentialLoading ? '불러오는 중…' : credentialError ? '접속 정보를 불러오지 못했습니다' : '••••••••••••', <>
                     <Button variant="ghost" icon={<Octicon name={credentialVisible ? 'eye-closed' : 'eye'} size={16} />} disabled={credentialLoading} aria-pressed={credentialVisible} onClick={() => void toggleCredentialVisibility()}>{credentialVisible ? '숨기기' : '표시'}</Button>
                     <Button variant="ghost" icon={<Octicon name="copy" size={16} />} aria-label="비밀번호 복사" disabled={credentialLoading} onClick={() => void copyCredential('password', '비밀번호')}>{copyLabel('비밀번호')}</Button>
