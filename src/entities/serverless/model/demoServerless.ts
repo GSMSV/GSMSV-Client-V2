@@ -1,4 +1,4 @@
-import { readDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, readDemoState } from '../../../shared/demo';
 import { DemoServerlessStorageError, transactDemoServerlessState } from './demoServerlessStorage';
 import { validateCronExpression } from './cron';
 export type DemoServerlessRuntime = 'javascript' | 'typescript' | 'python';
@@ -97,6 +97,9 @@ const seed: DemoServerlessState = {
   ],
 };
 
+const emptySeed: DemoServerlessState = { dailyLimit: 10_000, executionsToday: 0, sequence: 0, functions: [] };
+const getSeed = (): DemoServerlessState => isDemoFixtureMode() ? seed : emptySeed;
+
 function isState(value: unknown): value is DemoServerlessState {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<DemoServerlessState>;
@@ -104,7 +107,7 @@ function isState(value: unknown): value is DemoServerlessState {
 }
 
 function normalizeState(value: unknown): { value: DemoServerlessState; changed: boolean } {
-  if (!isState(value)) return { value: structuredClone(seed), changed: true };
+  if (!isState(value)) return { value: structuredClone(getSeed()), changed: true };
   const migrated = structuredClone(value);
   let changed = false;
   for (const fn of migrated.functions) {
@@ -136,7 +139,7 @@ function normalizeState(value: unknown): { value: DemoServerlessState; changed: 
 }
 
 export function getDemoServerlessState(): DemoServerlessState {
-  return normalizeState(readDemoState<unknown>(key, structuredClone(seed))).value;
+  return normalizeState(readDemoState<unknown>(key, structuredClone(getSeed()))).value;
 }
 
 /**
@@ -166,22 +169,22 @@ export async function loadDemoServerlessState(): Promise<DemoServerlessState> {
   const scenarios = pendingScenarios();
   if (scenarios.length) {
     scenarios.forEach(scenario => appliedScenarios.add(scenario));
-    const { state } = await transactDemoServerlessState(seed, normalizeState, current => { scenarios.forEach(scenario => applyScenario(current, scenario)); });
+    const { state } = await transactDemoServerlessState(getSeed(), normalizeState, current => { scenarios.forEach(scenario => applyScenario(current, scenario)); });
     return state;
   }
-  const { state } = await transactDemoServerlessState(seed, normalizeState);
+  const { state } = await transactDemoServerlessState(getSeed(), normalizeState);
   return state;
 }
 
 export async function clearDemoServerlessFunctions(): Promise<void> {
-  await transactDemoServerlessState(seed, normalizeState, state => {
+  await transactDemoServerlessState(getSeed(), normalizeState, state => {
     state.functions = state.functions.filter(fn => Boolean(fn.teamId));
     state.executionsToday = 0;
   });
 }
 
 export async function removeDemoServerlessFunctionsByTeam(teamId: string): Promise<void> {
-  await transactDemoServerlessState(seed, normalizeState, state => {
+  await transactDemoServerlessState(getSeed(), normalizeState, state => {
     state.functions = state.functions.filter(fn => fn.teamId !== teamId);
   });
 }
@@ -270,7 +273,7 @@ export function getNextDemoServerlessTriggerType(triggers: DemoServerlessTrigger
 }
 
 function mutate(id: string, update: (fn: DemoServerlessFunction, state: DemoServerlessState) => void | false): Promise<DemoServerlessFunction | undefined> {
-  return transactDemoServerlessState(seed, normalizeState, state => {
+  return transactDemoServerlessState(getSeed(), normalizeState, state => {
     const fn = state.functions.find(item => item.id === id);
     if (!fn || update(fn, state) === false) return undefined;
     return fn;
@@ -284,10 +287,20 @@ function version(fn: DemoServerlessFunction, state: DemoServerlessState, summary
   fn.versions = [{ id: currentId, label, savedAt: now, author: '김지민', changeSummary: summary, current: true, code: fn.code, runtime: fn.runtime, timeoutSeconds: fn.timeoutSeconds, memoryMb: fn.memoryMb }, ...fn.versions.map(item => ({ ...item, current: false }))].slice(0, 10);
 }
 
+function formatExpiry(timestamp: number): string {
+  const date = new Date(timestamp + 9 * 60 * 60 * 1000);
+  return `${date.getUTCFullYear()}. ${date.getUTCMonth() + 1}. ${date.getUTCDate()}.`;
+}
+
+function parseExpiry(value: string): number {
+  const match = /^(\d{4})\. (\d{1,2})\. (\d{1,2})\.$/.exec(value);
+  return match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) - 9 * 60 * 60 * 1000 : NaN;
+}
+
 export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promise<string> {
   const id = crypto.randomUUID();
-  const fn: DemoServerlessFunction = { id, name: draft.name, description: draft.description, runtime: draft.runtime, timeoutSeconds: draft.timeoutSeconds, memoryMb: draft.memoryMb, code: draft.code, active: false, expiresAt: '생성 후 7일', variables: [], triggers: [], versions: [], runs: [], testResult: null };
-  return transactDemoServerlessState(seed, normalizeState, state => {
+  const fn: DemoServerlessFunction = { id, name: draft.name, description: draft.description, runtime: draft.runtime, timeoutSeconds: draft.timeoutSeconds, memoryMb: draft.memoryMb, code: draft.code, active: false, expiresAt: formatExpiry(Date.now() + 7 * 86_400_000), variables: [], triggers: [], versions: [], runs: [], testResult: null };
+  return transactDemoServerlessState(getSeed(), normalizeState, state => {
     if (state.functions.filter(existing => !existing.teamId).length >= demoServerlessFunctionLimit) {
       return { limit: true as const };
     }
@@ -307,8 +320,8 @@ export function createDemoServerlessFunction(draft: DemoServerlessDraft): Promis
 export function saveDemoServerlessCode(id: string, code: string) { return mutate(id, (fn, state) => { fn.code = code; version(fn, state, '코드'); state.sequence += 1; }); }
 export function saveDemoServerlessSettings(id: string, settings: Pick<DemoServerlessFunction, 'runtime' | 'timeoutSeconds' | 'memoryMb'>) { return mutate(id, (fn, state) => { Object.assign(fn, settings); version(fn, state, '실행 설정'); state.sequence += 1; }); }
 export function setDemoServerlessActive(id: string, active: boolean) { return mutate(id, fn => { fn.active = active; }); }
-export function extendDemoServerlessFunction(id: string) { return mutate(id, fn => { fn.expiresAt = '2026. 10. 20.'; delete fn.suspended; }); }
-export function deleteDemoServerlessFunction(id: string) { return transactDemoServerlessState(seed, normalizeState, state => { state.functions = state.functions.filter(fn => fn.id !== id); }); }
+export function extendDemoServerlessFunction(id: string) { return mutate(id, fn => { fn.expiresAt = formatExpiry(Math.max(Date.now(), parseExpiry(fn.expiresAt) || 0) + 14 * 86_400_000); delete fn.suspended; }); }
+export function deleteDemoServerlessFunction(id: string) { return transactDemoServerlessState(getSeed(), normalizeState, state => { state.functions = state.functions.filter(fn => fn.id !== id); }); }
 export function rollbackDemoServerlessVersion(id: string, versionId: string) { return mutate(id, (fn, state) => { const target = fn.versions.find(item => item.id === versionId); if (!target) return; fn.code = target.code; fn.runtime = target.runtime; fn.timeoutSeconds = target.timeoutSeconds; fn.memoryMb = target.memoryMb; version(fn, state, `버전 ${versionId} 복원`); state.sequence += 1; }); }
 export function addDemoServerlessVariable(id: string, variable: DemoServerlessVariable) { return mutate(id, fn => { fn.variables = [...fn.variables.filter(item => item.name !== variable.name), variable]; }); }
 export function deleteDemoServerlessVariable(id: string, name: string) { return mutate(id, fn => { fn.variables = fn.variables.filter(item => item.name !== name); }); }
@@ -317,7 +330,7 @@ export function setDemoServerlessDatabase(id: string, databaseId: string) { retu
 export function setDemoServerlessDomain(id: string, domain: string | null) { return mutate(id, fn => { fn.domain = domain; }); }
 export async function addDemoServerlessTrigger(id: string, trigger: Omit<DemoServerlessTrigger, 'id'>): Promise<boolean | string> {
   try {
-    return await transactDemoServerlessState(seed, normalizeState, state => {
+    return await transactDemoServerlessState(getSeed(), normalizeState, state => {
       const fn = state.functions.find(item => item.id === id);
       if (!fn) return false;
       if (trigger.type === 'HTTP') {
@@ -341,7 +354,7 @@ export function updateDemoServerlessTrigger(id: string, triggerId: string, enabl
 export function deleteDemoServerlessTrigger(id: string, triggerId: string) { return mutate(id, fn => { fn.triggers = fn.triggers.filter(item => item.id !== triggerId); }); }
 export function regenerateDemoServerlessUrl(id: string) { return mutate(id, fn => { fn.publicUrl = `https://${crypto.randomUUID().slice(0, 12)}.example.com`; }); }
 export async function executeDemoServerlessTest(id: string, payload: string): Promise<DemoServerlessTestExecution> {
-  const { result } = await transactDemoServerlessState(seed, normalizeState, state => {
+  const { result } = await transactDemoServerlessState(getSeed(), normalizeState, state => {
     const fn = state.functions.find(item => item.id === id);
     if (!fn) return { kind: 'missing' } as const;
     if (!fn.active) return { kind: 'inactive' } as const;

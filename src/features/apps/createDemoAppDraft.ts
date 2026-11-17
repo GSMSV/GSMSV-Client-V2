@@ -1,5 +1,5 @@
 import type { AppServiceDraft } from '../app/create-app/service';
-import { readDemoState, writeDemoState } from '../../shared/demo';
+import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../shared/demo';
 
 export interface DemoAppSourceDraft {
   name: string;
@@ -18,6 +18,12 @@ export const defaultDemoAppSourceDraft: DemoAppSourceDraft = {
   folder: '/',
   watchPaths: '',
 };
+
+export function getDefaultDemoAppSourceDraft(): DemoAppSourceDraft {
+  return isDemoFixtureMode()
+    ? { ...defaultDemoAppSourceDraft }
+    : { name: '', repository: '', branch: 'main', sourceType: 'github', folder: '/', watchPaths: '' };
+}
 
 const key = (teamId?: string) => `apps.create-draft.${teamId ?? 'personal'}`;
 const serviceKey = (teamId?: string) => `apps.create-service-draft.${teamId ?? 'personal'}`;
@@ -39,16 +45,16 @@ export function saveDemoAppServiceDraft(teamId: string | undefined, draft: DemoA
 const installedRepositoriesKey = 'apps.installed-repositories';
 const legacyInstalledRepositoryKey = 'apps.installed-repository';
 const supportedDemoRepositories = [defaultDemoAppSourceDraft.repository, 'gsm-jimin/study-log'] as const;
-type SupportedDemoRepository = (typeof supportedDemoRepositories)[number];
-
-function isSupportedDemoRepository(repository: unknown): repository is SupportedDemoRepository {
-  return typeof repository === 'string' && supportedDemoRepositories.includes(repository as SupportedDemoRepository);
+function isSupportedDemoRepository(repository: unknown): repository is string {
+  return typeof repository === 'string' && (isDemoFixtureMode()
+    ? supportedDemoRepositories.includes(repository as (typeof supportedDemoRepositories)[number])
+    : /^[a-z0-9][a-z0-9-]*\/[a-z0-9._-]+$/i.test(repository));
 }
 
 export function getDemoInstalledRepositories() {
   const saved = readDemoState<unknown>(installedRepositoriesKey, undefined);
   const legacy = readDemoState<unknown>(legacyInstalledRepositoryKey, undefined);
-  const installed = new Set<SupportedDemoRepository>([defaultDemoAppSourceDraft.repository]);
+  const installed = new Set<string>(isDemoFixtureMode() ? [defaultDemoAppSourceDraft.repository] : []);
 
   if (Array.isArray(saved)) {
     for (const repository of saved) {
@@ -56,13 +62,7 @@ export function getDemoInstalledRepositories() {
     }
   }
   if (isSupportedDemoRepository(legacy)) installed.add(legacy);
-
-  const repositories = [...installed];
-  const savedSet = new Set(Array.isArray(saved) ? saved.filter(isSupportedDemoRepository) : []);
-  if (!Array.isArray(saved) || savedSet.size !== saved.length || repositories.some(repository => !savedSet.has(repository))) {
-    writeDemoState(installedRepositoriesKey, repositories);
-  }
-  return repositories;
+  return [...installed];
 }
 
 export function installDemoRepository(repository: string) {

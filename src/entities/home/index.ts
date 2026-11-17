@@ -6,6 +6,7 @@ export {
   demoVmCreateFailureSeed,
   dismissDemoGraduationNotice,
   getDemoHomeState,
+  isDemoWorkspaceFirstVisit,
   recordDemoVmCreateFailure,
   saveDemoHomeState,
   setDemoFirstVisit,

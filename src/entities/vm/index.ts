@@ -14,6 +14,7 @@ export {
   getDemoVmState,
   isDemoVmExpired,
   isDemoVmInitializing,
+  isDemoVmSharedPoolBlocked,
   listDemoTeamVms,
   makeDemoVm,
   removeDemoVm,

@@ -1,6 +1,7 @@
 import {
   isDemoMode,
   readDemoState,
+  isDemoFixtureMode,
   writeDemoState,
 } from "../../../shared/demo";
 import type { AppOwner, AppListItem } from "./types";
@@ -70,6 +71,7 @@ export interface DemoManagedApp {
   branch: string;
   expiresAt: string;
   expiresAtMs?: number;
+  createdAtMs?: number;
   deletionAtMs?: number;
   stoppedFixture?: boolean;
   folder?: string;
@@ -288,6 +290,7 @@ function isDemoManagedApp(value: unknown): value is DemoManagedApp {
     typeof app.repository === "string" &&
     typeof app.expiresAt === "string" &&
     (app.expiresAtMs === undefined || (Number.isFinite(app.expiresAtMs) && Math.abs(app.expiresAtMs) <= 8.64e15)) &&
+    (app.createdAtMs === undefined || (Number.isFinite(app.createdAtMs) && Math.abs(app.createdAtMs) <= 8.64e15)) &&
     (app.owner === undefined || Boolean(
       app.owner &&
         (app.owner.type === "user" || app.owner.type === "team") &&
@@ -324,9 +327,9 @@ export function getDemoApps(): DemoManagedApp[] {
   const valid = Array.isArray(saved) && saved.every(isDemoManagedApp);
   let apps: DemoManagedApp[] = valid
     ? saved.map((app: DemoManagedApp) => ({ ...app, owner: app.owner ?? demoPersonalAppOwner }))
-    : structuredClone(seedApps);
+    : (isDemoFixtureMode() ? structuredClone(seedApps) : []);
   if (valid && storedApps !== undefined) return apps;
-  if (valid) {
+  if (valid && isDemoFixtureMode()) {
     const migrationFixtures = teamFixtureRemoved
       ? [expiredApp, readOnlyApp]
       : [demoTeamAppSeed, expiredApp, readOnlyApp];
@@ -362,8 +365,8 @@ export function getDemoAppSummaries(owner?: AppOwner): AppListItem[] {
       owner: app.owner ?? { type: "user", id: "demo-student", name: "김지민" },
       status: isDemoAppExpired(app) ? "suspended" : "active",
       created_by: "demo-student",
-      created_at: "2026-10-01T00:00:00.000Z",
-      updated_at: "2026-11-13T04:00:00.000Z",
+      created_at: app.createdAtMs ? new Date(app.createdAtMs).toISOString() : "2026-10-01T00:00:00.000Z",
+      updated_at: app.createdAtMs ? new Date(app.createdAtMs).toISOString() : "2026-11-13T04:00:00.000Z",
       demoDetails: {
         repository: app.repository,
         branch: app.branch,
@@ -458,12 +461,14 @@ export function addDemoApp(input: DemoAppInput): string | undefined {
   if (!canManageDemoApp({ owner: app.owner }) || quota.count >= quota.limit || service.memoryMb > quota.freeMemory ||
     (service.type === "웹" && !isDemoAppSubdomainAvailable(service.subdomain))) return undefined;
   const id = `demo-${crypto.randomUUID()}`;
-  const expiresAtMs = Date.now() + 7 * day;
+  const createdAtMs = Date.now();
+  const expiresAtMs = createdAtMs + 7 * day;
   apps.unshift({
     ...app,
     id,
     expiresAt: formatDemoAppDate(expiresAtMs),
     expiresAtMs,
+    createdAtMs,
     variables: [],
     environments: [
       { name: "production", branch: app.branch, autoDeploy: app.sourceType === "github", waitForCi: app.sourceType === "github" },

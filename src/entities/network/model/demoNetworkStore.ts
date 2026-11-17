@@ -1,5 +1,7 @@
 import { canManageDemoVm, getDemoVmState } from '../../vm/model/demoVmStore';
 import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode } from '../../../shared/demo';
+import { configuredDemoSshTargets } from '../../vm/model/demoSshSlots';
 import type { DomainList, FirewallRule, FirewallRulePage, NetworkProtocol, PortForward, PortForwardList } from './types';
 
 export interface DemoNetworkState {
@@ -17,6 +19,14 @@ const stateKey = (vmGrn: string) => `network-${vmGrn}`;
 const defaultHost = 'ssh.gsmsv.site';
 
 function seed(vmGrn: string): DemoNetworkState {
+  if (!isDemoFixtureMode()) {
+    const vm = getDemoVmState().vms.find(item => item.grn === vmGrn);
+    const target = configuredDemoSshTargets()[vm?.sshSlot ?? -1];
+    return {
+      ports: target ? [{ id: `${vmGrn}-ssh`, kind: 'ssh', external_port: target.port, internal_port: 22, protocol: 'tcp', allowed_source: null, description: 'SSH 기본 포트' }] : [],
+      domains: [], rules: [], firewallEnabled: true, sequence: 1,
+    };
+  }
   const team = vmGrn.includes('team-vm');
   const ssh = team ? 32117 : 32104;
   const hostname = vmGrn.replace(/^grn:gsmsv:vm:/, '').replace(/^(team-vm-|vm-)/, '').replace(/^team-/, '') || 'demo-vm';
@@ -52,7 +62,9 @@ export function clearDemoNetworkState(vmGrn: string): boolean {
 }
 
 export function demoPortList(vmGrn: string): PortForwardList {
-  return { items: getDemoNetworkState(vmGrn).ports, public_host: defaultHost, limits: { custom: 30 } };
+  const vm = getDemoVmState().vms.find(item => item.grn === vmGrn);
+  const host = isDemoFixtureMode() ? defaultHost : configuredDemoSshTargets()[vm?.sshSlot ?? -1]?.host ?? '';
+  return { items: getDemoNetworkState(vmGrn).ports, public_host: host, limits: { custom: 30 } };
 }
 
 export function demoDomainList(vmGrn: string): DomainList {

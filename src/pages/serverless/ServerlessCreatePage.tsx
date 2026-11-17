@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Button, SegmentedControl, TextField } from '../../shared/ui/controls';
 import { Banner, ModalSurface } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
+import { isDemoFixtureMode } from '../../shared/demo';
 import { ServerlessStateCard, StateCopy, StateField, StateFieldError, StateFieldLabel, StateFieldValue } from './ServerlessStateCard';
 
 export type ServerlessRuntime = 'javascript' | 'typescript' | 'python';
@@ -264,11 +265,11 @@ const CodeInput = styled.textarea`
 `;
 
 export default function ServerlessCreatePage({ onCancel, onCreate, existingNames = [], findCodeError }: ServerlessCreatePageProps) {
-  const [name, setName] = useState('welcome-api');
+  const [name, setName] = useState(() => isDemoFixtureMode() ? 'welcome-api' : '');
   const [runtime, setRuntime] = useState<ServerlessRuntime>('javascript');
   const [timeoutSeconds, setTimeoutSeconds] = useState<'30' | '60'>('30');
   const [memoryMb, setMemoryMb] = useState<'128' | '256'>('128');
-  const [description, setDescription] = useState('서비스 첫 방문자에게 환영 메시지를 반환합니다.');
+  const [description, setDescription] = useState(() => isDemoFixtureMode() ? '서비스 첫 방문자에게 환영 메시지를 반환합니다.' : '');
   const [code, setCode] = useState(starterCode.javascript);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');

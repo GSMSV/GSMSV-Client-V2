@@ -1,5 +1,6 @@
 export {
   isDemoMode,
+  isDemoFixtureMode,
   getDemoResetGeneration,
   readDemoState,
   resetDemoState,

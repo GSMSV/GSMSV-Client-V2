@@ -1,6 +1,6 @@
 import type { TeamDetail, TeamSummary } from './model/types';
 import { getSessionUser } from '../session';
-import { isDemoMode, readDemoState, writeDemoState } from '../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../shared/demo';
 
 export interface DemoTeamInvitation {
   id: string;
@@ -47,7 +47,10 @@ const demoStudentDirectory: DemoStudentAccount[] = [
 export function findDemoStudentAccount(email: string): DemoStudentAccount | undefined {
   if (!isDemoMode()) return undefined;
   const normalized = email.trim().toLowerCase();
-  return demoStudentDirectory.find(account => account.email === normalized);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return undefined;
+  return isDemoFixtureMode()
+    ? demoStudentDirectory.find(account => account.email === normalized)
+    : { name: normalized, email: normalized, classLabel: '입력한 이메일' };
 }
 
 interface DemoTeamState {
@@ -79,11 +82,14 @@ const seedState: DemoTeamState = {
   nextTeamNumber: 1,
 };
 
+const emptyState: DemoTeamState = { schemaVersion: 1, teams: [], invitations: [], quotaRequests: [], nextTeamNumber: 1 };
+
 function getState(): DemoTeamState {
-  const state = readDemoState<unknown>('teams', seedState);
-  if (!state || typeof state !== 'object') return seedState;
+  const fallback = isDemoFixtureMode() ? seedState : emptyState;
+  const state = readDemoState<unknown>('teams', fallback);
+  if (!state || typeof state !== 'object') return fallback;
   const candidate = state as Partial<DemoTeamState>;
-  if (!Array.isArray(candidate.teams) || !Array.isArray(candidate.invitations) || !Number.isInteger(candidate.nextTeamNumber)) return seedState;
+  if (!Array.isArray(candidate.teams) || !Array.isArray(candidate.invitations) || !Number.isInteger(candidate.nextTeamNumber)) return fallback;
   if ((candidate.schemaVersion ?? 0) >= 1) return { ...candidate, quotaRequests: candidate.quotaRequests ?? [] } as DemoTeamState;
 
   const previousSeedMembers = [

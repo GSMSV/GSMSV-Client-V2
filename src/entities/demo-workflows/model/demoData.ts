@@ -1,5 +1,7 @@
 import { getDemoProfile } from '../../profile';
-import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { getDemoVmState } from '../../vm/model/demoVmStore';
+import { configuredDemoSshTargets, sshCommandForSlot } from '../../vm/model/demoSshSlots';
 
 export type WorkflowStatus = '대기 중' | '검토 중' | '답변 완료' | '승인 완료' | '거절';
 
@@ -138,7 +140,8 @@ const demoAdminVms: DemoAdminVm[] = [{
 const demoCliRequest: CliLoginRequest = { code: 'WDJB-MJHT', device: 'MacBook-Air · macOS', requestedAt: '2026.09.30 14:30', expiresAt: '9분 남음', status: '확인 대기' };
 
 function localState<T>(key: string, seed: T): T {
-  return isDemoMode() ? readDemoState(key, seed) : seed;
+  const fallback = !isDemoFixtureMode() && Array.isArray(seed) ? [] as T : seed;
+  return isDemoMode() ? readDemoState(key, fallback) : fallback;
 }
 
 function saveState<T>(key: string, value: T): boolean {
@@ -161,6 +164,8 @@ export function getDemoAccounts(): DemoAccount[] {
     if (profile.accountDeleted) return [];
     return [{
       ...account,
+      name: profile.name,
+      team: profile.teamName ? `${profile.teamName} · ${profile.teamRole}` : '—',
       github: profile.github ?? '연결 안 됨',
       discord: profile.discordConnected ? '@jimin_2107' : '연결 안 됨',
     }];
@@ -170,7 +175,7 @@ export function getDemoAccountRecords(): DemoAccount[] { return localState('admi
 export function saveDemoAccounts(items: DemoAccount[]): boolean { return saveState('admin.accounts', items); }
 export function getDemoAdminGrantCandidates(): DemoAccount[] {
   const accounts = getDemoAccountRecords();
-  const candidates = [...accounts, ...demoAdminGrantCandidates.filter(candidate => !accounts.some(account => account.id === candidate.id))];
+  const candidates = [...accounts, ...(isDemoFixtureMode() ? demoAdminGrantCandidates.filter(candidate => !accounts.some(account => account.id === candidate.id)) : [])];
   return candidates.filter(account => account.role !== '관리자');
 }
 export function grantDemoAdminRole(accountId: string, reason: string): boolean {
@@ -178,7 +183,7 @@ export function grantDemoAdminRole(accountId: string, reason: string): boolean {
   if (!trimmedReason) return false;
   const accounts = getDemoAccountRecords();
   const existing = accounts.find(account => account.id === accountId);
-  const candidate = existing ?? demoAdminGrantCandidates.find(account => account.id === accountId);
+  const candidate = existing ?? (isDemoFixtureMode() ? demoAdminGrantCandidates.find(account => account.id === accountId) : undefined);
   if (!candidate || candidate.role === '관리자') return false;
   const updated = { ...candidate, role: '관리자', roleChangeReason: trimmedReason, roleChangedAt: new Date().toISOString() };
   return saveDemoAccounts(existing
@@ -209,7 +214,17 @@ export function saveDemoGraduationDate(value: string): boolean {
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return false;
   return saveState('admin.graduationDate', value);
 }
-export function getDemoAdminVms(): DemoAdminVm[] { return localState('admin.vms', demoAdminVms); }
+export function getDemoAdminVms(): DemoAdminVm[] {
+  if (isDemoFixtureMode()) return localState('admin.vms', demoAdminVms);
+  const targets = configuredDemoSshTargets();
+  return getDemoVmState().vms.map(vm => ({
+    id: vm.id, name: vm.name, owner: vm.owner === 'team' ? vm.teamName ?? vm.creator : vm.creator,
+    status: vm.status === 'running' ? '실행 중' : '중지',
+    vcpu: vm.cpu, ram: vm.memory, disk: vm.disk, purpose: vm.purpose,
+    createdAt: vm.createdAt, expiresAt: vm.expiresAt,
+    sshCommand: sshCommandForSlot(vm.sshSlot, targets) ?? '',
+  }));
+}
 export function saveDemoAdminVms(items: DemoAdminVm[]): boolean { return saveState('admin.vms', items); }
 const cliRequestKey = 'auth.cliRequest';
 

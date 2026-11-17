@@ -4,6 +4,7 @@ import { Button, NavigationItem } from '../../shared/ui/controls';
 import { Banner } from '../../shared/ui/feedback';
 import { ModalSurface } from '../../shared/ui/feedback/ModalSurface';
 import { Octicon } from '../../shared/ui/icons';
+import { isDemoFixtureMode } from '../../shared/demo';
 import { ServerlessStateCard, StateCopy, StateField, StateFieldLabel, StateFieldValue } from './ServerlessStateCard';
 
 export type ServerlessTestTab = 'code' | 'versions' | 'triggers' | 'environment' | 'test' | 'logs';
@@ -323,7 +324,7 @@ const Placeholder = styled.span`
 
 export function ServerlessTestPage({
   functionName,
-  requestPayload: initialPayload = '{\n  "name": "지민"\n}',
+  requestPayload: initialPayload = isDemoFixtureMode() ? '{\n  "name": "지민"\n}' : '{}',
   result = null,
   enabledTabs = ['test'],
   active = true,

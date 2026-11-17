@@ -847,22 +847,17 @@ function AdminInfrastructure({ demoMode }: { demoMode: boolean }) {
                       expiringGrns={demoSnapshot?.expiringGrns}
                       demoVmDetails={demoSnapshot?.vmDetails}
                       onDemoPowerAction={demoSnapshot ? async (grn, powerState) => {
-                        const { getDemoInfraSnapshot, saveDemoInfraSnapshot } = await import('../../entities/infra-node/demo');
+                        const { getDemoInfraSnapshot, setDemoAdminVmPower } = await import('../../entities/infra-node/demo');
                         const snapshot = getDemoInfraSnapshot();
                         if (!snapshot.resources.some(resource => resource.grn === grn)) {
                           setDemoPowerError(true);
                           return;
                         }
-                        const nextSnapshot = {
-                          ...snapshot,
-                          resources: snapshot.resources.map(resource => resource.grn === grn
-                            ? { ...resource, power_state: powerState, status: powerState === 'running' ? '실행 중' : '정지됨' }
-                            : resource),
-                        };
-                        if (!saveDemoInfraSnapshot(nextSnapshot)) {
+                        if (!setDemoAdminVmPower(grn, powerState)) {
                           setDemoPowerError(true);
                           return;
                         }
+                        const nextSnapshot = getDemoInfraSnapshot();
                         setDemoPowerError(false);
                         setDemoSnapshot(nextSnapshot);
                         setState(current => current.kind === 'ready' ? { ...current, resources: nextSnapshot.resources } : current);
