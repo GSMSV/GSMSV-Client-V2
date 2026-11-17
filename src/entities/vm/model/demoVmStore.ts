@@ -1,6 +1,6 @@
 import { getDemoTeam } from '../../team/demo';
 import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
-import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolSize } from './demoSshSlots';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolRoles } from './demoSshSlots';
 
 export type VmStatus = 'queued' | 'running' | 'stopped';
 export type VmOwner = 'personal' | 'team';
@@ -578,7 +578,7 @@ export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {
 
 export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, teamId = 'demo-team', teamName = 'GSM Connect', creatorName = '김지민'): { state: DemoVmState; vm: DemoVm } {
   const sshSlot = isDemoFixtureMode() ? null : allocateDemoSshSlot(state.vms.map(vm => vm.sshSlot).filter((slot): slot is number => slot !== undefined));
-  if (!isDemoFixtureMode() && sshSlot === null) throw new Error(`준비된 VM ${demoVmPoolSize}개를 모두 사용 중입니다. 기존 VM을 삭제한 뒤 다시 시도해 주세요.`);
+  if (!isDemoFixtureMode() && sshSlot === null) throw new Error(`사용자 VM용으로 준비된 ${demoVmPoolRoles.vm.length}대를 모두 사용 중입니다. 기존 VM을 삭제한 뒤 다시 시도해 주세요.`);
   const target = sshSlot === null ? undefined : configuredDemoSshTargets()[sshSlot];
   const sequence = state.sequence;
   const team = owner === 'team';
