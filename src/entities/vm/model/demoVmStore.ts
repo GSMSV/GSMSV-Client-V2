@@ -305,6 +305,11 @@ const teamDraft: VmDraft = {
   purpose: 'GSM Connect 서비스 API 서버 운영',
 };
 
+function defaultVmDraft(owner: VmOwner): VmDraft {
+  const fixtureDraft = owner === 'team' ? teamDraft : personalDraft;
+  return isDemoFixtureMode() ? fixtureDraft : { ...fixtureDraft, name: '', purpose: '' };
+}
+
 const queueDurationMs = 15_000;
 const setupDurationMs = 5_000;
 
@@ -351,7 +356,7 @@ export function getDemoVmState(): DemoVmState {
       internalIp: isDemoFixtureMode() ? '10.20.0.' + (100 + vm.requestedAtMs % 100) : '접속 정보 준비 중',
       sshPort: isDemoFixtureMode() ? (vm.owner === 'team' ? 32117 : 32104) : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.port ?? 0),
       sshUser: isDemoFixtureMode() ? vm.sshUser : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.user ?? '준비 중'),
-      password: isDemoFixtureMode() ? 'gsvm-demo-' + vm.requestedAtMs.toString(36) : '',
+      password: isDemoFixtureMode() ? 'gsvm-demo-' + vm.requestedAtMs.toString(36) : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.password ?? ''),
     };
   });
   if (!changed) return state;
@@ -533,7 +538,7 @@ function vmDraftKey(owner: VmOwner, teamId?: string): string {
 
 export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
   const draft = readDemoState<VmDraft | null>(vmDraftKey(owner, teamId), null);
-  if (!draft) return owner === 'team' ? teamDraft : personalDraft;
+  if (!draft) return defaultVmDraft(owner);
   const isPreviousPersonalSeed = owner === 'personal'
     && draft.cpu === 2 && draft.memory === 4 && draft.disk === 10
     && draft.os === 'Linux Ubuntu 22.04 LTS'
@@ -542,8 +547,8 @@ export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
   const isPreviousTeamSeed = owner === 'team' && draft.name === 'connect-api'
     && draft.purpose === teamDraft.purpose && draft.cpu === teamDraft.cpu
     && draft.memory === teamDraft.memory && draft.disk === teamDraft.disk && draft.os === teamDraft.os;
-  if (isPreviousTeamSeed) return teamDraft;
-  return isPreviousPersonalSeed ? personalDraft : draft;
+  if (isPreviousTeamSeed) return defaultVmDraft('team');
+  return isPreviousPersonalSeed ? defaultVmDraft('personal') : draft;
 }
 
 export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft, teamId?: string): void {
@@ -551,7 +556,7 @@ export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft, teamId?: string)
 }
 
 export function resetDemoVmDraft(owner: VmOwner, teamId?: string): void {
-  saveDemoVmDraft(owner, owner === 'team' ? teamDraft : personalDraft, teamId);
+  saveDemoVmDraft(owner, defaultVmDraft(owner), teamId);
 }
 
 export function getDemoVmQuota(state: DemoVmState, teamId: string): DemoVmQuota {

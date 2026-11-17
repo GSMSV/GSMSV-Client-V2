@@ -324,13 +324,13 @@ export default function DemoAdminVmDetailPage() {
       <CardHeader><SectionTitle>SSH 접속 정보</SectionTitle></CardHeader>
       <IconRows>
         <IconRow icon="person" label="SSH 계정" value={details.sshUser} action={details.sshCommand && <Button variant="ghost" icon={actionIcon('copy')} onClick={() => void copyValue(details.sshUser, 'SSH 계정')}>복사</Button>} />
-        {details.sshCommand && <IconRow icon="server" label="내부 IP" value={details.internalIp} action={<Button variant="ghost" icon={actionIcon('copy')} onClick={() => void copyValue(details.internalIp, '내부 IP')}>복사</Button>} />}
-        {details.initialPassword && <IconRow icon="key" label="초기 비밀번호" value={showPassword ? details.initialPassword : '••••••••••••'} action={<Button variant="ghost" icon={actionIcon('eye')} onClick={() => setShowPassword(value => !value)}>{showPassword ? '숨기기' : '표시'}</Button>} />}
+        <IconRow icon="server" label="내부 IP" value={details.internalIp} action={details.internalIp !== '—' && <Button variant="ghost" icon={actionIcon('copy')} onClick={() => void copyValue(details.internalIp, '내부 IP')}>복사</Button>} />
+        <IconRow icon="key" label="초기 비밀번호" value={showPassword ? details.initialPassword : '••••••••••••'} action={<Button variant="ghost" icon={actionIcon('eye')} onClick={() => setShowPassword(value => !value)}>{showPassword ? '숨기기' : '표시'}</Button>} />
       </IconRows>
     </Card>
     <Card>
       <CardHeader><CommandTitle><Octicon name="terminal" size={20} />SSH 명령어</CommandTitle></CardHeader>
-      {details.sshCommand ? <Code><span>1</span><span>{details.sshCommand}</span></Code> : <Hint>V1 VM 접속 정보가 등록되면 명령어를 표시합니다.</Hint>}
+      <Code><span>1</span><span>{details.sshCommand}</span></Code>
       <SshActions>
         {details.sshCommand && <Hint>실제 SSH 매핑: 외부 {details.sshCommand.match(/-p (\d+)/)?.[1] ?? '—'} → 내부 22 · 터미널에 붙여넣어 접속하세요.</Hint>}
         <SshButtons>

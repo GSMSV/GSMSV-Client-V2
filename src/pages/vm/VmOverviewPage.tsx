@@ -426,8 +426,8 @@ export function VmOverviewPage() {
         <SurfaceTitle>SSH 접속 정보</SurfaceTitle>
         <KVPairs>
           <InlineFact icon="person" label="SSH 계정" value={sshTarget?.user ?? vm.sshUser} action={sshCommand && <Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(sshTarget?.user ?? vm.sshUser, 'SSH 계정을')}>복사</Button>} />
-          {isDemoFixtureMode() && <InlineFact icon="server" label="내부 IP" value={vm.internalIp} action={<Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.internalIp, '내부 IP를')}>복사</Button>} />}
-          {isDemoFixtureMode() && <InlineFact icon="key" label="초기 비밀번호" value={passwordVisible ? vm.password : '••••••••••••'} action={<Button variant="ghost" icon={<Octicon name={passwordVisible ? 'eye-closed' : 'eye'} />} onClick={() => setPasswordVisible(visible => !visible)}>{passwordVisible ? '숨기기' : '표시'}</Button>} />}
+          <InlineFact icon="server" label="내부 IP" value={isDemoFixtureMode() ? vm.internalIp : '—'} action={isDemoFixtureMode() && <Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.internalIp, '내부 IP를')}>복사</Button>} />
+          <InlineFact icon="key" label="초기 비밀번호" value={passwordVisible ? (vm.password || sshTarget?.password || '') : '••••••••••••'} action={<Button variant="ghost" icon={<Octicon name={passwordVisible ? 'eye-closed' : 'eye'} />} onClick={() => setPasswordVisible(visible => !visible)}>{passwordVisible ? '숨기기' : '표시'}</Button>} />
         </KVPairs>
       </Surface>
       <Surface>
@@ -436,8 +436,8 @@ export function VmOverviewPage() {
           <NumberLine><span>1</span><SSHLine>{sshCommand}</SSHLine></NumberLine>
           <CommandFooter><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : `실제 SSH 매핑: 외부 ${sshPort} → 내부 22 · 터미널에 붙여넣어 접속하세요.`}</Hint><Actions>{vm.owner === 'personal' && <Button variant="secondary" icon={<Octicon name="book" />} onClick={() => navigate('/help')}>SSH 키 등록 Docs</Button>}<Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어를')}>명령어 복사</Button></Actions></CommandFooter>
         </> : <>
-          <Banner $tone="warning"><Octicon name="alert" size={20} /><BannerCopy><strong>{!isDemoFixtureMode() && !sshTarget ? 'SSH 접속 정보 준비 중' : 'SSH 기본 포트가 없습니다'}</strong><span>{!isDemoFixtureMode() && !sshTarget ? 'V1 VM 접속 정보가 등록되면 이 VM에 배정된 명령어를 표시합니다.' : 'SSH 접속 경로가 삭제되어 명령어를 표시할 수 없습니다. 기본 포트를 복원하면 새로 배정된 실제 외부 포트를 확인할 수 있습니다.'}</span></BannerCopy></Banner>
-          <Row><Button variant="secondary" onClick={() => navigate('/help')}>접속 Docs</Button>{(isDemoFixtureMode() || sshTarget) && <Button variant="primary" disabled={memberReadOnly} icon={<Octicon name="sync" />} onClick={() => void restoreSshPort()}>기본 포트 복원</Button>}</Row>
+          <Banner $tone="warning"><Octicon name="alert" size={20} /><BannerCopy><strong>SSH 기본 포트가 없습니다</strong><span>SSH 접속 경로가 삭제되어 명령어를 표시할 수 없습니다. 기본 포트를 복원하면 새로 배정된 실제 외부 포트를 확인할 수 있습니다.<br />· SSH 명령어를 제공할 수 없습니다.<br />· 누락된 SSH 22·HTTP 80·SVC 10000 포트만 복원합니다.</span></BannerCopy></Banner>
+          <Row><Button variant="secondary" onClick={() => navigate('/help')}>접속 Docs</Button><Button variant="primary" disabled={memberReadOnly} icon={<Octicon name="sync" />} onClick={() => void restoreSshPort()}>기본 포트 복원</Button></Row>
         </>}
       </Surface>
       </>}
@@ -453,7 +453,6 @@ export function VmOverviewPage() {
         <StateDialogActions><Button variant="secondary" disabled={retrySeconds > 0} onClick={() => setRetryAt(0)}>
           {retrySeconds > 0 ? retrySeconds + '초 후 다시 시도' : '확인'}
         </Button></StateDialogActions>
-        <Hint>요청 제한 시간이 지나면 다시 사용할 수 있습니다.</Hint>
       </StateDialogPanel>
     </ModalSurface>}
     {powerDialog && <ModalSurface labelledBy="vm-power-title" onDismiss={() => { if (powerOperation !== 'restart') setPowerDialog(null); }}>

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { allocateDemoSshSlot, demoVmPoolSize, parseDemoSshSlots, sshCommandForSlot } from './demoSshSlots';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolSize, parseDemoSshSlots, sshCommandForSlot } from './demoSshSlots';
 
 describe('precreated VM SSH pool', () => {
+  it('maps the supplied VM slots in creation order with display passwords', () => {
+    const slots = configuredDemoSshTargets();
+    expect(slots).toHaveLength(9);
+    expect(slots.map(slot => slot.port)).toEqual([21141, 21142, 21145, 21146, 21147, 21148, 21149, 27140, 27141]);
+    expect(new Set(slots.map(slot => `${slot.host}:${slot.port}`)).size).toBe(9);
+    expect(slots.every(slot => slot.host === 'ssh.gsmsv.site' && slot.user === 'ubuntu' && Boolean(slot.password))).toBe(true);
+    expect(sshCommandForSlot(0, slots)).toBe('ssh ubuntu@ssh.gsmsv.site -p 21141');
+  });
   it('allocates in order and releases a slot after deletion', () => {
     expect(allocateDemoSshSlot([])).toBe(0);
     expect(allocateDemoSshSlot([0])).toBe(1);
@@ -20,5 +28,6 @@ describe('precreated VM SSH pool', () => {
   it('rejects malformed or unsafe SSH configuration', () => {
     expect(parseDemoSshSlots('[{"host":"vm.example.com;echo bad","port":22,"user":"student"}]')).toEqual([]);
     expect(parseDemoSshSlots('[{"host":"vm.example.com","port":0,"user":"student"}]')).toEqual([]);
+    expect(parseDemoSshSlots('[{"host":"vm.example.com","port":22,"user":"student"},{"host":"vm.example.com","port":22,"user":"student"}]')).toEqual([]);
   });
 });

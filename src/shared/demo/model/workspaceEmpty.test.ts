@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { indexedDB } from 'fake-indexeddb';
-import { getDemoVmState, isDemoVmSharedPoolBlocked, makeDemoVm, removeDemoVm, saveDemoVmState } from '../../../entities/vm/model/demoVmStore';
+import { getDemoVmDraft, getDemoVmState, isDemoVmSharedPoolBlocked, makeDemoVm, removeDemoVm, resetDemoVmDraft, saveDemoVmState } from '../../../entities/vm/model/demoVmStore';
 import { demoVmPoolSize } from '../../../entities/vm/model/demoSshSlots';
 import { createDemoServerlessFunction, extendDemoServerlessFunction, getDemoServerlessState, loadDemoServerlessState } from '../../../entities/serverless/model/demoServerless';
 import { getDemoDatabaseState } from '../../../entities/database/model/demoDatabase';
@@ -46,6 +46,13 @@ function visitWorkspace() {
 afterEach(() => { Reflect.deleteProperty(globalThis, 'window'); });
 
 describe('fresh interactive workspace', () => {
+  it('starts VM drafts without example names or purposes and resets them the same way', () => {
+    visitWorkspace();
+    expect(getDemoVmDraft('personal')).toMatchObject({ name: '', purpose: '' });
+    expect(getDemoVmDraft('team', 'my-team')).toMatchObject({ name: '', purpose: '' });
+    resetDemoVmDraft('personal');
+    expect(getDemoVmDraft('personal')).toMatchObject({ name: '', purpose: '' });
+  });
   it('has no precreated personal or team resources or requests', async () => {
     visitWorkspace();
     expect(getDemoVmState().vms).toEqual([]);
@@ -76,7 +83,20 @@ describe('fresh interactive workspace', () => {
       expect(created.vm.password).toBe('');
       state = created.state;
     }
-    expect(() => makeDemoVm(state, draft, 'personal')).toThrow('준비된 VM 10개');
+    expect(() => makeDemoVm(state, draft, 'personal')).toThrow('준비된 VM 9개');
+  });
+
+  it('shows the assigned SSH port and display password after VM setup', () => {
+    visitWorkspace();
+    const draft = { name: 'my-vm', purpose: 'test', cpu: 1, memory: 1, disk: 10, os: 'Linux Ubuntu 22.04 LTS' as const };
+    const created = makeDemoVm(getDemoVmState(), draft, 'personal');
+    created.vm.requestedAtMs = Date.now() - 30_000;
+    expect(saveDemoVmState(created.state)).toBe(true);
+    const ready = getDemoVmState().vms[0];
+    expect(ready.sshPort).toBe(21141);
+    expect(ready.sshUser).toBe('ubuntu');
+    expect(ready.password).toBeTruthy();
+    expect(getDemoInfraSnapshot().vmDetails[ready.grn].initialPassword).toBe(ready.password);
   });
 
   it('reuses a VM slot only after that VM is deleted', () => {
