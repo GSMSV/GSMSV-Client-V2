@@ -23,6 +23,27 @@ function getApiUrl(path: string) {
   return `${apiOrigin}${path}`;
 }
 
+// 인증 API 자체는 갱신 대상에서 뺀다(로그인·갱신·로그아웃 실패가 다시 갱신을 부르지 않게).
+const refreshExemptPrefix = '/api/v2/auth/';
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** 리프레시 쿠키로 액세스 토큰을 갱신한다. 동시에 여러 요청이 401을 받아도 한 번만 호출한다. */
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= fetch(getApiUrl('/api/v2/auth/refresh'), { method: 'POST', credentials: 'include' })
+    .then(response => response.status === 204)
+    .catch(() => false)
+    .finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+/** 401이면 토큰을 한 번 갱신하고 같은 요청을 다시 보낸다. */
+async function fetchWithRefresh(path: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(getApiUrl(path), init);
+  if (response.status !== 401 || path.startsWith(refreshExemptPrefix) || init.signal?.aborted) return response;
+  if (!(await refreshSession())) return response;
+  return fetch(getApiUrl(path), init);
+}
+
 async function request(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type')) {
@@ -31,7 +52,7 @@ async function request(path: string, init: RequestInit): Promise<Response> {
 
   let response: Response;
   try {
-    response = await fetch(getApiUrl(path), {
+    response = await fetchWithRefresh(path, {
       ...init,
       credentials: 'include',
       headers,
@@ -70,7 +91,7 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
 export async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
   let response: Response;
   try {
-    response = await fetch(getApiUrl(path), { ...init, credentials: 'include' });
+    response = await fetchWithRefresh(path, { ...init, credentials: 'include' });
   } catch (error) {
     if (init.signal?.aborted) throw error;
     throw new ApiRequestError(null, 'NETWORK_ERROR');
