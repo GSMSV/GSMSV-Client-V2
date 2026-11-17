@@ -1,9 +1,12 @@
 export {
   acknowledgeDemoDatabaseMembers,
   addDemoPreRestoreBackup,
-  applyDemoDatabaseWrite,
-  DEMO_DATABASE_WRITE_STEP_GB,
   createDemoDatabase,
+  DEMO_DATABASES_PER_VM,
+  DemoDatabaseCapacityError,
+  generateDemoDatabasePassword,
+  getDemoDatabaseCapacity,
+  recordDemoDatabaseUsage,
   deleteDemoDatabase,
   getDemoDatabase,
   getDemoDatabaseConnectedFunctions,
@@ -21,5 +24,16 @@ export {
   setDemoDatabasePassword,
   updateDemoDatabase,
 } from './model/demoDatabase';
+export {
+  deleteDemoDatabaseFiles,
+  downloadDemoDatabaseBackup,
+  ensureDemoDailyBackup,
+  ensureDemoDatabaseFile,
+  provisionDemoDatabase,
+  readDemoDatabaseFile,
+  restoreDemoDatabaseBackup,
+  runDemoDatabaseQuery,
+  type DemoQueryOutcome,
+} from './model/demoDatabaseFiles';
 export { DEMO_TEAM_DEDICATED_DATABASE_LIMIT, getDemoTeamDedicatedDatabaseQuota } from './model/demoDedicatedQuota';
 export type { DemoDatabaseState } from './model/demoDatabase';

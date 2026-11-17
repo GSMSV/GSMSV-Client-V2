@@ -241,7 +241,7 @@ const DialogActions = styled.div`
   margin-top: 8px;
 `;
 
-type DialogState = 'count' | 'teamLimit' | 'storage' | 'postgres' | 'permission' | 'notApproved' | 'failure' | 'accepted' | null;
+type DialogState = 'count' | 'teamLimit' | 'capacity' | 'storage' | 'postgres' | 'permission' | 'notApproved' | 'failure' | 'accepted' | null;
 interface Loadable<T> { value: T | null; loading: boolean; error: boolean; }
 const initialLoadable = <T,>(): Loadable<T> => ({ value: null, loading: true, error: false });
 
@@ -272,6 +272,7 @@ export default function DatabaseCreatePage() {
   const [name, setName] = useState('');
   const [engine, setEngine] = useState<DatabaseEngine>('mysql');
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [capacityVms, setCapacityVms] = useState<{ vmNumber: number; used: number; limit: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [nameError, setNameError] = useState('');
   const requestKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -393,19 +394,34 @@ export default function DatabaseCreatePage() {
         return;
       }
       let createdGrn: string;
+      const demoDatabase = await import('../../entities/database/demo');
       try {
-        const { createDemoDatabase, getDemoDatabaseCredentials, listDemoDatabases } = await import('../../entities/database/demo');
+        const { createDemoDatabase, getDemoDatabaseCapacity, getDemoDatabaseCredentials, listDemoDatabases, provisionDemoDatabase } = demoDatabase;
         if (teamId && listDemoDatabases(teamId).length >= 4) {
           setDialog('teamLimit');
+          setSubmitting(false);
+          return;
+        }
+        const capacity = getDemoDatabaseCapacity();
+        if (!capacity.available) {
+          setCapacityVms(capacity.vms);
+          setDialog('capacity');
           setSubmitting(false);
           return;
         }
         const owner = teamId ? { id: teamId, name: team.value?.name ?? 'GSM Connect' } : undefined;
         const created = createDemoDatabase(trimmedName, engine, owner, 'shared');
         if (!getDemoDatabaseCredentials(created.grn)) throw new Error('DEMO_DATABASE_CREDENTIALS_UNAVAILABLE');
+        // 실제 Database 파일을 만들어 브라우저에 저장한 뒤에야 상세 화면으로 간다.
+        await provisionDemoDatabase(created.grn);
         createdGrn = created.grn;
-      } catch {
-        setDialog('failure');
+      } catch (error) {
+        if (error instanceof demoDatabase.DemoDatabaseCapacityError) {
+          setCapacityVms(demoDatabase.getDemoDatabaseCapacity().vms);
+          setDialog('capacity');
+        } else {
+          setDialog('failure');
+        }
         setSubmitting(false);
         return;
       }
@@ -468,11 +484,12 @@ export default function DatabaseCreatePage() {
 
   const storageLimit = storage ? `${formatNumber(storage.limit)} GB` : '한도';
   const dialogIcons: Record<Exclude<DialogState, null>, Parameters<typeof Octicon>[0]['name']> = {
-    count: 'database', teamLimit: 'database', storage: 'alert', postgres: 'database', permission: 'lock', notApproved: 'clock', failure: 'alert', accepted: 'check-circle',
+    count: 'database', teamLimit: 'database', capacity: 'server', storage: 'alert', postgres: 'database', permission: 'lock', notApproved: 'clock', failure: 'alert', accepted: 'check-circle',
   };
   const dialogContent: Record<Exclude<DialogState, null>, { title: string; copy: string; lines?: string[] }> = {
     count: { title: 'Database를 더 발급할 수 없습니다', copy: `· 내 Database ${count ? formatNumber(count.limit) : ''}개를 모두 쓰고 있습니다.${count ? ` 개인 ${formatNumber(count.used)} / ${formatNumber(count.limit)}` : ''}`, lines: ['쓰지 않는 Database를 지우면 다시 발급할 수 있습니다.', '더 필요하면 팀을 만들어 팀 Database를 쓰세요.'] },
     teamLimit: { title: '팀 Database를 더 발급할 수 없습니다', copy: '현재 팀의 Database 발급 한도에 도달했습니다. 기존 Database를 확인한 뒤 다시 시도해 주세요.' },
+    capacity: { title: `Database용 VM ${formatNumber(capacityVms.length || 2)}대가 모두 가득 찼습니다`, copy: '새 Database를 둘 자리가 없어 발급하지 않았습니다.', lines: [...capacityVms.map(vm => `VM ${formatNumber(vm.vmNumber)} · Database ${formatNumber(vm.used)} / ${formatNumber(vm.limit)}개`), '쓰지 않는 Database를 지우면 다시 발급할 수 있습니다.'] },
     storage: { title: '용량을 먼저 줄여 주세요', copy: '쓰기 금지 중인 Database가 있어서 새 Database를 발급할 수 없습니다.', lines: [...(!teamId && storage ? [`사용 용량 ${formatNumber(storage.used)} / ${formatNumber(storage.limit)} GB`] : []), `${teamId ? '팀 용량을 한도' : storageLimit} 아래로 줄이면 쓰기 금지가 풀리고 다시 발급할 수 있습니다.`] },
     postgres: { title: 'PostgreSQL은 준비 중입니다', copy: '지금은 MySQL만 발급할 수 있습니다.' },
     permission: { title: 'Database를 발급할 권한이 없습니다', copy: '팀장 또는 DevOps만 팀 Database를 발급할 수 있습니다.' },

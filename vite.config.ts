@@ -18,6 +18,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // Database 쿼리 콘솔의 SQLite Worker를 ES 모듈로 만든다. sql.js WASM은 이 Worker 청크에서만 불러온다.
+    worker: { format: 'es' },
     server: { proxy: apiProxy },
     preview: { proxy: apiProxy },
   };

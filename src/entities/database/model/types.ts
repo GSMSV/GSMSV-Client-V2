@@ -30,7 +30,9 @@ export interface DatabaseDetail {
   status: DatabaseStatus;
   write_locked: boolean;
   connection: { host: string; port: number; database: string; username: string; tls: boolean };
-  storage: { used_gb: number; owner_total_used_gb: number; owner_limit_gb: number };
+  storage: { used_gb: number; owner_total_used_gb: number; owner_limit_gb: number; /** 데모: 브라우저에 저장된 실제 Database 파일 크기. */ used_bytes?: number };
+  /** 데모: 이 Database를 둔 준비된 VM 칸(0부터). Database용 VM 8·9번 중 하나. */
+  vm_slot?: number;
   max_connections: number;
   created_by: { name: string };
   created_at: string;
