@@ -1,4 +1,4 @@
-import { ApiRequestError, requestJson } from '../../../shared/api';
+import { requestJson, requestNoContent } from '../../../shared/api';
 import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 const demoNotificationSlice = 'notifications';
@@ -71,7 +71,7 @@ export function markNotificationRead(id: string, signal?: AbortSignal) {
     if (signal?.aborted) return Promise.reject(signal.reason);
     return Promise.resolve().then(() => persistDemoNotifications(getDemoNotifications().map(item => item.id === id ? { ...item, read: true } : item)));
   }
-  return requestNoContent(`/api/v2/notifications/${encodeURIComponent(id)}/read`, 'POST', signal);
+  return requestNoContent(`/api/v2/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', signal });
 }
 
 export function markAllNotificationsRead(signal?: AbortSignal) {
@@ -79,7 +79,7 @@ export function markAllNotificationsRead(signal?: AbortSignal) {
     if (signal?.aborted) return Promise.reject(signal.reason);
     return Promise.resolve().then(() => persistDemoNotifications(getDemoNotifications().map(item => ({ ...item, read: true }))));
   }
-  return requestNoContent('/api/v2/notifications/read-all', 'POST', signal);
+  return requestNoContent('/api/v2/notifications/read-all', { method: 'POST', signal });
 }
 
 export function deleteNotification(id: string, signal?: AbortSignal) {
@@ -87,7 +87,7 @@ export function deleteNotification(id: string, signal?: AbortSignal) {
     if (signal?.aborted) return Promise.reject(signal.reason);
     return Promise.resolve().then(() => persistDemoNotifications(getDemoNotifications().filter(item => item.id !== id)));
   }
-  return requestNoContent(`/api/v2/notifications/${encodeURIComponent(id)}`, 'DELETE', signal);
+  return requestNoContent(`/api/v2/notifications/${encodeURIComponent(id)}`, { method: 'DELETE', signal });
 }
 
 const demoNotificationPaths: Record<string, string> = {
@@ -101,20 +101,4 @@ const demoNotificationPaths: Record<string, string> = {
 /** 목데이터 알림에는 실제 GRN이 없으므로 종류별로 관련 화면을 연결한다. */
 export function getDemoNotificationPath(item: NotificationItem): string | null {
   return isDemoMode() ? demoNotificationPaths[item.kind] ?? null : null;
-}
-
-async function requestNoContent(path: string, method: 'POST' | 'DELETE', signal?: AbortSignal): Promise<void> {
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN?.replace(/\/+$/, '') ?? '';
-  let response: Response;
-  try {
-    response = await fetch(`${apiOrigin}${path}`, { method, credentials: 'include', signal });
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    throw new ApiRequestError(null, 'NETWORK_ERROR');
-  }
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { code?: string; request_id?: string } | null;
-    throw new ApiRequestError(response.status, payload?.code ?? 'UNKNOWN_ERROR', payload?.request_id);
-  }
 }

@@ -1,6 +1,9 @@
+/** 서버 오류 본문 `{code, message, request_id, details?}`. `details`는 값이 없으면 빠진다. */
 export interface ApiErrorPayload {
   code?: string;
+  message?: string;
   request_id?: string;
+  details?: Record<string, unknown>;
 }
 
 export class ApiRequestError extends Error {
@@ -27,10 +30,23 @@ function getApiUrl(path: string) {
 const refreshExemptPrefix = '/api/v2/auth/';
 let refreshInFlight: Promise<boolean> | null = null;
 
-/** 리프레시 쿠키로 액세스 토큰을 갱신한다. 동시에 여러 요청이 401을 받아도 한 번만 호출한다. */
-function refreshSession(): Promise<boolean> {
-  refreshInFlight ??= fetch(getApiUrl('/api/v2/auth/refresh'), { method: 'POST', credentials: 'include' })
+const refreshLockName = 'gsmsv-auth-refresh';
+
+function postRefresh(): Promise<boolean> {
+  return fetch(getApiUrl('/api/v2/auth/refresh'), { method: 'POST', credentials: 'include' })
     .then(response => response.status === 204)
+    .catch(() => false);
+}
+
+/**
+ * 리프레시 쿠키로 액세스 토큰을 갱신한다. 동시에 여러 요청이 401을 받아도 한 번만 호출한다.
+ * 서버는 리프레시 토큰을 한 번 쓰면 바꾸고, 이미 쓴 토큰이 오면 401과 함께 쿠키를 지운다.
+ * 그래서 여러 탭이 같은 토큰으로 동시에 갱신하지 않도록 Web Locks로 탭 사이에서도 차례로 보낸다.
+ * 앞 탭이 갱신을 마치면 쿠키 저장소에 새 토큰이 있으므로 다음 탭은 새 토큰으로 갱신한다.
+ */
+function refreshSession(): Promise<boolean> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  refreshInFlight ??= (locks ? locks.request(refreshLockName, postRefresh) : postRefresh())
     .catch(() => false)
     .finally(() => { refreshInFlight = null; });
   return refreshInFlight;
