@@ -427,7 +427,7 @@ export function VmOverviewPage() {
         <KVPairs>
           <InlineFact icon="person" label="SSH 계정" value={sshTarget?.user ?? vm.sshUser} action={sshCommand && <Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(sshTarget?.user ?? vm.sshUser, 'SSH 계정을')}>복사</Button>} />
           <InlineFact icon="server" label="내부 IP" value={isDemoFixtureMode() ? vm.internalIp : '—'} action={isDemoFixtureMode() && <Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.internalIp, '내부 IP를')}>복사</Button>} />
-          <InlineFact icon="key" label="초기 비밀번호" value={passwordVisible ? (vm.password || sshTarget?.password || '') : '••••••••••••'} action={<Button variant="ghost" icon={<Octicon name={passwordVisible ? 'eye-closed' : 'eye'} />} onClick={() => setPasswordVisible(visible => !visible)}>{passwordVisible ? '숨기기' : '표시'}</Button>} />
+          <InlineFact icon="key" label="초기 비밀번호" value={passwordVisible ? (vm.password || sshTarget?.password || '—') : '••••••••••••'} action={<Button variant="ghost" icon={<Octicon name={passwordVisible ? 'eye-closed' : 'eye'} />} onClick={() => setPasswordVisible(visible => !visible)}>{passwordVisible ? '숨기기' : '표시'}</Button>} />
         </KVPairs>
       </Surface>
       <Surface>

@@ -95,6 +95,7 @@ describe('fresh interactive workspace', () => {
     const ready = getDemoVmState().vms[0];
     expect(ready.sshPort).toBe(21141);
     expect(ready.sshUser).toBe('ubuntu');
+    expect(ready.internalIp).toBe('');
     expect(ready.password).toBeTruthy();
     expect(getDemoInfraSnapshot().vmDetails[ready.grn].initialPassword).toBe(ready.password);
   });
