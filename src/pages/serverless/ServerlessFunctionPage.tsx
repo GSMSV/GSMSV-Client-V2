@@ -37,7 +37,9 @@ export interface ServerlessFunctionPageProps {
   onDelete?: () => void;
   onSaveSettings?: (settings: ServerlessFunctionSettings) => void;
   /** 저장하지 못하면 화면 위 오류 안내에 쓸 문구를 돌려준다. */
-  onSaveCode?: (code: string, runtime: ServerlessRuntime) => ServerlessCodeSaveError | void;
+  onSaveCode?: (code: string, runtime: ServerlessRuntime) => ServerlessCodeSaveError | void | Promise<ServerlessCodeSaveError | void>;
+  /** 활성화(배포)하지 못했을 때 위쪽에 보일 안내. */
+  activationError?: ServerlessCodeSaveError | null;
   /** 사용 기간이 끝나 정지된 함수 (Figma 15-03). */
   suspended?: { expiredAtLabel: string; deleteAtLabel: string };
   /** 팀 함수를 일반 팀원으로 볼 때 (Figma 15-04). */
@@ -371,8 +373,10 @@ export function ServerlessFunctionPage({
   onToggleActive,
   suspended,
   readOnly = false,
+  activationError = null,
 }: ServerlessFunctionPageProps) {
   const [saveError, setSaveError] = useState<ServerlessCodeSaveError | null>(null);
+  const [isSavingCode, setIsSavingCode] = useState(false);
   const [runtime, setRuntime] = useState<ServerlessRuntime>(initialRuntime);
   const [timeoutSeconds, setTimeoutSeconds] = useState<'30' | '60'>(String(initialTimeout) as '30' | '60');
   const [memoryMb, setMemoryMb] = useState<'128' | '256'>(String(initialMemory) as '128' | '256');
@@ -424,6 +428,13 @@ export function ServerlessFunctionPage({
           <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!hasSettingsWriter} onClick={saveSettings}>설정 저장</Button>
         </Actions>
       </TabsRow>
+
+      {activationError && <Banner
+        tone="danger"
+        title={activationError.title}
+        description={activationError.description}
+        icon={<Octicon name="alert" size={20} />}
+      />}
 
       {saveError && <Banner
         tone="danger"
@@ -516,7 +527,13 @@ export function ServerlessFunctionPage({
         </CodeEditor>
         <EditorActions>
           <VersionCaption>{savedVersionLabel}</VersionCaption>
-          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveCode} onClick={() => setSaveError(onSaveCode?.(code, runtime) ?? null)}>코드 저장</Button>
+          <Button variant="primary" icon={<Octicon name="check" size={16} />} disabled={!onSaveCode || isSavingCode} onClick={() => {
+            if (!onSaveCode) return;
+            setIsSavingCode(true);
+            void Promise.resolve(onSaveCode(code, runtime))
+              .then(error => setSaveError(error ?? null))
+              .finally(() => setIsSavingCode(false));
+          }}>코드 저장</Button>
         </EditorActions>
       </Panel>
 

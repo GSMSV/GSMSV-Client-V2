@@ -32,6 +32,12 @@ import {
   updateDemoServerlessTrigger,
   updateDemoServerlessVariable,
   subscribeDemoServerlessState,
+  describeServerlessVm,
+  isServerlessCompilerReady,
+  loadServerlessCompiler,
+  onServerlessCompilerReady,
+  serverlessConcurrentLimit,
+  serverlessVmShortageCopy,
   type DemoServerlessFunction,
 } from '../../entities/serverless';
 import { listDemoTeams } from '../../entities/team/demo';
@@ -83,6 +89,31 @@ function getFunctionAccess(functionId: string | undefined, demoMode: boolean): {
 function formatExpiryLabel(expiresAt: string) {
   const match = /^\d{4}\. (\d{1,2})\. (\d{1,2})\.$/.exec(expiresAt.trim());
   return match ? `${Number(match[1])}월 ${Number(match[2])}일 14:00` : expiresAt;
+}
+
+/** 코드 검사·실행에 쓰는 sucrase를 미리 불러온다. 불러오면 다시 그려 실제 파서 결과를 보여 준다. */
+function useServerlessCompiler(enabled: boolean) {
+  const [ready, setReady] = useState(isServerlessCompilerReady);
+  useEffect(() => {
+    if (!enabled) return;
+    const unsubscribe = onServerlessCompilerReady(() => setReady(true));
+    void loadServerlessCompiler().then(() => setReady(true)).catch(() => undefined);
+    return () => { unsubscribe(); };
+  }, [enabled]);
+  return ready;
+}
+
+/** 실제 파서로 검사해 저장 전 오류 안내 문구를 만든다. */
+async function checkCodeBeforeSave(code: string, runtime: DemoServerlessFunction['runtime'], currentVersionLabel: string | undefined) {
+  if (runtime !== 'python') await loadServerlessCompiler().catch(() => undefined);
+  const codeError = findDemoServerlessCodeError(code, runtime);
+  if (!codeError) return undefined;
+  const versionCopy = currentVersionLabel ? ` 지금 ${currentVersionLabel}은 그대로입니다.` : '';
+  const language = runtime === 'python' ? 'Python' : runtime === 'typescript' ? 'TypeScript' : 'JavaScript';
+  return {
+    title: `${language} 오류로 저장하지 않았습니다`,
+    description: `${getDemoServerlessFileName(runtime)} ${codeError.line}번째 줄의 형식 오류를 고쳐 주세요: ${codeError.message.replace(/\.$/, '')}.${versionCopy}`,
+  };
 }
 
 function refresh(setRevision: Dispatch<SetStateAction<number>>) { setRevision(value => value + 1); }
@@ -139,6 +170,7 @@ export function ServerlessCreateRoute() {
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading');
   const [retryCount, setRetryCount] = useState(0);
   const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+  const compilerReady = useServerlessCompiler(demoMode);
   useEffect(() => {
     if (!demoMode) return;
     const controller = new AbortController();
@@ -171,7 +203,7 @@ export function ServerlessCreateRoute() {
     <ServerlessShell>
       <CreatePage
         existingNames={getDemoServerlessFunctions().map(fn => fn.name)}
-        findCodeError={findDemoServerlessCodeError}
+        findCodeError={compilerReady ? (code, runtime) => findDemoServerlessCodeError(code, runtime) : findDemoServerlessCodeError}
         onCancel={backToList}
         onCreate={async (draft: ServerlessFunctionDraft) => {
           try {
@@ -196,6 +228,8 @@ export function ServerlessFunctionRoute() {
   const { functionId } = useParams<{ functionId: string }>();
   const demoMode = isDemoMode();
   const { revision, setRevision, loading, loadError, retry } = useServerlessStateRevision(functionId, demoMode);
+  const [activationError, setActivationError] = useState<{ title: string; description: string } | null>(null);
+  useServerlessCompiler(demoMode);
   const { fn, readOnly } = getFunctionAccess(functionId, demoMode);
   if (!demoMode) return <Navigate to="/serverless" replace />;
   if (loading || loadError) return <ServerlessLoadState tab="code" fn={fn} loadError={loadError} retry={retry} />;
@@ -217,6 +251,7 @@ export function ServerlessFunctionRoute() {
         expiresAtLabel={formatExpiryLabel(fn.expiresAt)}
         suspended={fn.suspended}
         readOnly={readOnly}
+        activationError={activationError}
         savedVersionLabel={fn.versions[0] ? `${fn.versions[0].label} · ${fn.versions[0].savedAt} 저장` : '저장된 버전 없음'}
         triggerSummary={fn.triggers.filter(trigger => trigger.enabled).map(trigger => trigger.type === 'HTTP'
           ? `${trigger.type} ${trigger.schedule === 'ALL' ? '전체' : trigger.schedule}`
@@ -225,24 +260,23 @@ export function ServerlessFunctionRoute() {
         enabledTabs={enabledTabs}
         onNavigateTab={tab => void navigate(tabPath(fn.id, tab))}
         onManageTriggers={() => void navigate(tabPath(fn.id, 'Trigger'))}
-        onDelete={readOnly ? undefined : () => { deleteDemoServerlessFunction(fn.id); void navigate('/serverless'); }}
+        onDelete={readOnly ? undefined : () => { void deleteDemoServerlessFunction(fn.id).then(() => navigate('/serverless')); }}
         onSaveSettings={readOnly ? undefined : (settings: ServerlessFunctionSettings) => { saveDemoServerlessSettings(fn.id, settings); changed(); }}
-        onSaveCode={readOnly ? undefined : (code, runtime) => {
-          const codeError = findDemoServerlessCodeError(code, runtime);
-          if (codeError) {
-            const versionCopy = currentVersion ? ` 지금 ${currentVersion.label}은 그대로입니다.` : '';
-            return {
-              title: runtime === 'python' ? 'Python 오류로 저장하지 않았습니다' : 'TypeScript 오류로 저장하지 않았습니다',
-              description: `${getDemoServerlessFileName(runtime)} ${codeError.line}번째 줄의 형식 오류를 고쳐 주세요.${versionCopy}`,
-            };
-          }
-          saveDemoServerlessCode(fn.id, code);
+        onSaveCode={readOnly ? undefined : async (code, runtime) => {
+          const saveError = await checkCodeBeforeSave(code, runtime, currentVersion?.label);
+          if (saveError) return saveError;
+          await saveDemoServerlessCode(fn.id, code);
           changed();
           return undefined;
         }}
         onTest={() => void navigate(tabPath(fn.id, 'test'))}
         onExtend={() => { extendDemoServerlessFunction(fn.id); changed(); }}
-        onToggleActive={readOnly ? undefined : active => { setDemoServerlessActive(fn.id, active); changed(); }}
+        onToggleActive={readOnly ? undefined : active => {
+          void setDemoServerlessActive(fn.id, active).then(outcome => {
+            setActivationError(outcome === 'vm-full' ? serverlessVmShortageCopy : null);
+            changed();
+          });
+        }}
       />
     </ServerlessShell>
   );
@@ -276,8 +310,9 @@ export function ServerlessTriggersRoute() {
         key={fn.id}
         functionName={fn.name}
         publicUrl={fn.publicUrl ?? getDemoServerlessUrl(fn.id)}
+        deployedVmLabel={fn.active ? describeServerlessVm(fn.vmSlot) : undefined}
         httpMethod={fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule === 'ALL' ? '전체' : fn.triggers.find(trigger => trigger.type === 'HTTP')?.schedule}
-        concurrentLimit={2}
+        concurrentLimit={serverlessConcurrentLimit}
         rejectedRequestsToday={fn.rejectedRequestsToday}
         dailyExecutions={quota.daily_executions}
         triggers={fn.triggers}
@@ -368,7 +403,12 @@ export function ServerlessTabRoute() {
       dailyExecutions={quota.daily_executions}
       executionError={executionError}
       onDismissExecutionError={() => setExecutionError(null)}
-      onActivate={() => { setDemoServerlessActive(fn.id, true); setExecutionError(null); changed(); }}
+      onActivate={() => {
+        void setDemoServerlessActive(fn.id, true).then(outcome => {
+          setExecutionError(outcome === 'vm-full' ? { kind: 'vm-full', ...serverlessVmShortageCopy } : null);
+          changed();
+        });
+      }}
       enabledTabs={allTabs as readonly ServerlessTestTab[]}
       onExecute={readOnly ? undefined : async payload => {
         try {

@@ -11,6 +11,7 @@ export type ServerlessTestTab = 'code' | 'versions' | 'triggers' | 'environment'
 
 export type ServerlessExecutionError =
   | { kind: 'inactive' | 'quota' | 'missing' | 'storage' }
+  | { kind: 'vm-full'; title: string; description: string }
   | { kind: 'runtime-error'; message: string; location: string }
   | { kind: 'timeout'; timeoutSeconds: 30 | 60; memoryMb: 128 | 256 };
 
@@ -409,6 +410,13 @@ export function ServerlessTestPage({
         icon={<Octicon name="alert" size={20} />}
         title="한도에 닿아서 실행하지 않았습니다"
         description="수동 실행도 하루 실행 한도에 포함됩니다. 다음 날 다시 실행해 주세요."
+      />}
+
+      {executionError?.kind === 'vm-full' && <Banner
+        tone="danger"
+        icon={<Octicon name="alert" size={20} />}
+        title={executionError.title}
+        description={executionError.description}
       />}
 
       <TwoColumns>
