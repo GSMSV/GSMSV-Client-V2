@@ -299,7 +299,7 @@ export function VmOverviewPage() {
     }
     const powerRequestTimes = nextPowerRequestTimes(target);
     if (!powerRequestTimes) return;
-    const next = { ...current, vms: current.vms.map(item => item.id === target.id ? { ...item, powerRequestTimes, status: 'running' as const } : item) };
+    const next = { ...current, vms: current.vms.map(item => item.id === target.id ? { ...item, powerRequestTimes, status: 'running' as const, lastRestartedAt: new Date().toISOString() } : item) };
     if (saveDemoVmState(next)) {
       setState(next);
       setNotice('VM을 시작했습니다.');
@@ -357,7 +357,7 @@ export function VmOverviewPage() {
       setNotice('클립보드에 접근할 수 없습니다.');
       return;
     }
-    void navigator.clipboard.writeText(text).then(() => setNotice(`${label}을(를) 복사했습니다.`)).catch(() => setNotice('클립보드에 접근할 수 없습니다.'));
+    void navigator.clipboard.writeText(text).then(() => setNotice(`${label} 복사했습니다.`)).catch(() => setNotice('클립보드에 접근할 수 없습니다.'));
   }
 
   function guardPower(action: PowerActionLabel, run: () => void) {
@@ -414,15 +414,15 @@ export function VmOverviewPage() {
         <Surface><SurfaceTitle>사용 기간</SurfaceTitle><KVPairs>
           <InlineFact icon="calendar" label="생성일" value={vm.createdAt} />
           <InlineFact icon="clock" label="만료일" value={vm.expiresAt} />
-          <InlineFact icon="pulse" label="가동 시간" value={vm.status === 'running' ? '2일 19시간' : '정지 상태'} />
+          <InlineFact icon="pulse" label="가동 시간" value={vm.status === 'running' ? formatDemoVmUptime(vm) : '정지 상태'} />
         </KVPairs></Surface>
       </Grid2>}
       {vm.status !== 'queued' && <>
       <Surface>
         <SurfaceTitle>SSH 접속 정보</SurfaceTitle>
         <KVPairs>
-          <InlineFact icon="person" label="SSH 계정" value={vm.sshUser} action={<Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.sshUser, 'SSH 계정')}>복사</Button>} />
-          <InlineFact icon="server" label="내부 IP" value={vm.internalIp} action={<Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.internalIp, '내부 IP')}>복사</Button>} />
+          <InlineFact icon="person" label="SSH 계정" value={vm.sshUser} action={<Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.sshUser, 'SSH 계정을')}>복사</Button>} />
+          <InlineFact icon="server" label="내부 IP" value={vm.internalIp} action={<Button variant="ghost" icon={<Octicon name="copy" />} onClick={() => copy(vm.internalIp, '내부 IP를')}>복사</Button>} />
           <InlineFact icon="key" label="초기 비밀번호" value={passwordVisible ? vm.password : '••••••••••••'} action={<Button variant="ghost" icon={<Octicon name={passwordVisible ? 'eye-closed' : 'eye'} />} onClick={() => setPasswordVisible(visible => !visible)}>{passwordVisible ? '숨기기' : '표시'}</Button>} />
         </KVPairs>
       </Surface>
@@ -430,7 +430,7 @@ export function VmOverviewPage() {
         <CommandTitle><Octicon name="terminal" size={16} />SSH 명령어</CommandTitle>
         {sshCommand ? <>
           <NumberLine><span>1</span><SSHLine>{sshCommand}</SSHLine></NumberLine>
-          <CommandFooter><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : `실제 SSH 매핑: 외부 ${sshPort} → 내부 22 · 터미널에 붙여넣어 접속하세요.`}</Hint><Actions>{vm.owner === 'personal' && <Button variant="secondary" icon={<Octicon name="book" />} onClick={() => navigate('/help')}>SSH 키 등록 Docs</Button>}<Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어')}>명령어 복사</Button></Actions></CommandFooter>
+          <CommandFooter><Hint>{vm.owner === 'team' ? '팀원 누구나 볼 수 있습니다. 비밀번호를 아는 팀원은 VM 안에서 관리자(sudo) 권한을 가집니다.' : `실제 SSH 매핑: 외부 ${sshPort} → 내부 22 · 터미널에 붙여넣어 접속하세요.`}</Hint><Actions>{vm.owner === 'personal' && <Button variant="secondary" icon={<Octicon name="book" />} onClick={() => navigate('/help')}>SSH 키 등록 Docs</Button>}<Button variant="primary" icon={<Octicon name="copy" />} onClick={() => copy(sshCommand, '명령어를')}>명령어 복사</Button></Actions></CommandFooter>
         </> : <>
           <Banner $tone="warning"><Octicon name="alert" size={20} /><BannerCopy><strong>SSH 기본 포트가 없습니다</strong><span>SSH 접속 경로가 삭제되어 명령어를 표시할 수 없습니다. 기본 포트를 복원하면 새로 배정된 실제 외부 포트를 확인할 수 있습니다.<br />· SSH 명령어를 제공할 수 없습니다.<br />· 누락된 SSH 22·HTTP 80·SVC 10000 포트만 복원합니다.</span></BannerCopy></Banner>
           <Row><Button variant="secondary" onClick={() => navigate('/help')}>접속 Docs</Button><Button variant="primary" disabled={memberReadOnly} icon={<Octicon name="sync" />} onClick={() => void restoreSshPort()}>기본 포트 복원</Button></Row>
@@ -521,4 +521,17 @@ export function VmOverviewPage() {
       </StateDialogPanel>
     </ModalSurface>}
   </DemoShell>;
+}
+
+/** 가동 시간. 목데이터에서 만들거나 다시 켠 VM은 실제 경과 시간을, 시드 VM은 Figma 값을 보여준다. */
+function formatDemoVmUptime(vm: { requestedAtMs?: number; lastRestartedAt?: string; createdAt: string }): string {
+  const bootedAt = vm.lastRestartedAt ? Date.parse(vm.lastRestartedAt)
+    : vm.requestedAtMs !== undefined ? getDemoVmExpiryTime(vm.createdAt) : undefined;
+  if (bootedAt === undefined || Number.isNaN(bootedAt)) return '2일 19시간';
+  const minutes = Math.max(0, Math.floor((Date.now() - bootedAt) / 60_000));
+  if (minutes < 1) return '1분 미만';
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days > 0) return `${days}일 ${hours}시간`;
+  return hours > 0 ? `${hours}시간 ${minutes % 60}분` : `${minutes}분`;
 }

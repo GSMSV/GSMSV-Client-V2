@@ -260,7 +260,8 @@ const initialVmState: DemoVmState = {
       snapshots: [],
     },
   ],
-  personalQuota: { cpu: 4, memory: 8, disk: 30, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
+  // Matches the seed rows (portfolio-api and portfolio-worker each count 10 GB of SSD); saveDemoVmState recomputes the same totals.
+  personalQuota: { cpu: 4, memory: 8, disk: 20, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
   teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
   teamQuotas: { 'demo-team': { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 } },
   sequence: 1,
