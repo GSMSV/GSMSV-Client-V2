@@ -344,7 +344,7 @@ function LiveAppOverviewPage() {
       if (!signal.aborted) setApp({ value, loading: false, error: false, notFound: false });
     } catch (error) {
       if (signal.aborted) return;
-      if (error instanceof ApiRequestError && error.status === 404) {
+      if (error instanceof ApiRequestError && error.code === 'RESOURCE_NOT_FOUND') {
         setApp({ value: null, loading: false, error: false, notFound: true });
       } else {
         setApp({ value: null, loading: false, error: true, notFound: false });
