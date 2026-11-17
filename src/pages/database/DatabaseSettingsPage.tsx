@@ -232,7 +232,7 @@ export default function DatabaseSettingsPage(){
     try{
       if(isDemoMode()){
         const demo=await import('../../entities/database/demo');
-        const password=`demo-${crypto.randomUUID().slice(0,18)}`;
+        const password=demo.generateDemoDatabasePassword();
         if (!demo.setDemoDatabasePassword(value.grn,password)) throw new Error('Database password could not be saved');
         if(value.owner.type==='team'){
           // 교체 시점의 팀원을 기록해 '비밀번호 교체를 권합니다' 배너를 닫는다.
@@ -254,6 +254,8 @@ export default function DatabaseSettingsPage(){
     try{
       if(isDemoMode()){
         const demo=await import('../../entities/database/demo');
+        // 브라우저에 저장된 Database 파일과 백업 사본을 실제로 지운 뒤 삭제 중으로 바꾼다.
+        await demo.deleteDemoDatabaseFiles(value.grn);
         if(!demo.deleteDemoDatabase(value.grn))throw new Error('Database not found');
         setDeleteOperation({operation:{id:`demo-op-${crypto.randomUUID()}`,type:'delete',status:'queued'},resource:{grn:value.grn,status:'deleting'}});
         setShowDeleteDialog(false);setConfirmName('');deleteIdempotencyKey.current=null;return;
