@@ -120,7 +120,7 @@ export default function AdminTeamApprovalsDemoPage() {
     setFilter('done');
     setSelectedId(selected.id);
     setRejectReason(selected.rejectReason);
-    setNotice(`${selected.name} 팀 신청을 승인했습니다. 로컬 미리보기에서만 적용됩니다.`);
+    setNotice(`${selected.name} 팀 신청을 승인했습니다.`);
   }
 
   function reject() {

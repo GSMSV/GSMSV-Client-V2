@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { getDemoQueryAudit, saveDemoQueryAudit } from '../../entities/demo-workflows';
 import { getSessionUser } from '../../entities/session';
 import { getDemoTeam } from '../../entities/team/demo';
-import { isDemoMode, simulateDemoRequest } from '../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, simulateDemoRequest } from '../../shared/demo';
 import { Button } from '../../shared/ui/controls';
 import { Banner, ErrorCard, LoadingCard } from '../../shared/ui/feedback';
 import { Octicon } from '../../shared/ui/icons';
@@ -107,12 +107,12 @@ const seedRows: QueryRow[] = [
 const userColumns = ['id', 'name', 'email', 'created_at'];
 const initialQuery = 'SELECT id, name, email, created_at\nFROM users\nORDER BY created_at DESC\nLIMIT 20;';
 
-function parseQuery(query: string, sourceRows: QueryRow[]): { columns: QueryColumn[]; rows: QueryRow[]; limit?: number; error?: string } {
+function parseQuery(query: string, sourceRows: QueryRow[], schemaColumns: string[]): { columns: QueryColumn[]; rows: QueryRow[]; limit?: number; error?: string } {
   const sql = query.replace(/--[^\n]*/g, '').trim().replace(/;+\s*$/, '');
   const statement = sql.match(/^select\s+([\s\S]+?)\s+from\s+(users|databases)\b([\s\S]*)$/i);
   if (!statement) return { columns: [], rows: [], error: 'users 또는 databases 테이블의 SELECT 쿼리를 입력해 주세요.' };
 
-  const availableColumns = Object.keys(sourceRows[0] ?? {});
+  const availableColumns = Object.keys(sourceRows[0] ?? {}).length ? Object.keys(sourceRows[0]) : schemaColumns;
   const requestedColumns = statement[1].trim() === '*'
     ? availableColumns.map(source => ({ source, label: source }))
     : statement[1].split(',').map((expression): QueryColumn | null => {
@@ -172,11 +172,11 @@ export default function DatabaseQueryDemoPage() {
 
 function DatabaseQuery({ databaseId }: { databaseId: string }) {
   const navigate = useNavigate();
-  const [query, setQuery] = useState(initialQuery);
-  const [rows, setRows] = useState(seedRows);
-  const [resultColumns, setResultColumns] = useState(userColumns);
+  const [query, setQuery] = useState(() => isDemoFixtureMode() ? initialQuery : '');
+  const [rows, setRows] = useState<QueryRow[]>(() => isDemoFixtureMode() ? seedRows : []);
+  const [resultColumns, setResultColumns] = useState<string[]>(() => isDemoFixtureMode() ? userColumns : []);
   const [databaseRows, setDatabaseRows] = useState<QueryRow[]>([]);
-  const [resultCount, setResultCount] = useState(3);
+  const [resultCount, setResultCount] = useState(() => isDemoFixtureMode() ? 3 : 0);
   const [executing, setExecuting] = useState(false);
   const [outcome, setOutcome] = useState<'timeout' | 'row-cap' | 'byte-cap' | 'write-locked' | null>(null);
   const timeoutRef = useRef<number | null>(null);
@@ -280,8 +280,8 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       timeoutRef.current = window.setTimeout(() => {
         setExecuting(false);
         setOutcome('timeout');
-        setRows(seedRows);
-        setResultCount(seedRows.length);
+        setRows(isDemoFixtureMode() ? seedRows : []);
+        setResultCount(isDemoFixtureMode() ? seedRows.length : 0);
         setRan(true);
         timeoutRef.current = null;
       }, 45_000);
@@ -289,8 +289,9 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
     }
     const rowCapDemo = /--\s*demo:row-cap\b/i.test(query);
     const byteCapDemo = /--\s*demo:byte-cap\b/i.test(query);
-    const sourceRows = /\bfrom\s+databases\b/i.test(query) ? databaseRows : seedRows;
-    const parsed = parseQuery(query, sourceRows);
+    const fromDatabases = /\bfrom\s+databases\b/i.test(query);
+    const sourceRows = fromDatabases ? databaseRows : isDemoFixtureMode() ? seedRows : [];
+    const parsed = parseQuery(query, sourceRows, fromDatabases ? ['id', 'name', 'engine', 'status', 'created_at'] : userColumns);
     const success = !parsed.error;
     audit(success);
     if (!success) {
@@ -374,7 +375,7 @@ function DatabaseQuery({ databaseId }: { databaseId: string }) {
       {database && error && ran && <ErrorText role="alert">{error}</ErrorText>}
     </Card>
     <Card>
-      <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행 · 0.04초</ResultHeading></CardHeader>
+      <CardHeader><ResultHeading>결과 · {database ? resultCount : 0}행{ran || isDemoFixtureMode() ? ' · 0.04초' : ''}</ResultHeading></CardHeader>
       <TableWrap><ResultsTable>{resultColumns.join(',') === userColumns.join(',') && <colgroup>{userColumnWidths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup>}<thead><tr>{resultColumns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{(database ? rows : []).map((row, index) => <tr key={`${String(row.id ?? index)}-${index}`}>{resultColumns.map(column => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody></ResultsTable></TableWrap>
     </Card>
     </>}

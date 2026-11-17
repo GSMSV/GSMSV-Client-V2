@@ -1,5 +1,6 @@
 import { getDemoTeam } from '../../team/demo';
-import { readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { allocateDemoSshSlot, configuredDemoSshTargets, demoVmPoolSize } from './demoSshSlots';
 
 export type VmStatus = 'queued' | 'running' | 'stopped';
 export type VmOwner = 'personal' | 'team';
@@ -40,6 +41,7 @@ export interface DemoVm {
   expiresAt: string;
   internalIp: string;
   sshPort: number;
+  sshSlot?: number;
   sshUser: string;
   password: string;
   autoSnapshots: boolean;
@@ -267,6 +269,24 @@ const initialVmState: DemoVmState = {
   sequence: 1,
 };
 
+const emptyVmState: DemoVmState = {
+  schemaVersion: currentSchemaVersion,
+  vms: [],
+  deletedVms: [],
+  personalQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 30 },
+  teamQuota: { cpu: 0, memory: 0, disk: 0, cpuLimit: 4, memoryLimit: 8, diskLimit: 60 },
+  teamQuotas: {},
+  sequence: 1,
+};
+
+/** The crowded student pool is a Figma fixture, not a limit on a user's empty workspace. */
+export function isDemoVmSharedPoolBlocked(state: DemoVmState, requestedCpu: number): boolean {
+  if (!isDemoFixtureMode()) return false;
+  const ownCpu = state.vms.filter(vm => vm.owner === 'personal').reduce((total, vm) => total + vm.cpu, 0);
+  const otherStudentsCpu = state.studentPoolReleaseAt !== undefined && Date.now() >= state.studentPoolReleaseAt ? 8 : 11;
+  return ownCpu + otherStudentsCpu + requestedCpu > 14;
+}
+
 const personalDraft: VmDraft = {
   cpu: 2,
   memory: 4,
@@ -284,6 +304,11 @@ const teamDraft: VmDraft = {
   name: 'connect-web',
   purpose: 'GSM Connect 서비스 API 서버 운영',
 };
+
+function defaultVmDraft(owner: VmOwner): VmDraft {
+  const fixtureDraft = owner === 'team' ? teamDraft : personalDraft;
+  return isDemoFixtureMode() ? fixtureDraft : { ...fixtureDraft, name: '', purpose: '' };
+}
 
 const queueDurationMs = 15_000;
 const setupDurationMs = 5_000;
@@ -328,9 +353,10 @@ export function getDemoVmState(): DemoVmState {
       status: now >= expiresAt ? 'stopped' as const : 'running' as const,
       createdAt: formatDemoVmDate(completedAt),
       expiresAt: formatDemoVmDate(expiresAt),
-      internalIp: '10.20.0.' + (100 + vm.requestedAtMs % 100),
-      sshPort: vm.owner === 'team' ? 32117 : 32104,
-      password: 'gsvm-demo-' + vm.requestedAtMs.toString(36),
+      internalIp: isDemoFixtureMode() ? '10.20.0.' + (100 + vm.requestedAtMs % 100) : '',
+      sshPort: isDemoFixtureMode() ? (vm.owner === 'team' ? 32117 : 32104) : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.port ?? 0),
+      sshUser: isDemoFixtureMode() ? vm.sshUser : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.user ?? '준비 중'),
+      password: isDemoFixtureMode() ? 'gsvm-demo-' + vm.requestedAtMs.toString(36) : (configuredDemoSshTargets()[vm.sshSlot ?? -1]?.password ?? ''),
     };
   });
   if (!changed) return state;
@@ -357,7 +383,7 @@ function migrateToSchema5(stored: DemoVmState): DemoVmState {
 
 function readStoredDemoVmState(): DemoVmState {
   const stored = readDemoState<DemoVmState | null>(stateKey, null);
-  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return initialVmState;
+  if (!stored || !Array.isArray(stored.vms) || !stored.personalQuota || !stored.teamQuota) return isDemoFixtureMode() ? initialVmState : emptyVmState;
   if ((stored.schemaVersion ?? 0) >= currentSchemaVersion) return stored;
   if ((stored.schemaVersion ?? 0) === 4) return migrateToSchema5(stored);
 
@@ -512,7 +538,7 @@ function vmDraftKey(owner: VmOwner, teamId?: string): string {
 
 export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
   const draft = readDemoState<VmDraft | null>(vmDraftKey(owner, teamId), null);
-  if (!draft) return owner === 'team' ? teamDraft : personalDraft;
+  if (!draft) return defaultVmDraft(owner);
   const isPreviousPersonalSeed = owner === 'personal'
     && draft.cpu === 2 && draft.memory === 4 && draft.disk === 10
     && draft.os === 'Linux Ubuntu 22.04 LTS'
@@ -521,8 +547,8 @@ export function getDemoVmDraft(owner: VmOwner, teamId?: string): VmDraft {
   const isPreviousTeamSeed = owner === 'team' && draft.name === 'connect-api'
     && draft.purpose === teamDraft.purpose && draft.cpu === teamDraft.cpu
     && draft.memory === teamDraft.memory && draft.disk === teamDraft.disk && draft.os === teamDraft.os;
-  if (isPreviousTeamSeed) return teamDraft;
-  return isPreviousPersonalSeed ? personalDraft : draft;
+  if (isPreviousTeamSeed) return defaultVmDraft('team');
+  return isPreviousPersonalSeed ? defaultVmDraft('personal') : draft;
 }
 
 export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft, teamId?: string): void {
@@ -530,7 +556,7 @@ export function saveDemoVmDraft(owner: VmOwner, draft: VmDraft, teamId?: string)
 }
 
 export function resetDemoVmDraft(owner: VmOwner, teamId?: string): void {
-  saveDemoVmDraft(owner, owner === 'team' ? teamDraft : personalDraft, teamId);
+  saveDemoVmDraft(owner, defaultVmDraft(owner), teamId);
 }
 
 export function getDemoVmQuota(state: DemoVmState, teamId: string): DemoVmQuota {
@@ -551,6 +577,9 @@ export function listDemoTeamVms(state: DemoVmState, teamId: string): DemoVm[] {
 }
 
 export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, teamId = 'demo-team', teamName = 'GSM Connect', creatorName = '김지민'): { state: DemoVmState; vm: DemoVm } {
+  const sshSlot = isDemoFixtureMode() ? null : allocateDemoSshSlot(state.vms.map(vm => vm.sshSlot).filter((slot): slot is number => slot !== undefined));
+  if (!isDemoFixtureMode() && sshSlot === null) throw new Error(`준비된 VM ${demoVmPoolSize}개를 모두 사용 중입니다. 기존 VM을 삭제한 뒤 다시 시도해 주세요.`);
+  const target = sshSlot === null ? undefined : configuredDemoSshTargets()[sshSlot];
   const sequence = state.sequence;
   const team = owner === 'team';
   const suffix = String(sequence).padStart(3, '0');
@@ -574,10 +603,11 @@ export function makeDemoVm(state: DemoVmState, draft: VmDraft, owner: VmOwner, t
     nodeType: '자원이 많이 남은 Node에 자동 배분',
     createdAt: '생성 요청 접수',
     expiresAt: team ? '생성 완료 시각부터 30일' : '생성 완료 시각부터 7일',
-    internalIp: '배정 대기 중',
+    internalIp: isDemoFixtureMode() ? '배정 대기 중' : '',
     sshPort: 0,
-    sshUser: 'ubuntu',
-    password: '대기 중',
+    sshSlot: sshSlot ?? undefined,
+    sshUser: target?.user ?? (isDemoFixtureMode() ? 'ubuntu' : '준비 중'),
+    password: isDemoFixtureMode() ? '대기 중' : '',
     autoSnapshots: false,
     snapshots: [],
   };

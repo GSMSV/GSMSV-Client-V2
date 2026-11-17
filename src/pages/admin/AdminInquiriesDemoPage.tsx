@@ -190,7 +190,7 @@ export default function AdminInquiriesDemoPage() {
     });
     setNotice(current.isMine && !notified
       ? '답변을 등록했습니다. 로컬 알림은 저장하지 못했습니다.'
-      : '답변을 등록했습니다. 로컬 미리보기에서 답변 완료 상태로 표시됩니다.');
+      : '답변을 등록했습니다. 답변 완료 상태로 표시됩니다.');
   }
   function cancelReply() { setReply(selected?.reply ?? ''); setShowOverwrite(false); setNotice('답변 수정을 취소했습니다.'); }
 

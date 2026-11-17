@@ -163,8 +163,8 @@ export default function DatabaseBackupsPage() {
   useEffect(() => {
     if (isDemoMode()) {
       let cancelled = false;
-      void import('../../entities/home').then(({ demoHomeTeams }) => {
-        if (!cancelled) setTeams(demoHomeTeams);
+      void import('../../entities/team/demo').then(({ listDemoTeams }) => {
+        if (!cancelled) setTeams(listDemoTeams());
       });
       return () => { cancelled = true; };
     }

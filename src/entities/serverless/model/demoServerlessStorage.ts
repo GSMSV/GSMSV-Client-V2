@@ -1,9 +1,9 @@
-import { getDemoResetGeneration, readDemoState, writeDemoState } from '../../../shared/demo';
+import { getDemoResetGeneration, isDemoFixtureMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 const databaseName = 'gsmsv-demo-serverless';
 const databaseVersion = 1;
 const storeName = 'state';
-const stateId = 'current';
+const stateId = () => isDemoFixtureMode() ? 'current-fixture' : 'current-workspace';
 const invalidationKey = 'gsmsv.demo.serverless.revision';
 const channelName = 'gsmsv-demo-serverless-state';
 
@@ -101,7 +101,8 @@ export async function transactDemoServerlessState<T, R>(
     }
 
     const store = transaction.objectStore(storeName);
-    const request = store.get(stateId) as IDBRequest<StoredRecord<T> | undefined>;
+    const recordId = stateId();
+    const request = store.get(recordId) as IDBRequest<StoredRecord<T> | undefined>;
     let state = seed;
     let result: R | undefined;
     let changed = false;
@@ -120,7 +121,7 @@ export async function transactDemoServerlessState<T, R>(
           result = update(state);
           if (JSON.stringify(state) !== beforeUpdate) changed = true;
         }
-        if (changed) store.put({ id: stateId, generation, value: state } satisfies StoredRecord<T>);
+        if (changed) store.put({ id: recordId, generation, value: state } satisfies StoredRecord<T>);
       } catch {
         try { transaction.abort(); } catch { /* transaction may already be inactive */ }
       }

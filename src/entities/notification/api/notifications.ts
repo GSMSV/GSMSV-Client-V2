@@ -1,5 +1,5 @@
 import { requestJson, requestNoContent } from '../../../shared/api';
-import { isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
+import { isDemoFixtureMode, isDemoMode, readDemoState, writeDemoState } from '../../../shared/demo';
 
 const demoNotificationSlice = 'notifications';
 
@@ -37,7 +37,7 @@ function seededDemoNotifications(): NotificationItem[] {
 }
 
 function getDemoNotifications(): NotificationItem[] {
-  const seed = seededDemoNotifications();
+  const seed = isDemoFixtureMode() ? seededDemoNotifications() : [];
   const stored = readDemoState<unknown>(demoNotificationSlice, seed);
   if (Array.isArray(stored) && stored.every(item => item && typeof item.id === 'string')) return stored;
   return seed;
